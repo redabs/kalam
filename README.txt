@@ -93,20 +93,3 @@ The improvement that Kakoune makes over Vim is that it makes editing interactive
 always tell what areas are affected by changes. Instead of doing s/foo/bar/g and praying 
 you can actually see that you've selected foo and the renaming is done interactively with
 multiple cursors. This is something I really want to keep.
-
-
-#Code Style:
-* Variables are PascalCase
-* Types are snake_case_with_trailing_underscore_t
-* Functions are snake_case
-* Macros are CAPITALIZED_SNAKE_CASE
-
-struct my_type_t {
-    u32 MyMember;
-};
-
-u32
-my_function(my_type_t MyArgument) {
-    ASSERT_TRUE(MyArgument.MyMember != 0);
-    return 8 / MyArgument.MyMember;
-}
