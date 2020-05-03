@@ -1,0 +1,46 @@
+version(1);
+project_name = "kalam";
+
+patterns = {
+"*.c",
+"*.cpp",
+"*.h",
+"*.m",
+"*.mm",
+"*.bat",
+"*.sh",
+"*.4coder",
+"*.txt",
+"*.vert",
+"*.frag",
+"*.glsl",
+"*.inc",
+"*.g",
+"*.f",
+"*.v",
+};
+
+blacklist_patterns = {
+".*",
+};
+
+load_paths_only = {
+ {"."},
+};
+
+load_paths = {
+ { load_paths_only, .os = "win"  },
+};
+
+build_bat = "cd src && build.bat";
+
+command_list = {
+{
+	.name = "build the thing",
+	.out = "*compilation*", .footer_panel = true, .save_dirty_files = true,
+	.cmd = {{build_bat, .os = "win"}},
+},
+};
+
+fkey_command[1] = "build the thing";
+fkey_command[2] = "run font";
