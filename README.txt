@@ -1,9 +1,9 @@
 "Selection first" style editing based on Kakoune.
 4coder style project management, i.e. barely any!
-i3 style tiling with sane navigation.
+i3/vim style tiling with sane navigation.
 
 #TODO: 
-    [ ] Self-hosting :P (actually use kalam to develop)
+    [ ] Self replicating :) (actually use kalam to develop)
 
 * Text
     [ ] Reading font files
@@ -11,8 +11,6 @@ i3 style tiling with sane navigation.
         [ ] .otf
     [ ] Layouting/ wrapping
     [ ] Rendering (software/ hardware?)
-        Software rendering would be the most portable because on any platform we just need a 
-        framebuffer.
         [ ] DPI awareness
         [ ] Ligatures
     [ ] Scaling?
@@ -30,10 +28,8 @@ i3 style tiling with sane navigation.
         [ ] C++
         [ ] Python
         [ ] jai(?)
-    [ ] Definitions/ declaration
-        Jump to definition
-
-    [ ] Compiler output
+    [ ] Definitions/ declarations
+    [ ] Compiler output (errors)
         [ ] MSVC
         [ ] GCC
 
@@ -58,6 +54,7 @@ i3 style tiling with sane navigation.
     [ ] Movement
         [ ] To line X
         [ ] Up/ down N lines
+        [ ] To declaration
 
     [ ] Copy/paste
         "Registers" for multiple cursors? System clipboard?
@@ -76,7 +73,8 @@ i3 style tiling with sane navigation.
         It's extremely important that searching and navigating between search results is 
         smooth. In Kakoune I would rather search forward on the same line than move the 
         cursor by characters or words. When the search is slick as butter to initiate and
-        interact with I go from spamming the arrow keys to teleporting to where I want to be.
+        interact with I go from spamming the arrow keys to teleporting to where I want to 
+        be.
 
 * Customization
     Initially, none! This is the editor that _I_ want, based on the editors _I_ like. Some 
@@ -93,3 +91,13 @@ The improvement that Kakoune makes over Vim is that it makes editing interactive
 always tell what areas are affected by changes. Instead of doing s/foo/bar/g and praying 
 you can actually see that you've selected foo and the renaming is done interactively with
 multiple cursors. This is something I really want to keep.
+
+#Discussions:
+
+##Software vs. Hardware rendering
+Software pros:
+    * Portable
+    * Faster and less resource intensive if done right
+    * More resistant to dying graphics APIs, OpenGL, Vulkan...
+    * No added complexity wrt. graphics concepts that don't apply to us any way.
+    

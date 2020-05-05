@@ -1,6 +1,7 @@
 #ifndef INTRINSICS_H
 #define INTRINSICS_H
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <float.h>
 
@@ -20,9 +21,13 @@ typedef s8 b8;
 typedef float f32;
 typedef double f64;
 
+#define local_persist static
+#define internal static
+#define file_scope static
+
 #define ARRAY_COUNT(A) (sizeof(A) / sizeof(A[0]))
 
-#define ASSERT(C) ((C) ? (void)0 : *(int *)0 = 0)
+#define ASSERT(C) if(!(C)) { *(int *)0 = 0; } 
 
 #define OFFSET_OF(Type, Member) ((size_t) &(((Type *)0)->Member))
 #define REBASE(MemberInstance, StructName, MemberName) (StructName *)((u8 *)MemberInstance - OFFSET_OF(StructName, MemberName))
@@ -34,4 +39,8 @@ typedef double f64;
 
 #define ARE_BITS_SET(FIELD, MASK) ((FIELD & MASK) == MASK ? 1 : 0)
 
-#endif
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) < (b) ? (b) : (a))
+#define ABS(x) ((x < 0) ? -(x) : (x))
+
+#endif //INTRINSICS_H
