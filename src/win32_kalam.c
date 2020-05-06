@@ -1,18 +1,83 @@
-#include "event.c"
-
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #undef min
 #undef max
-#include <Windowsx.h> // GET_X_LPARAM, GET_Y_LPARAM
+#include <Windowsx.h>
 
 #include "intrinsics.h"
 #include "types.h"
 #include "event.h"
-
-#include "kalam.h"
+#include "font.h"
+#include "renderer.h"
+#include "platform.h" 
 
 b8 WmClose = false;
+
+typedef struct {
+    framebuffer_t Fb;
+    BITMAPINFO BitmapInfo;
+} win32_framebuffer_info_t;
+
+win32_framebuffer_info_t FramebufferInfo = {.Fb.BytesPerPixel = 4, .BitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER)};
+
+b32
+win32_get_file_size(HANDLE FileHandle, s64 *Out) {
+    LARGE_INTEGER FileSize;
+    if(GetFileSizeEx(FileHandle, &FileSize)) {
+        *Out = FileSize.QuadPart;
+        return true;
+    }
+    return false;
+}
+
+b32
+platform_read_file(char *Path, platform_file_data_t *FileData) {
+    // TODO: IMPORTANT! Non-ASCII file paths
+    HANDLE FileHandle = CreateFileA(Path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    if(FileHandle == INVALID_HANDLE_VALUE) {
+        // TODO
+        return false;
+    }
+    
+    s64 FileSize = 0;
+    if(!win32_get_file_size(FileHandle, &FileSize)) {
+        // TODO
+        return false;
+    } else if(FileSize > GIGABYTES(1)) {
+        // TODO: Handle large files. Map only parts of files bigger than a certain size?
+        CloseHandle(FileHandle);
+        return false;
+    }
+    
+    FileData->Data = VirtualAlloc(0, FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    DWORD SizeRead = 0;
+    if(!ReadFile(FileHandle, FileData->Data, (DWORD)FileSize, &SizeRead, 0)) { 
+        VirtualFree(FileData->Data, 0, MEM_RELEASE);
+        CloseHandle(FileHandle);
+        return false;
+    }
+    FileData->Size = (s64)SizeRead;
+    
+    return true;
+}
+
+void
+win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height) {
+    if(FbInfo->Fb.Data) {
+        VirtualFree(FbInfo->Fb.Data, 0, MEM_RELEASE);
+    }
+    FbInfo->Fb.Width = Width;
+    FbInfo->Fb.Height = Height;
+    
+    FbInfo->BitmapInfo.bmiHeader.biWidth = Width;
+    FbInfo->BitmapInfo.bmiHeader.biHeight = -Height;
+    FbInfo->BitmapInfo.bmiHeader.biPlanes = 1;
+    FbInfo->BitmapInfo.bmiHeader.biBitCount = 32;
+    FbInfo->BitmapInfo.bmiHeader.biCompression = BI_RGB;
+    
+    FbInfo->Fb.BytesPerPixel = 4;
+    FbInfo->Fb.Data = VirtualAlloc(0, Width * Height * FbInfo->Fb.BytesPerPixel, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+}
 
 LRESULT CALLBACK
 win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LParameter) {
@@ -25,7 +90,7 @@ win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LPara
         case WM_SIZE: {
             s32 Width = LOWORD(LParameter);
             s32 Height = HIWORD(LParameter);
-            // TODO(Redab): Resize backbuffer
+            win32_resize_framebuffer(&FramebufferInfo, Width, Height);
         } break;
         
         default: {
@@ -60,11 +125,9 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
                               (INPUT_MOD_Control * (Event.Key.KeyCode == VK_CONTROL)) |
                               (INPUT_MOD_Shift * (Event.Key.KeyCode == VK_SHIFT)) |
                               (INPUT_MOD_CapsLock * (Event.Key.KeyCode == VK_CAPITAL)) |
-                              (INPUT_MOD_NumLock * (Event.Key.KeyCode == VK_NUMLOCK))
-                              );
+                              (INPUT_MOD_NumLock * (Event.Key.KeyCode == VK_NUMLOCK)));
             }
             
-            // NOTE(Redab): TranslateMessage should've been called before for us to get the WM_CHAR.
             MSG CharMessage;
             if(TranslateMessage(Message)) {
                 if(PeekMessage(&CharMessage, *WindowHandle, 0, 0, PM_REMOVE)) {
@@ -137,16 +200,19 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     s32 WindowHeight = 900;
     
     HWND WindowHandle = CreateWindowEx(0, WindowClass.lpszClassName, "kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, WindowWidth, WindowHeight, 0, 0, Instance, 0);
-    BOOL bla = IsWindowUnicode(WindowHandle);
-    
-    RECT ClientRect;
-    GetClientRect(WindowHandle, &ClientRect);
-    s32 DrawBufferWidth = ClientRect.right - ClientRect.left;
-    s32 DrawBufferHeight = ClientRect.bottom - ClientRect.top;
-    
-    input_event_buffer_t EventBuffer = {0};
-    
     if(WindowHandle) {
+        {
+            RECT ClientRect;
+            GetClientRect(WindowHandle, &ClientRect);
+            s32 BufferWidth = ClientRect.right - ClientRect.left;
+            s32 BufferHeight = ClientRect.bottom - ClientRect.top;
+            
+            win32_resize_framebuffer(&FramebufferInfo, BufferWidth, BufferHeight);
+        }
+        
+        f_load_ttf("fonts/consola.ttf");
+        
+        input_event_buffer_t EventBuffer = {0};
         b8 Running = true;
         while(Running && !WmClose) {
             
@@ -156,15 +222,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 win32_handle_window_message(&Message, &WindowHandle, &EventBuffer);
             }
             
-            for(s32 i = 0; i < EventBuffer.Count; ++i) {
-                input_event_t *e = EventBuffer.Events + i;
-                if(e->Type == INPUT_EVENT_Press && 
-                   e->Device == INPUT_DEVICE_Keyboard &&
-                   e->Key.HasCharacterTranslation) {
-                    char c[2] = {e->Key.Character, 0};
-                    OutputDebugString(c);
-                }
-            }
+            r_draw_rectangle(&FramebufferInfo.Fb, (irect_t){.x=10, .y=100, .w=80, .h=100}, 0xffaabbcc);
+            
+            HDC Dc = GetDC(WindowHandle);
+            StretchDIBits(Dc, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, FramebufferInfo.Fb.Data, &FramebufferInfo.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
+            ReleaseDC(WindowHandle, Dc);
             
             EventBuffer.Count = 0;
         }

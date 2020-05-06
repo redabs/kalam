@@ -60,6 +60,6 @@ typedef struct {
     input_event_t Events[INPUT_EVENT_MAX];
 } input_event_buffer_t;
 
-
+void push_input_event(input_event_buffer_t *Buffer, input_event_t *Event);
 
 #endif //EVENT_H

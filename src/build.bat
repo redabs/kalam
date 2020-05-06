@@ -11,7 +11,8 @@ REM Disable
 REM /wd4100 unreferenced formal parameter
 REM /wd4189 local variable is initalized but not referenced
 REM /wd4201 nonstandard extension used: nameless struct/union
-set Warnings=/wd4100 /wd4189 /wd4201
+REM /wd4204 nonstandard extension used: non-constant aggregate initializer
+set Warnings=/wd4100 /wd4189 /wd4201 /wd4204
 REM  ------------------------------------
 
 REM -Zi Generate complete debug information
@@ -26,4 +27,4 @@ REM if exist *.ilk del *.ilk > NUL 2> NUL
 
 set IncludeDirs=
 
-cl %CFlags% %IncludeDirs% ../win32_kalam.c /link %LinkerFlags% 
+cl %CFlags% %IncludeDirs% ../*.c  /link %LinkerFlags% /OUT:kalam.exe

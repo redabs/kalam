@@ -97,7 +97,6 @@ multiple cursors. This is something I really want to keep.
 ##Software vs. Hardware rendering
 Software pros:
     * Portable
-    * Faster and less resource intensive if done right
+    * Faster and less resource intensive during idle if done right
     * More resistant to dying graphics APIs, OpenGL, Vulkan...
-    * No added complexity wrt. graphics concepts that don't apply to us any way.
-    
+    * No added complexity wrt. graphics hardware that don't apply to us any way.
