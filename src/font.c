@@ -21,17 +21,17 @@ f_load_ttf(char *Path, f32 Size) {
         s32 SetIndex = GlyphIndex / 256;
         glyph_set_t *Set = 0;
         for(s32 i = 0; i < Font.GlyphSetCount; ++i) {
-            if(Font.GlyphSets[i]->Index == SetIndex) {
-                Set = Font.GlyphSets[i];
+            if(Font.GlyphSets[i].SetIndex == SetIndex) {
+                Set = Font.GlyphSets[i].Set;
                 break;
             }
         }
         
         if(!Set) {
             ASSERT(Font.GlyphSetCount < GLYPH_SET_MAX);
-            Set = Font.GlyphSets[Font.GlyphSetCount] = malloc(sizeof(glyph_set_t));
+            Set = Font.GlyphSets[Font.GlyphSetCount].Set = malloc(sizeof(glyph_set_t));
+            Font.GlyphSets[Font.GlyphSetCount].SetIndex = SetIndex;
             ++Font.GlyphSetCount;
-            Set->Index = SetIndex;
             
             bitmap_t *Bitmap = &Set->Bitmap;
             Bitmap->w = 128;
