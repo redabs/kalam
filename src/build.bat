@@ -27,4 +27,4 @@ REM if exist *.ilk del *.ilk > NUL 2> NUL
 
 set IncludeDirs=
 
-cl %CFlags% %IncludeDirs% ../*.c  /link %LinkerFlags% /OUT:kalam.exe
+cl %CFlags% %IncludeDirs% ../win32_kalam.c ../kalam.c /link %LinkerFlags% /OUT:kalam.exe

@@ -4,12 +4,14 @@
 #undef max
 #include <Windowsx.h>
 
+#include "deps/stb_truetype.h"
+
 #include "intrinsics.h"
 #include "types.h"
 #include "event.h"
-#include "font.h"
 #include "renderer.h"
 #include "platform.h" 
+#include "font.h"
 
 b8 WmClose = false;
 
@@ -59,6 +61,11 @@ platform_read_file(char *Path, platform_file_data_t *FileData) {
     FileData->Size = (s64)SizeRead;
     
     return true;
+}
+
+void
+platform_free_file(platform_file_data_t *File) {
+    VirtualFree(File->Data, 0, MEM_RELEASE);
 }
 
 void
@@ -120,8 +127,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             Event.Key.IsRepeatKey = WasDown && IsDown;
             
             if(!Event.Key.IsRepeatKey) {
-                Modifiers ^= (
-                              (INPUT_MOD_Alt * (Event.Key.KeyCode == VK_MENU)) |
+                Modifiers ^= ((INPUT_MOD_Alt * (Event.Key.KeyCode == VK_MENU)) |
                               (INPUT_MOD_Control * (Event.Key.KeyCode == VK_CONTROL)) |
                               (INPUT_MOD_Shift * (Event.Key.KeyCode == VK_SHIFT)) |
                               (INPUT_MOD_CapsLock * (Event.Key.KeyCode == VK_CAPITAL)) |
@@ -210,7 +216,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             win32_resize_framebuffer(&FramebufferInfo, BufferWidth, BufferHeight);
         }
         
-        f_load_ttf("fonts/consola.ttf");
+        font_t Font = f_load_ttf("fonts/consola.ttf", 16);
         
         input_event_buffer_t EventBuffer = {0};
         b8 Running = true;
@@ -222,7 +228,21 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 win32_handle_window_message(&Message, &WindowHandle, &EventBuffer);
             }
             
-            r_draw_rectangle(&FramebufferInfo.Fb, (irect_t){.x=10, .y=100, .w=80, .h=100}, 0xffaabbcc);
+            r_draw_rect(&FramebufferInfo.Fb, (irect_t){.x=10, .y=100, .w=80, .h=100}, 0xffaabbcc);
+#if 0
+            r_draw_rect_bitmap(&FramebufferInfo.Fb, 0, 0, (irect_t){.x = 0, .y = 0, .w = Font.Bitmap.w, .h = Font.Bitmap.h}, &Font.Bitmap);
+            s32 CursorX = 50;
+            for(int i = 0; i < 256; ++i) {
+                s32 Baseline = 300;
+                s32 x0 = Font.BakedChars[i].x0;
+                s32 x1 = Font.BakedChars[i].x1;
+                s32 y0 = Font.BakedChars[i].y0;
+                s32 y1 = Font.BakedChars[i].y1;
+                irect_t Rect = {.x = x0, .y = y0, .w = x1 - x0, .h = y1 - y0};
+                r_draw_rect_bitmap(&FramebufferInfo.Fb, CursorX + Font.BakedChars[i].xoff, Baseline + Font.BakedChars[i].yoff, Rect, &Font.Bitmap);
+                CursorX += Font.BakedChars[i].xadvance;
+            }
+#endif
             
             HDC Dc = GetDC(WindowHandle);
             StretchDIBits(Dc, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, FramebufferInfo.Fb.Data, &FramebufferInfo.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
