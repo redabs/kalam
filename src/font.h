@@ -1,22 +1,32 @@
 #ifndef FONT_H
 #define FONT_H
 
+#define GLYPH_SET_MAX 32
+#define GLYPHS_PER_SET 256
+
 typedef struct {
     bitmap_t Bitmap;
-    stbtt_bakedchar GlyphInfo[256];
+    stbtt_bakedchar Glyphs[GLYPHS_PER_SET];
 } glyph_set_t;
 
-#define GLYPH_SET_MAX 32
 typedef struct {
-    s32 GlyphSetCount;
-    // TODO: Cache table with pointers to most recently used glyphs?
-    struct {
-        glyph_set_t *Set;
-        s32 SetIndex; // SetIndex = GlyphIndex / 256; for all glyph indices included in the set. If your glyph's index divided by 256 is equal to this set's SetIndex then it contains your glyph's info.
-    } GlyphSets[GLYPH_SET_MAX];
+    stbtt_fontinfo StbInfo;
+    platform_file_data_t File;
+    
     f32 Height;
+    f32 Size; 
+    
+    u32 SetCount;
+    struct {
+        u32 FirstCodepoint;
+        // Set contains glyphs in the range [FirstCodepoint, FirstCodePoint + 255]
+        glyph_set_t *Set;
+    } GlyphSets[GLYPH_SET_MAX];
+    
 } font_t;
 
 font_t f_load_ttf(char *Path, f32 Size);
+u8 *f_utf8_to_codepoint(u8 *Utf8, u32 *Codepoint);
+b32 f_get_glyph_set(font_t *Font, u32 Codepoint, glyph_set_t **Set);
 
 #endif //FONT_H

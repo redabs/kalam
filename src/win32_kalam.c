@@ -228,21 +228,33 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 win32_handle_window_message(&Message, &WindowHandle, &EventBuffer);
             }
             
-            r_draw_rect(&FramebufferInfo.Fb, (irect_t){.x=10, .y=100, .w=80, .h=100}, 0xffaabbcc);
-#if 0
-            r_draw_rect_bitmap(&FramebufferInfo.Fb, 0, 0, (irect_t){.x = 0, .y = 0, .w = Font.Bitmap.w, .h = Font.Bitmap.h}, &Font.Bitmap);
-            s32 CursorX = 50;
-            for(int i = 0; i < 256; ++i) {
-                s32 Baseline = 300;
-                s32 x0 = Font.BakedChars[i].x0;
-                s32 x1 = Font.BakedChars[i].x1;
-                s32 y0 = Font.BakedChars[i].y0;
-                s32 y1 = Font.BakedChars[i].y1;
-                irect_t Rect = {.x = x0, .y = y0, .w = x1 - x0, .h = y1 - y0};
-                r_draw_rect_bitmap(&FramebufferInfo.Fb, CursorX + Font.BakedChars[i].xoff, Baseline + Font.BakedChars[i].yoff, Rect, &Font.Bitmap);
-                CursorX += Font.BakedChars[i].xadvance;
+            {
+                s32 x = 100, y = 100;
+                u8 *String = (u8 *)"Foobar string, 1234!";
+                u8 *c = String;
+                while(*c) {
+                    u32 Codepoint;
+                    c = f_utf8_to_codepoint(c, &Codepoint);
+                    glyph_set_t *Set;
+                    if(f_get_glyph_set(&Font, Codepoint, &Set)) {
+                        stbtt_bakedchar *g = &Set->Glyphs[Codepoint % GLYPHS_PER_SET];
+                        irect_t Rect = {.x = g->x0, .y = g->y0, .w = g->x1 - g->x0, .h = g->y1 - g->y0};
+                        r_draw_rect_bitmap(&FramebufferInfo.Fb, x + g->xoff, y + g->yoff, Rect, &Set->Bitmap);
+                        x += (s32)g->xadvance;
+                    }
+                }
             }
-#endif
+            
+            {
+                s32 x = 0;
+                s32 y = 400;
+                for(u32 i = 0; i < Font.SetCount; ++i) {
+                    bitmap_t *b = &Font.GlyphSets[i].Set->Bitmap;
+                    irect_t Rect = {0, 0, b->w, b->h};
+                    r_draw_rect_bitmap(&FramebufferInfo.Fb, x, y, Rect, b);
+                    x += b->w + 10;
+                }
+            }
             
             HDC Dc = GetDC(WindowHandle);
             StretchDIBits(Dc, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, FramebufferInfo.Fb.Data, &FramebufferInfo.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
