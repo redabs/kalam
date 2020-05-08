@@ -9,9 +9,8 @@
 #include "intrinsics.h"
 #include "types.h"
 #include "event.h"
-#include "renderer.h"
 #include "platform.h" 
-#include "font.h"
+#include "kalam.h"
 
 b8 WmClose = false;
 
@@ -20,7 +19,8 @@ typedef struct {
     BITMAPINFO BitmapInfo;
 } win32_framebuffer_info_t;
 
-win32_framebuffer_info_t FramebufferInfo = {.Fb.BytesPerPixel = 4, .BitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER)};
+platform_shared_t Shared;
+win32_framebuffer_info_t FramebufferInfo;
 
 b32
 win32_get_file_size(HANDLE FileHandle, s64 *Out) {
@@ -32,35 +32,37 @@ win32_get_file_size(HANDLE FileHandle, s64 *Out) {
     return false;
 }
 
-b32
+
+b32 
 platform_read_file(char *Path, platform_file_data_t *FileData) {
+    b32 Success = true;
     // TODO: IMPORTANT! Non-ASCII file paths
     HANDLE FileHandle = CreateFileA(Path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    if(FileHandle == INVALID_HANDLE_VALUE) {
-        // TODO
-        return false;
-    }
     
     s64 FileSize = 0;
-    if(!win32_get_file_size(FileHandle, &FileSize)) {
-        // TODO
-        return false;
-    } else if(FileSize > GIGABYTES(1)) {
-        // TODO: Handle large files. Map only parts of files bigger than a certain size?
-        CloseHandle(FileHandle);
-        return false;
+    if(FileHandle != INVALID_HANDLE_VALUE) {
+        if(win32_get_file_size(FileHandle, &FileSize)) {
+            FileData->Data = VirtualAlloc(0, FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+            DWORD SizeRead = 0;
+            if(ReadFile(FileHandle, FileData->Data, (DWORD)FileSize, &SizeRead, 0)) {
+                FileData->Size = (s64)SizeRead;
+                Success = true;
+            } else {
+                VirtualFree(FileData->Data, 0, MEM_RELEASE);
+                // TODO: Diagnostics
+                Success = false;
+            }
+        } else {
+            // TODO: Diagnostics
+            Success = false;
+        }
+    } else {
+        // TODO: Diagnostics
+        Success = false;
     }
     
-    FileData->Data = VirtualAlloc(0, FileSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    DWORD SizeRead = 0;
-    if(!ReadFile(FileHandle, FileData->Data, (DWORD)FileSize, &SizeRead, 0)) { 
-        VirtualFree(FileData->Data, 0, MEM_RELEASE);
-        CloseHandle(FileHandle);
-        return false;
-    }
-    FileData->Size = (s64)SizeRead;
-    
-    return true;
+    CloseHandle(FileHandle);
+    return Success;
 }
 
 void
@@ -75,14 +77,16 @@ win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height
     }
     FbInfo->Fb.Width = Width;
     FbInfo->Fb.Height = Height;
+    FbInfo->Fb.BytesPerPixel = 4;
     
+    FbInfo->BitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     FbInfo->BitmapInfo.bmiHeader.biWidth = Width;
     FbInfo->BitmapInfo.bmiHeader.biHeight = -Height;
     FbInfo->BitmapInfo.bmiHeader.biPlanes = 1;
     FbInfo->BitmapInfo.bmiHeader.biBitCount = 32;
     FbInfo->BitmapInfo.bmiHeader.biCompression = BI_RGB;
     
-    FbInfo->Fb.BytesPerPixel = 4;
+    
     FbInfo->Fb.Data = VirtualAlloc(0, Width * Height * FbInfo->Fb.BytesPerPixel, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 }
 
@@ -101,12 +105,65 @@ win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LPara
         } break;
         
         default: {
-            Result = DefWindowProc(Window, Message, WParameter, LParameter);
+            Result = DefWindowProcW(Window, Message, WParameter, LParameter);
         } break;
     }
     
     return Result;
 }
+
+void
+push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
+    ASSERT(Buffer->Count + 1 < INPUT_EVENT_MAX);
+    Buffer->Events[Buffer->Count] = *Event;
+    ++Buffer->Count;
+}
+
+
+#if 0
+void
+codepoint_to_utf8(u32 Codepoint, u8 *Utf8) {
+    *(u32 *)Utf8 = 0;
+    
+    s64 c = Codepoint;
+    int n = 0;
+    u32 CodepointRanges[4] = {0x7f, 0x7ff, 0xffff, 0x10ffff};
+    while((c - CodepointRanges[n]) > 0) {
+        ++n;
+    }
+    
+    u8 LeadingBits[4] = {0x0, 0xc0, 0xe0, 0xf0};
+    u8 EncodedBitsMask[4] = {0x7f, 0x1f, 0xf, 0x7};
+    Utf8[0] = LeadingBits[n] | ((Codepoint >> (6 * n)) & EncodedBitsMask[n]);
+    
+    for(int i = 1; i < (n + 1); ++i) {
+        Utf8[i] = 0x80 | (Codepoint >> (6 * (n - i)) & 0x3f);
+    }
+}
+#else
+void
+codepoint_to_utf8(u32 Codepoint, u8 *Utf8) {
+    if(Codepoint <= 0x7f) {
+        Utf8[0] = Codepoint & 0x7f; 
+        
+    } else if(Codepoint <= 0x7ff) {
+        Utf8[0] = 0xc0 | ((Codepoint >> 6) & 0x1f);
+        Utf8[1] = 0x80 | (Codepoint        & 0x3f);
+        
+    } else if(Codepoint <= 0xffff) {
+        Utf8[0] = 0xe0 | ((Codepoint >> 12) & 0xf);
+        Utf8[1] = 0x80 | ((Codepoint >> 6)  & 0x3f);
+        Utf8[2] = 0x80 | ( Codepoint        & 0x3f);
+        
+    } else if(Codepoint <= 0x10ffff) {
+        Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0xf);
+        Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
+        Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
+        Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
+        
+    }
+}
+#endif
 
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
@@ -136,9 +193,9 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             
             MSG CharMessage;
             if(TranslateMessage(Message)) {
-                if(PeekMessage(&CharMessage, *WindowHandle, 0, 0, PM_REMOVE)) {
+                if(PeekMessageW(&CharMessage, *WindowHandle, 0, 0, PM_REMOVE)) {
                     if(CharMessage.message == WM_CHAR) {
-                        Event.Key.Character = CharMessage.wParam;
+                        codepoint_to_utf8((u32)CharMessage.wParam, Event.Key.Character);
                         Event.Key.HasCharacterTranslation = true;
                     } 
                 }
@@ -193,19 +250,21 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
 
 int CALLBACK 
 WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand) {
-    WNDCLASSA WindowClass = {0};
+    Shared.Framebuffer = &FramebufferInfo.Fb;
+    
+    WNDCLASSW WindowClass = {0};
     WindowClass.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
     WindowClass.lpfnWndProc = win32_window_callback;
     WindowClass.hInstance = Instance;
     WindowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
-    WindowClass.lpszClassName = "window_class";
-    RegisterClass(&WindowClass);
+    WindowClass.lpszClassName = L"window_class";
+    RegisterClassW(&WindowClass);
     
     // Including borders and decorations
     s32 WindowWidth = 900;
     s32 WindowHeight = 900;
     
-    HWND WindowHandle = CreateWindowEx(0, WindowClass.lpszClassName, "kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, WindowWidth, WindowHeight, 0, 0, Instance, 0);
+    HWND WindowHandle = CreateWindowExW(0, WindowClass.lpszClassName, L"kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, WindowWidth, WindowHeight, 0, 0, Instance, 0);
     if(WindowHandle) {
         {
             RECT ClientRect;
@@ -215,52 +274,23 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             
             win32_resize_framebuffer(&FramebufferInfo, BufferWidth, BufferHeight);
         }
+        k_init(&Shared);
         
-        font_t Font = f_load_ttf("fonts/consola.ttf", 16);
-        
-        input_event_buffer_t EventBuffer = {0};
         b8 Running = true;
         while(Running && !WmClose) {
             
             MSG Message = {0};
-            while(PeekMessage(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
-                DispatchMessage(&Message);
-                win32_handle_window_message(&Message, &WindowHandle, &EventBuffer);
+            while(PeekMessageW(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
+                DispatchMessageW(&Message);
+                win32_handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
             }
             
-            {
-                s32 x = 100, y = 100;
-                u8 *String = (u8 *)"Foobar string, 1234!";
-                u8 *c = String;
-                while(*c) {
-                    u32 Codepoint;
-                    c = f_utf8_to_codepoint(c, &Codepoint);
-                    glyph_set_t *Set;
-                    if(f_get_glyph_set(&Font, Codepoint, &Set)) {
-                        stbtt_bakedchar *g = &Set->Glyphs[Codepoint % GLYPHS_PER_SET];
-                        irect_t Rect = {.x = g->x0, .y = g->y0, .w = g->x1 - g->x0, .h = g->y1 - g->y0};
-                        r_draw_rect_bitmap(&FramebufferInfo.Fb, x + g->xoff, y + g->yoff, Rect, &Set->Bitmap);
-                        x += (s32)g->xadvance;
-                    }
-                }
-            }
             
-            {
-                s32 x = 0;
-                s32 y = 400;
-                for(u32 i = 0; i < Font.SetCount; ++i) {
-                    bitmap_t *b = &Font.GlyphSets[i].Set->Bitmap;
-                    irect_t Rect = {0, 0, b->w, b->h};
-                    r_draw_rect_bitmap(&FramebufferInfo.Fb, x, y, Rect, b);
-                    x += b->w + 10;
-                }
-            }
+            k_do_editor(&Shared);
             
             HDC Dc = GetDC(WindowHandle);
             StretchDIBits(Dc, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, FramebufferInfo.Fb.Data, &FramebufferInfo.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
             ReleaseDC(WindowHandle, Dc);
-            
-            EventBuffer.Count = 0;
         }
     } else {
         // TODO
