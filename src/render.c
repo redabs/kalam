@@ -52,24 +52,28 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     }
 }
 
-void 
+void
 draw_rect_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t *Bitmap) {
-    s32 MinX = MAX(xPos, 0);
-    s32 MaxX = MIN(MinX + Rect.w, Fb->Width);
+    s32 BoxMinX = MAX(xPos, 0);
+    s32 BoxMaxX = MIN(MAX(xPos + Rect.w, 0), Fb->Width);
+    s32 xOff = MIN(BoxMinX - xPos, Rect.w); 
+    // When the box we're drawing into is clipped xOff gives us the x-offset into the bitmap
+    // that we should start sampling from.
     
-    s32 MinY = MAX(yPos, 0); 
-    s32 MaxY = MIN(MinY + Rect.h, Fb->Height);
+    s32 BoxMinY = MAX(yPos, 0);
+    s32 BoxMaxY = MIN(MAX(yPos + Rect.h, 0), Fb->Height);
+    s32 yOff = MIN(BoxMinY - yPos, Rect.h); 
     
-    s32 w = MaxX - MinX;
-    s32 h = MaxY - MinY;
+    s32 w = BoxMaxX - BoxMinX;
+    s32 h = BoxMaxY - BoxMinY;
     
-    u32 *DestRow = (u32 *)Fb->Data + MinY * Fb->Width; 
-    u8 *SrcRow = Bitmap->Data + Rect.y * Bitmap->Stride;
+    u32 *DestRow = (u32 *)Fb->Data + BoxMinY * Fb->Width;
+    u8 *SrcRow = Bitmap->Data + (Rect.y + yOff) * Bitmap->Stride;
     for(s32 y = 0; y < h; ++y) {
-        u32 *DestPixel = DestRow + MinX;
-        u8 *SrcPixel = SrcRow + Rect.x;
+        u32 *DestPixel = DestRow + BoxMinX;
+        u8 *SrcPixel = SrcRow + Rect.x + xOff;
         for(s32 x = 0; x < w; ++x) {
-            u32 c = (u32)*SrcPixel;
+            u32 c = (u32) *SrcPixel;
             *DestPixel = c << 16 | c << 8 | c;
             ++DestPixel;
             ++SrcPixel;

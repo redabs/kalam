@@ -46,12 +46,12 @@ do_char(u8 *Char) {
 
 void
 k_init(platform_shared_t *Shared) {
-    Shared->Font = load_ttf("fonts/calibri.ttf", 16);
+    Ctx.Font = load_ttf("fonts/calibri.ttf", 64);
+    
 }
 
 void
 k_do_editor(platform_shared_t *Shared) {
-    
     {
         input_event_buffer_t *Events = &Shared->EventBuffer;
         for(s32 i = 0; i < Events->Count; ++i) {
@@ -59,7 +59,6 @@ k_do_editor(platform_shared_t *Shared) {
             if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
                 if(e->Key.HasCharacterTranslation) {
                     do_char(e->Key.Character);
-                } else {
                 }
             } else if(e->Type == INPUT_EVENT_Scroll) {
                 
@@ -69,19 +68,23 @@ k_do_editor(platform_shared_t *Shared) {
         Events->Count = 0;
     }
     
+    Ctx.p = (ivec2_t){100, 100};
     {
-        s32 x = 200, y = 100;
+        ivec2_t p = Ctx.p;
         u8 *End = Ctx.Buffer.Data + Ctx.Buffer.Size;
         u8 *c = Ctx.Buffer.Data;
         while(c < End) {
             u32 Codepoint;
             c = utf8_to_codepoint(c, &Codepoint);
             glyph_set_t *Set;
-            if(get_glyph_set(&Shared->Font, Codepoint, &Set)) {
+            if(get_glyph_set(&Ctx.Font, Codepoint, &Set)) {
                 stbtt_bakedchar *g = &Set->Glyphs[Codepoint & 0xff];
                 irect_t Rect = {.x = g->x0, .y = g->y0, .w = g->x1 - g->x0, .h = g->y1 - g->y0};
-                draw_rect_bitmap(Shared->Framebuffer, x + (s32)g->xoff, y + (s32)g->yoff, Rect, &Set->Bitmap);
-                x += (s32)g->xadvance;
+                s32 y = p.y + (s32)g->yoff + Ctx.Font.MHeight / 2;
+                
+                
+                draw_rect_bitmap(Shared->Framebuffer, p.x + (s32)g->xoff, y, Rect, &Set->Bitmap);
+                p.x += (s32)(g->xadvance + 0.5);
             }
         }
     }
@@ -89,8 +92,8 @@ k_do_editor(platform_shared_t *Shared) {
     {
         s32 x = 0;
         s32 y = 400;
-        for(u32 i = 0; i < Shared->Font.SetCount; ++i) {
-            bitmap_t *b = &Shared->Font.GlyphSets[i].Set->Bitmap;
+        for(u32 i = 0; i < Ctx.Font.SetCount; ++i) {
+            bitmap_t *b = &Ctx.Font.GlyphSets[i].Set->Bitmap;
             irect_t Rect = {0, 0, b->w, b->h};
             draw_rect_bitmap(Shared->Framebuffer, x, y, Rect, b);
             x += b->w + 10;

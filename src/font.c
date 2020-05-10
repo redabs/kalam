@@ -47,11 +47,19 @@ load_ttf(char *Path, f32 Size) {
     
     s32 Status = stbtt_InitFont(&Font.StbInfo, Font.File.Data, 0);
     
-    s32 Ascent, Descent, LineGap;
-    stbtt_GetFontVMetrics(&Font.StbInfo, &Ascent, &Descent, &LineGap);
-    
+    stbtt_GetFontVMetrics(&Font.StbInfo, &Font.Ascent, &Font.Descent, &Font.LineGap);
     f32 Scale = stbtt_ScaleForMappingEmToPixels(&Font.StbInfo, Size);
-    Font.Height = (Ascent - Descent + LineGap) * Scale;
+    Font.Ascent = (s32)(Font.Ascent * Scale);
+    Font.Descent = (s32)(Font.Descent * Scale);
+    Font.LineGap = (s32)(Font.LineGap * Scale);
+    
+    {
+        glyph_set_t *Set;
+        if(get_glyph_set(&Font, 'M', &Set)) {
+            stbtt_bakedchar *g = &Set->Glyphs['M'];
+            Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
+        }
+    }
     
     
     return Font;
