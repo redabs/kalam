@@ -124,42 +124,35 @@ void
 utf16_to_utf8(u32 Utf16, u8 *Utf8) {
     if(Utf16 <= 0x7f) {
         Utf8[0] = Utf16 & 0x7f; 
-        return;
         
     } else if(Utf16 <= 0x7ff) {
         Utf8[0] = 0xc0 | ((Utf16 >> 6) & 0x1f);
         Utf8[1] = 0x80 | (Utf16        & 0x3f);
-        return; 
         
     } else if(Utf16 >= 0xe000 && Utf16 <= 0xffff) {
         Utf8[0] = 0xe0 | ((Utf16 >> 12) & 0xf);
         Utf8[1] = 0x80 | ((Utf16 >> 6)  & 0x3f);
         Utf8[2] = 0x80 | ( Utf16        & 0x3f);
-        return;
-    }
-    
-    u32 High = Utf16 >> 16;
-    u32 Low = Utf16 & 0xffff;
-    // Surrogate pairs
-    if((High >= 0xd800 && High <= 0xdfff)  &&
-       (Low >= 0xd800 && Low <= 0xdfff)) {
-        High = (High - 0xd800) << 10;
-        Low = Low - 0xdc00;
-        u32 Codepoint = High + Low + 0x10000;
         
-        Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
-        Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
-        Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
-        Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
-        return;
-    } 
-    
+    } else {
+        u32 High = Utf16 >> 16;
+        u32 Low = Utf16 & 0xffff;
+        // Surrogate pairs
+        if((High >= 0xd800 && High <= 0xdfff)  && (Low >= 0xd800 && Low <= 0xdfff)) {
+            High = (High - 0xd800) << 10;
+            Low = Low - 0xdc00;
+            u32 Codepoint = High + Low + 0x10000;
+            
+            Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
+            Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
+            Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
+            Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
+        } 
+    }
 }
 
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
-    u32 Bla;
-    utf16_to_utf8(0xd801dc37, (u8 *)&Bla);
     local_persist input_modifier Modifiers; 
     input_event_t Event = {0};
     switch(Message->message) {
