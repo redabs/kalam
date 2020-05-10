@@ -120,53 +120,46 @@ push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
 }
 
 
-#if 0
 void
-codepoint_to_utf8(u32 Codepoint, u8 *Utf8) {
-    *(u32 *)Utf8 = 0;
-    
-    s64 c = Codepoint;
-    int n = 0;
-    u32 CodepointRanges[4] = {0x7f, 0x7ff, 0xffff, 0x10ffff};
-    while((c - CodepointRanges[n]) > 0) {
-        ++n;
+utf16_to_utf8(u32 Utf16, u8 *Utf8) {
+    if(Utf16 <= 0x7f) {
+        Utf8[0] = Utf16 & 0x7f; 
+        return;
+        
+    } else if(Utf16 <= 0x7ff) {
+        Utf8[0] = 0xc0 | ((Utf16 >> 6) & 0x1f);
+        Utf8[1] = 0x80 | (Utf16        & 0x3f);
+        return; 
+        
+    } else if(Utf16 >= 0xe000 && Utf16 <= 0xffff) {
+        Utf8[0] = 0xe0 | ((Utf16 >> 12) & 0xf);
+        Utf8[1] = 0x80 | ((Utf16 >> 6)  & 0x3f);
+        Utf8[2] = 0x80 | ( Utf16        & 0x3f);
+        return;
     }
     
-    u8 LeadingBits[4] = {0x0, 0xc0, 0xe0, 0xf0};
-    u8 EncodedBitsMask[4] = {0x7f, 0x1f, 0xf, 0x7};
-    Utf8[0] = LeadingBits[n] | ((Codepoint >> (6 * n)) & EncodedBitsMask[n]);
-    
-    for(int i = 1; i < (n + 1); ++i) {
-        Utf8[i] = 0x80 | (Codepoint >> (6 * (n - i)) & 0x3f);
-    }
-}
-#else
-void
-codepoint_to_utf8(u32 Codepoint, u8 *Utf8) {
-    if(Codepoint <= 0x7f) {
-        Utf8[0] = Codepoint & 0x7f; 
+    u32 High = Utf16 >> 16;
+    u32 Low = Utf16 & 0xffff;
+    // Surrogate pairs
+    if((High >= 0xd800 && High <= 0xdfff)  &&
+       (Low >= 0xd800 && Low <= 0xdfff)) {
+        High = (High - 0xd800) << 10;
+        Low = Low - 0xdc00;
+        u32 Codepoint = High + Low + 0x10000;
         
-    } else if(Codepoint <= 0x7ff) {
-        Utf8[0] = 0xc0 | ((Codepoint >> 6) & 0x1f);
-        Utf8[1] = 0x80 | (Codepoint        & 0x3f);
-        
-    } else if(Codepoint <= 0xffff) {
-        Utf8[0] = 0xe0 | ((Codepoint >> 12) & 0xf);
-        Utf8[1] = 0x80 | ((Codepoint >> 6)  & 0x3f);
-        Utf8[2] = 0x80 | ( Codepoint        & 0x3f);
-        
-    } else if(Codepoint <= 0x10ffff) {
-        Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0xf);
+        Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
         Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
         Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
         Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
-        
-    }
+        return;
+    } 
+    
 }
-#endif
 
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
+    u32 Bla;
+    utf16_to_utf8(0xd801dc37, (u8 *)&Bla);
     local_persist input_modifier Modifiers; 
     input_event_t Event = {0};
     switch(Message->message) {
@@ -195,7 +188,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             if(TranslateMessage(Message)) {
                 if(PeekMessageW(&CharMessage, *WindowHandle, 0, 0, PM_REMOVE)) {
                     if(CharMessage.message == WM_CHAR) {
-                        codepoint_to_utf8((u32)CharMessage.wParam, Event.Key.Character);
+                        utf16_to_utf8((u32)CharMessage.wParam, Event.Key.Character);
                         Event.Key.HasCharacterTranslation = true;
                     } 
                 }
