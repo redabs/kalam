@@ -77,7 +77,6 @@ win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height
     }
     FbInfo->Fb.Width = Width;
     FbInfo->Fb.Height = Height;
-    FbInfo->Fb.BytesPerPixel = 4;
     
     FbInfo->BitmapInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     FbInfo->BitmapInfo.bmiHeader.biWidth = Width;
@@ -87,7 +86,7 @@ win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height
     FbInfo->BitmapInfo.bmiHeader.biCompression = BI_RGB;
     
     
-    FbInfo->Fb.Data = VirtualAlloc(0, Width * Height * FbInfo->Fb.BytesPerPixel, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    FbInfo->Fb.Data = VirtualAlloc(0, Width * Height * 4, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 }
 
 LRESULT CALLBACK

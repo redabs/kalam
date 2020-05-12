@@ -8,7 +8,6 @@ typedef struct {
     u8 *Data;
     s32 Width;
     s32 Height;
-    u8 BytesPerPixel;
 } framebuffer_t;
 
 typedef struct {

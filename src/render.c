@@ -34,6 +34,18 @@ utf8_to_codepoint(u8 *Utf8, u32 *Codepoint) {
     return Utf8 + 1;
 }
 
+void
+clear_framebuffer(framebuffer_t *Fb, u32 Color) {
+    u64 Size = Fb->Width * Fb->Height;
+    u32 *Dest = (u32 *)Fb->Data;
+    for(u64 i = 0; i < Size; ++i) {
+        Dest[i] = Color;
+    }
+}
+/*
+The quick brown fucker yeeted the lazy zoomer
+The quick brown fucker yeeted the lazy zoomer
+*/
 void 
 draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     s32 MinX = MAX(Rect.x, 0);
@@ -52,8 +64,10 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     }
 }
 
+#include <math.h>
+
 void
-draw_rect_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t *Bitmap) {
+draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t *Bitmap) {
     s32 BoxMinX = MAX(xPos, 0);
     s32 BoxMaxX = MIN(MAX(xPos + Rect.w, 0), Fb->Width);
     s32 xOff = MIN(BoxMinX - xPos, Rect.w); 
@@ -73,8 +87,18 @@ draw_rect_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t *
         u32 *DestPixel = DestRow + BoxMinX;
         u8 *SrcPixel = SrcRow + Rect.x + xOff;
         for(s32 x = 0; x < w; ++x) {
-            u32 c = (u32) *SrcPixel;
-            *DestPixel = c << 16 | c << 8 | c;
+            u8 s = (u8)MIN(pow((f32)*SrcPixel, 1.2), 255.f);
+            u8 dr = (*DestPixel >> 16) & 0xff;
+            u8 dg = (*DestPixel >> 8)  & 0xff;
+            u8 db =  *DestPixel        & 0xff;
+            
+            f32 a = (f32)(*SrcPixel) / 255.f;
+            
+            u8 r = (u8)((1. - a) * dr + a * s);
+            u8 g = (u8)((1. - a) * dg + a * s);
+            u8 b = (u8)((1. - a) * db + a * s);
+            
+            *DestPixel = 0xff000000 | r << 16 | g << 8 | b;
             ++DestPixel;
             ++SrcPixel;
         }

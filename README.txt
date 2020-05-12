@@ -86,7 +86,10 @@ i3/vim style tiling with sane navigation.
         currently inside highlighted. This is how I _actually_ get a sense of where I am
         in a source file.
 
-#What:
+	[ ] Toggle a mode where shortcuts are displayed for jumping to any visible token in the
+		buffer. Think vim mode for browser where interactive elements are given key commands.
+
+#What: 
 The improvement that Kakoune makes over Vim is that it makes editing interactive. You can
 always tell what areas are affected by changes. Instead of doing s/foo/bar/g and praying 
 you can actually see that you've selected foo and the renaming is done interactively with
@@ -100,3 +103,19 @@ Software pros:
     * Faster and less resource intensive during idle if done right
     * More resistant to dying graphics APIs, OpenGL, Vulkan...
     * No added complexity wrt. graphics hardware that don't apply to us any way.
+
+##Defining cursor movement behavior
+When moving the cursor vertically between lines the column position of the cursor changes 
+depending on the length of the line it is going to. Standard (what I've observed that most
+editors do) behavior is to have two column values; one is where the cursor was before the
+vertical movement, call it CursorWas, the other is min(CursorWas, length_of_current_line),
+call it CursorIs. E.g. if the cursor moves up one line, it will actually end up on maximum
+value of where it was previously and the length of the current line, obviously the cursor
+can not go beyond that as it will end up on the same line it started on. 
+
+When the cursor moves horizontally CursorIs is updated to be wherever it ended up, and
+CursorWas is to be equal to CursorIs, effectively moving the vertical line that we're 
+moving along when moving the cursor vertically. gVim on windows does not allow you to move
+the end of the previous line by moving left past the beginning of the current line, sublime
+text does allow you to do this. I shall allow it, as it's an easy way to move to the line
+above.

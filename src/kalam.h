@@ -3,11 +3,13 @@
 
 typedef struct {
     u8 *Data;
-    u64 Capacity;
-    u64 Size; // In bytes
+    s64 Capacity;
+    s64 Size; // In bytes of contents
     struct {
+        s32 Line; // 0 based
+        s32 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
+        s32 ColumnWas;
         s64 ByteOff;
-        s64 CharOff;
     } Cursor;
 } text_buffer_t;
 
@@ -50,8 +52,6 @@ typedef struct {
     text_buffer_t Buffer;
     
 } ctx_t;
-
-
 
 void k_do_editor(platform_shared_t *Shared);
 void k_init(platform_shared_t *Shared);
