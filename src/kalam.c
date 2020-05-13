@@ -43,7 +43,7 @@ cursor_move(text_buffer_t *Buf, dir Dir) {
         return;
     }
     
-    // TODO:
+    // TODO: \r\n line endings
     switch(Dir) {
         case UP: {
         } break;
@@ -52,12 +52,49 @@ cursor_move(text_buffer_t *Buf, dir Dir) {
         } break;
         
         case LEFT: {
+            // Move one character back
+            u8 *c = Buf->Data + Buf->Cursor.ByteOff - 1;
+            u64 ByteOff = Buf->Cursor.ByteOff - 1;
+            while(ByteOff > 0 &&  (*c & 0xc0) == 0x80)  {
+                --c;
+                --ByteOff;
+            }
+            Buf->Cursor.ByteOff = ByteOff;
+            
+            if(Buf->Cursor.ColumnIs - 1 < 0) {
+                // Find out what column we ended up on when we jumped up one line.
+                --Buf->Cursor.Line;
+                s64 Column = 0;
+                s64 i = Buf->Cursor.ByteOff - 1;
+                while(Buf->Data[i] != '\n' && i > 0) {
+                    --i;
+                    ++Column;
+                }
+                
+                Buf->Cursor.ColumnIs = Column;
+                Buf->Cursor.ColumnWas = Column;
+            } else {
+                --Buf->Cursor.ColumnIs;
+                --Buf->Cursor.ColumnWas;
+            }
+            
         } break;
         
         case RIGHT: {
+            u8 *c = Buf->Data + Buf->Cursor.ByteOff;
+            if(*c == '\n') {
+                ++Buf->Cursor.Line;
+                Buf->Cursor.ColumnIs = 0;
+                Buf->Cursor.ColumnWas = 0;
+            } else {
+                ++Buf->Cursor.ColumnIs;
+                ++Buf->Cursor.ColumnWas;
+            }
+            u8 n = utf8_char_width(c);
+            Buf->Cursor.ByteOff += n;;
+            
         } break;
     }
-    
 }
 
 void
@@ -128,6 +165,12 @@ move_forward(text_buffer_t *Buffer) {
 void
 draw_buffer(framebuffer_t *Fb, font_t *Font, text_buffer_t *Buf) {
     s32 LineHeight = Font->Ascent - Font->Descent; 
+    {
+        u32 Codepoint = 'M';
+        s32 x = Font->MWidth * (s32)Buf->Cursor.ColumnIs;
+        s32 y = LineHeight * (s32)Buf->Cursor.Line;
+        draw_rect(Fb, (irect_t){.x = x, .y = y, .w = Font->MWidth, .h = LineHeight}, 0xff117766);
+    }
     s32 LineIndex = 0;
     u8 *c = Buf->Data;
     u8 *End = Buf->Data + Buf->Size;
@@ -153,9 +196,7 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, text_buffer_t *Buf) {
                 CursorX += (s32)(g->xadvance + 0.5);
             }
         }
-        
     }
-    
 }
 
 void
@@ -180,7 +221,7 @@ k_do_editor(platform_shared_t *Shared) {
                 
                 default: {
                     if(e->Key.HasCharacterTranslation) {
-                        do_char(e->Key.Character);
+                        do_char(e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
                     }
                 } break;
             }
@@ -191,39 +232,7 @@ k_do_editor(platform_shared_t *Shared) {
     } Events->Count = 0;
     
     clear_framebuffer(Shared->Framebuffer, 0xff110f58);
-#if 0
-    {
-        font_t *Font = &Ctx.Font;
-        s32 LineHeight = Font->Ascent - Font->Descent; 
-        s32 FbWidth = Shared->Framebuffer->Width;
-        for(s32 i = 0; i < 25; ++i) {
-            s32 LineY = i * LineHeight;
-            s32 Center = LineY + LineHeight / 2;
-            //draw_rect(Shared->Framebuffer, (irect_t){0, LineY, FbWidth, LineHeight}, (i&1) ? 0xffaaaaaa : 0xff444444);
-            //draw_rect(Shared->Framebuffer, (irect_t){0, Center - 1, FbWidth, 2}, 0xff333333);
-            
-            s32 CursorX = 0;
-            s32 Baseline = Center + Font->MHeight / 2; //LineY + LineHeight;
-            
-            char *TestString = "The quick brown fucker yeeted the lazy zoomer";
-            for(char *c = TestString; *c; ++c) {
-                glyph_set_t *Set;
-                s32 Advance = 32;
-                if(get_glyph_set(Font, *c, &Set)) {
-                    stbtt_bakedchar *g = &Set->Glyphs[*c];
-                    bitmap_t *b = &Set->Bitmap;
-                    
-                    irect_t gRect = {.x = g->x0, .y = g->y0, .w = g->x1 - g->x0, .h = g->y1 - g->y0};
-                    s32 yOff = (s32)(g->yoff + 0.5);
-                    draw_glyph_bitmap(Shared->Framebuffer, CursorX, Baseline + yOff - 1, gRect, b);
-                    
-                    Advance = (s32)(g->xadvance + 0.5);
-                }
-                CursorX += Advance;
-            }
-        }
-    }
-#endif
+    
     draw_buffer(Shared->Framebuffer, &Ctx.Font, &Ctx.Buffer);
     
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
@@ -233,3 +242,5 @@ k_do_editor(platform_shared_t *Shared) {
         x += b->w + 10;
     }
 }
+
+

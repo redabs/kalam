@@ -58,6 +58,7 @@ load_ttf(char *Path, f32 Size) {
         if(get_glyph_set(&Font, 'M', &Set)) {
             stbtt_bakedchar *g = &Set->Glyphs['M'];
             Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
+            Font.MWidth = (s32)(g->x1 - g->x0 + 0.5);
         }
     }
     

@@ -89,12 +89,6 @@ i3/vim style tiling with sane navigation.
 	[ ] Toggle a mode where shortcuts are displayed for jumping to any visible token in the
 		buffer. Think vim mode for browser where interactive elements are given key commands.
 
-#What: 
-The improvement that Kakoune makes over Vim is that it makes editing interactive. You can
-always tell what areas are affected by changes. Instead of doing s/foo/bar/g and praying 
-you can actually see that you've selected foo and the renaming is done interactively with
-multiple cursors. This is something I really want to keep.
-
 #Discussions:
 
 ##Software vs. Hardware rendering

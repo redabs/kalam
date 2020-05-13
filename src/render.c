@@ -42,10 +42,7 @@ clear_framebuffer(framebuffer_t *Fb, u32 Color) {
         Dest[i] = Color;
     }
 }
-/*
-The quick brown fucker yeeted the lazy zoomer
-The quick brown fucker yeeted the lazy zoomer
-*/
+
 void 
 draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     s32 MinX = MAX(Rect.x, 0);

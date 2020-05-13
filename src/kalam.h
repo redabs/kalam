@@ -6,9 +6,9 @@ typedef struct {
     s64 Capacity;
     s64 Size; // In bytes of contents
     struct {
-        s32 Line; // 0 based
-        s32 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
-        s32 ColumnWas;
+        s64 Line; // 0 based
+        s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
+        s64 ColumnWas;
         s64 ByteOff;
     } Cursor;
 } text_buffer_t;
@@ -36,6 +36,7 @@ typedef struct {
     s32 LineGap;
     
     s32 MHeight; // The height in pixels of 'M'
+    s32 MWidth; // The width in pixels of 'M'. This is used under the presumption of a monospace font.
     
     u32 SetCount;
     struct {
