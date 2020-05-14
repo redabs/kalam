@@ -53,6 +53,23 @@ cursor_move(buffer_t *Buf, dir Dir) {
         } break;
         
         case LEFT: {
+            if(Buf->Cursor.ByteOffset > 0) {
+                if(Buf->Cursor.ColumnIs == 0) {
+                    line_t *PreviousLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line - 1;
+                    Buf->Cursor.ByteOffset = PreviousLine->ByteOffset + PreviousLine->Size - 1;
+                    Buf->Cursor.ColumnIs = PreviousLine->ColumnCount - 1;
+                    Buf->Cursor.ColumnWas = PreviousLine->ColumnCount - 1;
+                    Buf->Cursor.Line -= 1;
+                } else {
+                    Buf->Cursor.ColumnIs -= 1;
+                    Buf->Cursor.ColumnWas -= 1;
+                    // Scan one character back
+                    while(Buf->Cursor.ByteOffset > 0 && (Buf->Data[Buf->Cursor.ByteOffset] & 0xc0) == 0x80) {
+                        Buf->Cursor.ByteOffset -= 1;
+                    }
+                }
+            }
+            
         } break;
         
         case RIGHT: {

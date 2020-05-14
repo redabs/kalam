@@ -113,3 +113,11 @@ moving along when moving the cursor vertically. gVim on windows does not allow y
 the end of the previous line by moving left past the beginning of the current line, sublime
 text does allow you to do this. I shall allow it, as it's an easy way to move to the line
 above.
+
+So instead of scanning characters and trying very hard to not be off by one and keep ColumnIs,
+ColumnWas, Line and the cursor's byte offset into the text in sync when moving the cursor, I
+have decided to make a structure which describes each line of text in a currently open buffer.
+That way I can jump to any line by simply searching for the entry which describes that line
+and only scan characters within that line to find offset into the line corresponds to the 
+column I want to be at. I think a design like this is also more flexible wrt. different 
+encodings.
