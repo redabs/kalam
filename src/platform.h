@@ -20,7 +20,12 @@ typedef struct {
     input_event_buffer_t EventBuffer;
 } platform_shared_t;
 
+// From the platform to editor
 b32 platform_read_file(char *Path, platform_file_data_t *FileData);
 void platform_free_file(platform_file_data_t *FileData);
+
+// From the editor to the platform
+void k_do_editor(platform_shared_t *Shared);
+void k_init(platform_shared_t *Shared);
 
 #endif //PLATFORM_H

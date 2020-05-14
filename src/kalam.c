@@ -2,6 +2,7 @@
 #include "deps/stb_truetype.h"
 
 #include "intrinsics.h"
+#include "memory.h"
 #include "types.h"
 #include "event.h"
 #include "platform.h"
@@ -23,12 +24,6 @@ utf8_char_width(u8 *Char) {
     }
 }
 
-void
-k_init(platform_shared_t *Shared) {
-    Ctx.Font = load_ttf("fonts/consola.ttf", 15);
-    
-}
-
 typedef enum {
     UP    = 1,
     DOWN  = 1 << 1,
@@ -37,72 +32,55 @@ typedef enum {
 } dir;
 
 void
-cursor_move(text_buffer_t *Buf, dir Dir) {
-    if(Dir & (UP | LEFT) && Buf->Cursor.ByteOff == 0 || 
-       Dir & (RIGHT | DOWN) && Buf->Cursor.ByteOff >= Buf->Size) {
-        return;
-    }
-    
-    // TODO: \r\n line endings
+cursor_move(buffer_t *Buf, dir Dir) {
     switch(Dir) {
         case UP: {
+            if(Buf->Cursor.Line > 0) {
+                line_t *PreviousLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line - 1;
+                Buf->Cursor.ByteOffset = PreviousLine->ByteOffset;
+                Buf->Cursor.ColumnIs = MIN(Buf->Cursor.ColumnWas, PreviousLine->ColumnCount - 1);
+                Buf->Cursor.Line -= 1;
+            }
         } break;
         
         case DOWN: {
+            if((Buf->Cursor.Line + 1) < Buf->Lines.Used) {
+                line_t *NextLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
+                Buf->Cursor.ByteOffset = NextLine->ByteOffset;
+                Buf->Cursor.ColumnIs = MIN(Buf->Cursor.ColumnWas, NextLine->ColumnCount - 1);
+                Buf->Cursor.Line += 1;
+            }
         } break;
         
         case LEFT: {
-            // Move one character back
-            u8 *c = Buf->Data + Buf->Cursor.ByteOff - 1;
-            u64 ByteOff = Buf->Cursor.ByteOff - 1;
-            while(ByteOff > 0 &&  (*c & 0xc0) == 0x80)  {
-                --c;
-                --ByteOff;
-            }
-            Buf->Cursor.ByteOff = ByteOff;
-            
-            if(Buf->Cursor.ColumnIs - 1 < 0) {
-                // Find out what column we ended up on when we jumped up one line.
-                --Buf->Cursor.Line;
-                s64 Column = 0;
-                s64 i = Buf->Cursor.ByteOff - 1;
-                while(Buf->Data[i] != '\n' && i > 0) {
-                    --i;
-                    ++Column;
-                }
-                
-                Buf->Cursor.ColumnIs = Column;
-                Buf->Cursor.ColumnWas = Column;
-            } else {
-                --Buf->Cursor.ColumnIs;
-                --Buf->Cursor.ColumnWas;
-            }
-            
         } break;
         
         case RIGHT: {
-            u8 *c = Buf->Data + Buf->Cursor.ByteOff;
-            if(*c == '\n') {
-                ++Buf->Cursor.Line;
-                Buf->Cursor.ColumnIs = 0;
-                Buf->Cursor.ColumnWas = 0;
-            } else {
-                ++Buf->Cursor.ColumnIs;
-                ++Buf->Cursor.ColumnWas;
+            if(Buf->Cursor.ByteOffset < Buf->Used) {
+                line_t *CurrentLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
+                if((Buf->Cursor.ColumnIs + 1) > (CurrentLine->ColumnCount - 1)) {
+                    line_t *NextLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
+                    Buf->Cursor.ByteOffset = NextLine->ByteOffset;
+                    Buf->Cursor.ColumnIs = 0;
+                    Buf->Cursor.ColumnWas = 0;
+                    Buf->Cursor.Line += 1;
+                } else {
+                    Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
+                    Buf->Cursor.ColumnIs += 1;
+                    Buf->Cursor.ColumnWas += 1;
+                }
             }
-            u8 n = utf8_char_width(c);
-            Buf->Cursor.ByteOff += n;;
-            
         } break;
     }
 }
 
 void
 do_char(u8 *Char) {
+#if 0
     u8 n = utf8_char_width(Char);
     
     // TODO: tab, backspace 
-    text_buffer_t *b = &Ctx.Buffer;
+    buffer_t *b = &Ctx.Buffer;
     if((b->Size + n) > b->Capacity) {
         u64 NewCapacity = b->Capacity + KILOBYTES(4);
         b->Data = realloc(b->Data, NewCapacity);
@@ -120,50 +98,11 @@ do_char(u8 *Char) {
     b->Size += n;
     
     cursor_move(b, RIGHT);
-}
-
-
-#if 0
-void
-move_back(text_buffer_t *Buffer) { 
-    if(Buffer->Cursor.ByteOff == 0) {
-        return;
-    }
-    
-    // Scan one character back
-    u8 *c = Buffer->Data + Buffer->Cursor.ByteOff - 1;
-    u64 i = Buffer->Cursor.ByteOff - 1;
-    b32 Found = false;
-    
-    while(i >= 0) {
-        if((*c & 0xc0) != 0x80) {
-            Found = true;
-            break;
-        }
-        --c;
-        --i;
-    }
-    Buffer->Cursor.ByteOff = i;
-    
-    u32 Codepoint;
-    utf8_to_codepoint(c, &Codepoint);
-    if(Codepoint == '\n') {
-        --Buffer->Cursor.Line;
-    } else {
-    }
-}
-
-void
-move_forward(text_buffer_t *Buffer) {
-    if(Buffer->Cursor.ByteOff < Buffer->Size) {
-        Buffer->Cursor.ByteOff += utf8_char_width(Buffer->Data + Buffer->Cursor.ByteOff);
-        ++Buffer->Cursor.CharOff;
-    }
-}
 #endif
+}
 
 void
-draw_buffer(framebuffer_t *Fb, font_t *Font, text_buffer_t *Buf) {
+draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
     s32 LineHeight = Font->Ascent - Font->Descent; 
     {
         u32 Codepoint = 'M';
@@ -173,7 +112,7 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, text_buffer_t *Buf) {
     }
     s32 LineIndex = 0;
     u8 *c = Buf->Data;
-    u8 *End = Buf->Data + Buf->Size;
+    u8 *End = Buf->Data + Buf->Used;
     s32 CursorX = 0;
     while(c < End) {
         s32 LineY = LineIndex * LineHeight;
@@ -197,6 +136,48 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, text_buffer_t *Buf) {
             }
         }
     }
+}
+
+void
+load_file(char *Path, buffer_t *Dest) {
+    mem_zero_struct(Dest);
+    {
+        // TODO: Think a little harder about how files are loaded
+        platform_file_data_t File;
+        ASSERT(platform_read_file(Path, &File));
+        
+        u64 Capacity = (File.Size + 4096) & ~(4096 - 1);
+        Dest->Data = malloc(Capacity);
+        Dest->Used = File.Size;
+        Dest->Capacity = Capacity;
+        mem_copy(Dest->Data, File.Data, File.Size);
+        
+        platform_free_file(&File);
+        
+    }
+    
+    // TODO: Detect file encoding, we assume utf-8 for now
+    line_t Line = {0};
+    u8 n = 0;
+    for(u64 i = 0; i < Dest->Used; i += n) {
+        n = utf8_char_width(Dest->Data + i);
+        Line.Size += n;
+        Line.ColumnCount += 1;
+        
+        if(Dest->Data[i] == '\n') {
+            line_t *l = mem_buf_push_struct(&Dest->Lines, line_t);
+            *l = Line;
+            mem_zero_struct(&Line);
+            Line.ByteOffset = i + n;
+        }
+    }
+}
+
+void
+k_init(platform_shared_t *Shared) {
+    Ctx.Font = load_ttf("fonts/consola.ttf", 15);
+    load_file("test.c", &Ctx.Buffer);
+    
 }
 
 void

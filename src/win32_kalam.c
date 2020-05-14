@@ -7,10 +7,10 @@
 #include "deps/stb_truetype.h"
 
 #include "intrinsics.h"
+#include "memory.h"
 #include "types.h"
 #include "event.h"
 #include "platform.h" 
-#include "kalam.h"
 
 b8 WmClose = false;
 

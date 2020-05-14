@@ -2,16 +2,23 @@
 #define KALAM_H
 
 typedef struct {
+    u64 ByteOffset;
+    u64 Size;
+    u64 ColumnCount; // in characters
+} line_t;
+
+typedef struct {
     u8 *Data;
-    s64 Capacity;
-    s64 Size; // In bytes of contents
+    u64 Capacity;
+    u64 Used; // In bytes of contents
+    mem_buffer_t Lines; // line_t
     struct {
-        s64 Line; // 0 based
-        s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
-        s64 ColumnWas;
-        s64 ByteOff;
+        u64 Line; // 0 based
+        u64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
+        u64 ColumnWas;
+        u64 ByteOffset;
     } Cursor;
-} text_buffer_t;
+} buffer_t;
 
 typedef struct {
     u8 *Data;
@@ -50,11 +57,7 @@ typedef struct {
 typedef struct {
     font_t Font;
     ivec2_t p;
-    text_buffer_t Buffer;
-    
+    buffer_t Buffer;
 } ctx_t;
-
-void k_do_editor(platform_shared_t *Shared);
-void k_init(platform_shared_t *Shared);
 
 #endif //KALAM_H
