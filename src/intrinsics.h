@@ -41,6 +41,7 @@ typedef double f64;
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) < (b) ? (b) : (a))
+#define CLAMP(Low, High, x) MAX(MIN(x, High), Low)
 #define ABS(x) ((x < 0) ? -(x) : (x))
 
 #endif //INTRINSICS_H

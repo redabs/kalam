@@ -164,7 +164,6 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             
             Event.Device = INPUT_DEVICE_Keyboard;
             Event.Type = IsDown ? INPUT_EVENT_Press : INPUT_EVENT_Release;
-            Event.Modifiers = Modifiers;
             Event.Key.KeyCode = Message->wParam;
             Event.Key.IsRepeatKey = WasDown && IsDown;
             
@@ -175,6 +174,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
                               (INPUT_MOD_CapsLock * (Event.Key.KeyCode == VK_CAPITAL)) |
                               (INPUT_MOD_NumLock * (Event.Key.KeyCode == VK_NUMLOCK)));
             }
+            Event.Modifiers = Modifiers;
             
             MSG CharMessage;
             if(TranslateMessage(Message)) {

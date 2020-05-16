@@ -32,90 +32,92 @@ typedef enum {
 } dir;
 
 void
-cursor_move(buffer_t *Buf, dir Dir) {
+cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
+    int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
+    s64 Column = 0;
     switch(Dir) {
+        case DOWN: 
         case UP: {
-            if(Buf->Cursor.Line > 0) {
-                line_t *PreviousLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line - 1;
-                Buf->Cursor.ByteOffset = PreviousLine->ByteOffset;
-                Buf->Cursor.ColumnIs = MIN(Buf->Cursor.ColumnWas, PreviousLine->ColumnCount - 1);
-                Buf->Cursor.Line -= 1;
+            s64 LineCount = mem_buf_count(&Buf->Lines, line_t);
+            if((Dir == UP && Buf->Cursor.Line > 0) ||
+               (Dir == DOWN && Buf->Cursor.Line < LineCount)) {
+                s64 LineNum = CLAMP(0, LineCount - 1, Buf->Cursor.Line + ((Dir == DOWN) ? StepSize : -StepSize));
+                line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
+                Column = MIN(Buf->Cursor.ColumnWas, Line->ColumnCount - 1);
+                
+                Buf->Cursor.Line = LineNum;
+                Buf->Cursor.ColumnIs = Column;
+                Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
+                Buf->Cursor.ByteOffset = Line->ByteOffset;
+                for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
+                    Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
+                }
             }
         } break;
         
-        case DOWN: {
-            if((Buf->Cursor.Line + 1) < Buf->Lines.Used) {
-                line_t *NextLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
-                Buf->Cursor.ByteOffset = NextLine->ByteOffset;
-                Buf->Cursor.ColumnIs = MIN(Buf->Cursor.ColumnWas, NextLine->ColumnCount - 1);
-                Buf->Cursor.Line += 1;
+        case RIGHT: {
+            s64 LineNum = Buf->Cursor.Line;
+            line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
+            Column = Buf->Cursor.ColumnIs;
+            s64 LineCount = mem_buf_count(&Buf->Lines, line_t);
+            for(s64 i = 0; i < StepSize; ++i) {
+                if(Column + 1 >= Line->ColumnCount) {
+                    if(LineNum + 1 >= LineCount) {
+                        Column = Line->ColumnCount;
+                        break;
+                    }
+                    LineNum++;
+                    Line++;
+                    Column = 0;
+                } else {
+                    Column++;
+                }
+            }
+            
+            Buf->Cursor.Line = LineNum;
+            Buf->Cursor.ColumnIs = Column;
+            Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
+            Buf->Cursor.ByteOffset = Line->ByteOffset;
+            for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
+                Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
             }
         } break;
         
         case LEFT: {
-            if(Buf->Cursor.ByteOffset > 0) {
-                if(Buf->Cursor.ColumnIs == 0) {
-                    line_t *PreviousLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line - 1;
-                    Buf->Cursor.ByteOffset = PreviousLine->ByteOffset + PreviousLine->Size - 1;
-                    Buf->Cursor.ColumnIs = PreviousLine->ColumnCount - 1;
-                    Buf->Cursor.ColumnWas = PreviousLine->ColumnCount - 1;
-                    Buf->Cursor.Line -= 1;
-                } else {
-                    Buf->Cursor.ColumnIs -= 1;
-                    Buf->Cursor.ColumnWas -= 1;
-                    // Scan one character back
-                    while(Buf->Cursor.ByteOffset > 0 && (Buf->Data[Buf->Cursor.ByteOffset] & 0xc0) == 0x80) {
-                        Buf->Cursor.ByteOffset -= 1;
+            s64 LineNum = Buf->Cursor.Line;
+            line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
+            Column = Buf->Cursor.ColumnIs;
+            for(s64 i = 0; i < StepSize; ++i) {
+                if(Column - 1 < 0) {
+                    if(LineNum - 1 < 0) {
+                        Column = 0;
+                        break;
                     }
+                    LineNum--;
+                    Line--;
+                    Column = Line->ColumnCount - 1;
+                } else {
+                    Column--;
                 }
             }
             
-        } break;
-        
-        case RIGHT: {
-            if(Buf->Cursor.ByteOffset < Buf->Used) {
-                line_t *CurrentLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
-                if((Buf->Cursor.ColumnIs + 1) > (CurrentLine->ColumnCount - 1)) {
-                    line_t *NextLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
-                    Buf->Cursor.ByteOffset = NextLine->ByteOffset;
-                    Buf->Cursor.ColumnIs = 0;
-                    Buf->Cursor.ColumnWas = 0;
-                    Buf->Cursor.Line += 1;
-                } else {
-                    Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
-                    Buf->Cursor.ColumnIs += 1;
-                    Buf->Cursor.ColumnWas += 1;
-                }
+            Buf->Cursor.Line = LineNum;
+            Buf->Cursor.ColumnIs = Column;
+            Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
+            Buf->Cursor.ByteOffset = Line->ByteOffset;
+            for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
+                Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
             }
         } break;
+        
     }
 }
 
 void
 do_char(u8 *Char) {
-#if 0
     u8 n = utf8_char_width(Char);
-    
-    // TODO: tab, backspace 
-    buffer_t *b = &Ctx.Buffer;
-    if((b->Size + n) > b->Capacity) {
-        u64 NewCapacity = b->Capacity + KILOBYTES(4);
-        b->Data = realloc(b->Data, NewCapacity);
-        b->Capacity = NewCapacity;
-    }
-    
-    // Move all bytes after cursor forward n bytes
-    for(s64 i = b->Size - 1; i >= b->Cursor.ByteOff; i--) {
-        b->Data[i + n] = b->Data[i];
-    }
-    
-    for(u8 i = 0; i < n; i++) {
-        b->Data[b->Cursor.ByteOff + i] = Char[i];
-    }
-    b->Size += n;
-    
-    cursor_move(b, RIGHT);
-#endif
+    // TODO: keep lines up to date
+    //cursor_move(b, RIGHT);
 }
 
 void
@@ -181,7 +183,7 @@ load_file(char *Path, buffer_t *Dest) {
         Line.Size += n;
         Line.ColumnCount += 1;
         
-        if(Dest->Data[i] == '\n') {
+        if(Dest->Data[i] == '\n' || (i + n) >= Dest->Used) {
             line_t *l = mem_buf_push_struct(&Dest->Lines, line_t);
             *l = Line;
             mem_zero_struct(&Line);
@@ -203,18 +205,19 @@ k_do_editor(platform_shared_t *Shared) {
     for(s32 i = 0; i < Events->Count; ++i) {
         input_event_t *e = &Events->Events[i];
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
+            s32 StepSize = (e->Modifiers & INPUT_MOD_Control) ? 5 : 1;
             switch(e->Key.KeyCode) {
                 case KEY_Left: {
-                    cursor_move(&Ctx.Buffer, LEFT);
+                    cursor_move(&Ctx.Buffer, LEFT, StepSize);
                 } break;
                 case KEY_Right: {
-                    cursor_move(&Ctx.Buffer, RIGHT);
+                    cursor_move(&Ctx.Buffer, RIGHT, StepSize);
                 } break;
                 case KEY_Up: {
-                    cursor_move(&Ctx.Buffer, UP);
+                    cursor_move(&Ctx.Buffer, UP, StepSize);
                 } break;
                 case KEY_Down: {
-                    cursor_move(&Ctx.Buffer, DOWN);
+                    cursor_move(&Ctx.Buffer, DOWN, StepSize);
                 } break;
                 
                 default: {
@@ -240,5 +243,3 @@ k_do_editor(platform_shared_t *Shared) {
         x += b->w + 10;
     }
 }
-
-

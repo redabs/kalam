@@ -4,7 +4,7 @@
 typedef struct {
     u64 ByteOffset;
     u64 Size;
-    u64 ColumnCount; // in characters
+    s64 ColumnCount; // in characters
 } line_t;
 
 typedef struct {
@@ -13,9 +13,9 @@ typedef struct {
     u64 Used; // In bytes of contents
     mem_buffer_t Lines; // line_t
     struct {
-        u64 Line; // 0 based
-        u64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
-        u64 ColumnWas;
+        s64 Line; // 0 based
+        s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
+        s64 ColumnWas;
         u64 ByteOffset;
     } Cursor;
 } buffer_t;
