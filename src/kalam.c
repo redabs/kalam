@@ -106,24 +106,31 @@ void
 do_char(buffer_t *Buf, u8 *Char) {
     u8 n = utf8_char_width(Char);
     if(Buf->Used + n > Buf->Capacity) {
-        Buf->Capacity = (Buf->Capacity + 4096) & ~(4096 - 1);
+        Buf->Capacity = (Buf->Capacity + 4096) & (4096 - 1);
         Buf->Data = realloc(Buf->Data, Buf->Capacity);
         ASSERT(Buf->Data);
     }
     Buf->Used += n;
     
-    for(u64 i = Buf->Used - 1; i >= Buf->Cursor.ByteOffset; --i) {
-        Buf->Data[i + n] = Buf->Data[i];
+    for(u64 i = Buf->Used; i > Buf->Cursor.ByteOffset; --i) {
+        Buf->Data[i + n - 1] = Buf->Data[i - 1];
     }
     
     for(s64 i = 0; i < n; ++i) {
         Buf->Data[Buf->Cursor.ByteOffset] = Char[i];
     }
     
-    
     // Update following lines
     for(s64 i = Buf->Cursor.Line + 1; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
         ((line_t *)Buf->Lines.Data)[i].ByteOffset += n;
+    }
+    
+    // If we realloc when pushing the struct pointers to lines might get invalidated
+    if(*Char == '\n') {
+        mem_buf_push_struct(&Buf->Lines, line_t);
+        for(s64 i = mem_buf_count(&Buf->Lines, line_t) - 1; i > Buf->Cursor.Line; --i) {
+            ((line_t *)Buf->Lines.Data)[i] = ((line_t *)Buf->Lines.Data)[i - 1];
+        }
     }
     
     line_t *CurrentLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
@@ -132,22 +139,19 @@ do_char(buffer_t *Buf, u8 *Char) {
     
     // TODO: CRLF 
     if(*Char == '\n') {
-        mem_buf_push_struct(&Buf->Lines, line_t);
-        for(s64 i = mem_buf_count(&Buf->Lines, line_t); i > Buf->Cursor.Line; --i) {
-            ((line_t *)Buf->Lines.Data)[i] = ((line_t *)Buf->Lines.Data)[i - 1];
-        }
-        
-        line_t *NewLine = CurrentLine + 1;
+        line_t *NewLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
         NewLine->ByteOffset = Buf->Cursor.ByteOffset + n;
-        NewLine->Size = CurrentLine->Size - (Buf->Cursor.ByteOffset - CurrentLine->ByteOffset);
-        NewLine->ColumnCount = CurrentLine->ColumnCount - Buf->Cursor.ColumnIs;
+        NewLine->Size = CurrentLine->Size - (NewLine->ByteOffset - CurrentLine->ByteOffset);
+        NewLine->ColumnCount = CurrentLine->ColumnCount - (Buf->Cursor.ColumnIs + 1);
         
-        // Cut off current line
-        CurrentLine->Size = Buf->Cursor.ByteOffset - CurrentLine->ByteOffset + n;
-        CurrentLine->ColumnCount = Buf->Cursor.ColumnIs + 1;
-    }
+        // Split current line
+        CurrentLine->Size -= NewLine->Size;
+        CurrentLine->ColumnCount -= NewLine->ColumnCount;
+        
+    } 
     
     cursor_move(Buf, RIGHT, 1);
+    
 }
 
 
