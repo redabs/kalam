@@ -74,6 +74,17 @@ utf8_to_codepoint(u8 *Utf8, u32 *Codepoint) {
     return Utf8 + 1;
 }
 
+u8
+utf8_char_width(u8 *Char) {
+    switch(*Char & 0xf0) {
+        case 0xf0: { return 4; } break;
+        case 0xe0: { return 3; } break;
+        case 0xd0:
+        case 0xc0: { return 2; } break;
+        default:   { return 1; } break;
+    }
+}
+
 void
 clear_framebuffer(framebuffer_t *Fb, u32 Color) {
     u64 Size = Fb->Width * Fb->Height;
@@ -150,7 +161,14 @@ draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u8 *Start, 
     s32 CursorX = x;
     while(c < End) {
         u32 Codepoint;
+        if(*c == '\n') { 
+#if 0
+            c += utf8_char_width(c);
+            continue;
+#endif
+        }
         c = utf8_to_codepoint(c, &Codepoint);
+        
         glyph_set_t *Set;
         
         if(get_glyph_set(Font, Codepoint, &Set)) {

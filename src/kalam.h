@@ -7,7 +7,8 @@ typedef struct {
     s64 ColumnCount; // in characters
 } line_t;
 
-typedef struct {
+typedef 
+struct {
     u8 *Data;
     u64 Capacity;
     u64 Used; // In bytes of contents

@@ -13,17 +13,6 @@
 
 ctx_t Ctx = {0};
 
-u8
-utf8_char_width(u8 *Char) {
-    switch(*Char & 0xf0) {
-        case 0xf0: { return 4; } break;
-        case 0xe0: { return 3; } break;
-        case 0xd0:
-        case 0xc0: { return 2; } break;
-        default:   { return 1; } break;
-    }
-}
-
 typedef enum {
     UP    = 1,
     DOWN  = 1 << 1,
@@ -115,35 +104,50 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
 
 void
 do_char(buffer_t *Buf, u8 *Char) {
-#if 0
     u8 n = utf8_char_width(Char);
     if(Buf->Used + n > Buf->Capacity) {
         Buf->Capacity = (Buf->Capacity + 4096) & ~(4096 - 1);
         Buf->Data = realloc(Buf->Data, Buf->Capacity);
         ASSERT(Buf->Data);
     }
+    Buf->Used += n;
     
     for(u64 i = Buf->Used - 1; i >= Buf->Cursor.ByteOffset; --i) {
         Buf->Data[i + n] = Buf->Data[i];
     }
     
+    for(s64 i = 0; i < n; ++i) {
+        Buf->Data[Buf->Cursor.ByteOffset] = Char[i];
+    }
+    
+    
+    // Update following lines
+    for(s64 i = Buf->Cursor.Line + 1; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
+        ((line_t *)Buf->Lines.Data)[i].ByteOffset += n;
+    }
+    
+    line_t *CurrentLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
+    CurrentLine->Size += n;
+    CurrentLine->ColumnCount += 1;
+    
     // TODO: CRLF 
     if(*Char == '\n') {
         mem_buf_push_struct(&Buf->Lines, line_t);
-        for(s64 i = mem_buf_count(&Buf->Lines, line_t) - 1; i >= Buf->Cursor.Line; --i) {
-            
-        }
-    } else {
-        for(s64 i = Buf->Cursor.Line + 1; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
-            ((line_t *)Buf->Lines.Data)[i].ByteOffset += n;
+        for(s64 i = mem_buf_count(&Buf->Lines, line_t); i > Buf->Cursor.Line; --i) {
+            ((line_t *)Buf->Lines.Data)[i] = ((line_t *)Buf->Lines.Data)[i - 1];
         }
         
-        line_t *Line = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
-        Line->Size += n;
-        Line->ColumnCount++;
+        line_t *NewLine = CurrentLine + 1;
+        NewLine->ByteOffset = Buf->Cursor.ByteOffset + n;
+        NewLine->Size = CurrentLine->Size - (Buf->Cursor.ByteOffset - CurrentLine->ByteOffset);
+        NewLine->ColumnCount = CurrentLine->ColumnCount - Buf->Cursor.ColumnIs;
+        
+        // Cut off current line
+        CurrentLine->Size = Buf->Cursor.ByteOffset - CurrentLine->ByteOffset + n;
+        CurrentLine->ColumnCount = Buf->Cursor.ColumnIs + 1;
     }
-    // Update byteoffset of all following lines
-#endif
+    
+    cursor_move(Buf, RIGHT, 1);
 }
 
 
@@ -158,11 +162,10 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
         draw_rect(Fb, (irect_t){.x = x, .y = y, .w = Font->MWidth, .h = LineHeight}, 0xff117766);
     }
     
-    int LineEndBytes = 1; // TODO: CRLF
     for(s64 i = 0; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
         line_t *Line = (line_t *)Buf->Lines.Data + i;
         u8 *Start = Buf->Data + Line->ByteOffset;
-        u8 *End = Start + Line->Size - LineEndBytes;
+        u8 *End = Start + Line->Size;
         s32 LineY = (s32)i * LineHeight;
         s32 Center = LineY + (LineHeight >> 1);
         s32 Baseline = Center + (Font->MHeight >> 1);
