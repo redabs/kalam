@@ -14,7 +14,7 @@ typedef enum {
 
 typedef enum {
     INPUT_MOD_Alt      = 1,
-    INPUT_MOD_Control  = 1 << 1,
+    INPUT_MOD_Ctrl     = 1 << 1,
     INPUT_MOD_Shift    = 1 << 2,
     INPUT_MOD_CapsLock = 1 << 3,
     INPUT_MOD_NumLock  = 1 << 4,

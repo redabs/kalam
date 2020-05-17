@@ -1,3 +1,43 @@
+glyph_set_t *
+load_glyph_set(font_t *Font, u32 Codepoint) {
+    if(Font->SetCount < GLYPH_SET_MAX) {
+        glyph_set_t *Set = malloc(sizeof(glyph_set_t));
+        u32 FirstCodepoint = Codepoint & (~0xff);
+        Font->GlyphSets[Font->SetCount].Set = Set;
+        Font->GlyphSets[Font->SetCount].FirstCodepoint = FirstCodepoint;
+        Font->SetCount++;
+        
+        bitmap_t *b = &Set->Bitmap;
+        b->w = 128;
+        b->h = 128;
+        b->Data = malloc(b->w * b->h);
+        while(stbtt_BakeFontBitmap(Font->File.Data, 0, Font->Size, b->Data, b->w, b->h, FirstCodepoint, 256, Set->Glyphs) <= 0) {
+            b->w *= 2;
+            b->h *= 2;
+            b->Data = realloc(b->Data, b->w * b->h);
+        }
+        b->Stride = b->w;
+        
+        return Set;
+    }
+    
+    return 0;
+}
+
+b32
+get_glyph_set(font_t *Font, u32 Codepoint, glyph_set_t **GlyphSet) {
+    u32 FirstCodepoint = Codepoint & (~0xff);
+    for(u32 i = 0; i < Font->SetCount; ++i) {
+        if(Font->GlyphSets[i].FirstCodepoint == FirstCodepoint) {
+            *GlyphSet = Font->GlyphSets[i].Set;
+            return true;
+        }
+    }
+    
+    *GlyphSet = load_glyph_set(Font, Codepoint);
+    return (*GlyphSet) != 0;
+}
+
 // Takes a pointer to a string of utf-8 encoded characters
 // Returns a pointer to the next character in the string
 inline u8 *
@@ -101,5 +141,25 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t 
         }
         DestRow += Fb->Width;
         SrcRow += Bitmap->Stride;
+    }
+}
+
+void 
+draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u8 *Start, u8 *End) {
+    u8 *c = Start; 
+    s32 CursorX = x;
+    while(c < End) {
+        u32 Codepoint;
+        c = utf8_to_codepoint(c, &Codepoint);
+        glyph_set_t *Set;
+        
+        if(get_glyph_set(Font, Codepoint, &Set)) {
+            stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
+            irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
+            s32 yOff = (s32)(g->yoff + 0.5);
+            draw_glyph_bitmap(Fb, CursorX, Baseline + yOff, gRect, &Set->Bitmap);
+            
+            CursorX += (s32)(g->xadvance + 0.5);
+        }
     }
 }

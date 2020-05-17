@@ -150,9 +150,9 @@ utf16_to_utf8(u32 Utf16, u8 *Utf8) {
     }
 }
 
+input_modifier Modifiers; 
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
-    local_persist input_modifier Modifiers; 
     input_event_t Event = {0};
     switch(Message->message) {
         case WM_KEYDOWN: 
@@ -169,7 +169,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             
             if(!Event.Key.IsRepeatKey) {
                 Modifiers ^= ((INPUT_MOD_Alt * (Event.Key.KeyCode == VK_MENU)) |
-                              (INPUT_MOD_Control * (Event.Key.KeyCode == VK_CONTROL)) |
+                              (INPUT_MOD_Ctrl * (Event.Key.KeyCode == VK_CONTROL)) |
                               (INPUT_MOD_Shift * (Event.Key.KeyCode == VK_SHIFT)) |
                               (INPUT_MOD_CapsLock * (Event.Key.KeyCode == VK_CAPITAL)) |
                               (INPUT_MOD_NumLock * (Event.Key.KeyCode == VK_NUMLOCK)));

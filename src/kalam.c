@@ -6,10 +6,10 @@
 #include "types.h"
 #include "event.h"
 #include "platform.h"
+
 #include "kalam.h"
 
 #include "render.c"
-#include "font.c"
 
 ctx_t Ctx = {0};
 
@@ -114,11 +114,39 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
 }
 
 void
-do_char(u8 *Char) {
+do_char(buffer_t *Buf, u8 *Char) {
+#if 0
     u8 n = utf8_char_width(Char);
-    // TODO: keep lines up to date
-    //cursor_move(b, RIGHT);
+    if(Buf->Used + n > Buf->Capacity) {
+        Buf->Capacity = (Buf->Capacity + 4096) & ~(4096 - 1);
+        Buf->Data = realloc(Buf->Data, Buf->Capacity);
+        ASSERT(Buf->Data);
+    }
+    
+    for(u64 i = Buf->Used - 1; i >= Buf->Cursor.ByteOffset; --i) {
+        Buf->Data[i + n] = Buf->Data[i];
+    }
+    
+    // TODO: CRLF 
+    if(*Char == '\n') {
+        mem_buf_push_struct(&Buf->Lines, line_t);
+        for(s64 i = mem_buf_count(&Buf->Lines, line_t) - 1; i >= Buf->Cursor.Line; --i) {
+            
+        }
+    } else {
+        for(s64 i = Buf->Cursor.Line + 1; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
+            ((line_t *)Buf->Lines.Data)[i].ByteOffset += n;
+        }
+        
+        line_t *Line = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
+        Line->Size += n;
+        Line->ColumnCount++;
+    }
+    // Update byteoffset of all following lines
+#endif
 }
+
+
 
 void
 draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
@@ -129,32 +157,46 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
         s32 y = LineHeight * (s32)Buf->Cursor.Line;
         draw_rect(Fb, (irect_t){.x = x, .y = y, .w = Font->MWidth, .h = LineHeight}, 0xff117766);
     }
-    s32 LineIndex = 0;
-    u8 *c = Buf->Data;
-    u8 *End = Buf->Data + Buf->Used;
-    s32 CursorX = 0;
-    while(c < End) {
-        s32 LineY = LineIndex * LineHeight;
+    
+    int LineEndBytes = 1; // TODO: CRLF
+    for(s64 i = 0; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
+        line_t *Line = (line_t *)Buf->Lines.Data + i;
+        u8 *Start = Buf->Data + Line->ByteOffset;
+        u8 *End = Start + Line->Size - LineEndBytes;
+        s32 LineY = (s32)i * LineHeight;
         s32 Center = LineY + (LineHeight >> 1);
         s32 Baseline = Center + (Font->MHeight >> 1);
         
-        u32 Codepoint;
-        c = utf8_to_codepoint(c, &Codepoint);
+        draw_text_line(Fb, Font, 0, Baseline, Start, End);
+    }
+}
+
+font_t
+load_ttf(char *Path, f32 Size) {
+    font_t Font = {0};
+    Font.Size = Size;
+    
+    ASSERT(platform_read_file(Path, &Font.File));
+    
+    s32 Status = stbtt_InitFont(&Font.StbInfo, Font.File.Data, 0);
+    
+    stbtt_GetFontVMetrics(&Font.StbInfo, &Font.Ascent, &Font.Descent, &Font.LineGap);
+    f32 Scale = stbtt_ScaleForMappingEmToPixels(&Font.StbInfo, Size);
+    Font.Ascent = (s32)(Font.Ascent * Scale);
+    Font.Descent = (s32)(Font.Descent * Scale);
+    Font.LineGap = (s32)(Font.LineGap * Scale);
+    
+    {
         glyph_set_t *Set;
-        if(get_glyph_set(Font, Codepoint, &Set)) {
-            stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
-            irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
-            s32 yOff = (s32)(g->yoff + 0.5);
-            draw_glyph_bitmap(Fb, CursorX, Baseline + yOff, gRect, &Set->Bitmap);
-            
-            if(Codepoint == '\n') {
-                ++LineIndex;
-                CursorX = 0;
-            } else {
-                CursorX += (s32)(g->xadvance + 0.5);
-            }
+        if(get_glyph_set(&Font, 'M', &Set)) {
+            stbtt_bakedchar *g = &Set->Glyphs['M'];
+            Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
+            Font.MWidth = (s32)(g->x1 - g->x0 + 0.5);
         }
     }
+    
+    
+    return Font;
 }
 
 void
@@ -196,8 +238,9 @@ void
 k_init(platform_shared_t *Shared) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 15);
     load_file("test.c", &Ctx.Buffer);
-    
 }
+
+extern input_modifier Modifiers;
 
 void
 k_do_editor(platform_shared_t *Shared) {
@@ -205,7 +248,7 @@ k_do_editor(platform_shared_t *Shared) {
     for(s32 i = 0; i < Events->Count; ++i) {
         input_event_t *e = &Events->Events[i];
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
-            s32 StepSize = (e->Modifiers & INPUT_MOD_Control) ? 5 : 1;
+            s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
             switch(e->Key.KeyCode) {
                 case KEY_Left: {
                     cursor_move(&Ctx.Buffer, LEFT, StepSize);
@@ -222,7 +265,7 @@ k_do_editor(platform_shared_t *Shared) {
                 
                 default: {
                     if(e->Key.HasCharacterTranslation) {
-                        do_char(e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
+                        do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
                     }
                 } break;
             }
