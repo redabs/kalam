@@ -150,9 +150,10 @@ utf16_to_utf8(u32 Utf16, u8 *Utf8) {
     }
 }
 
-input_modifier Modifiers; 
+
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
+    local_persist input_modifier Modifiers; 
     input_event_t Event = {0};
     switch(Message->message) {
         case WM_KEYDOWN: 

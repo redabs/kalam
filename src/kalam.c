@@ -1,5 +1,6 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "deps/stb_truetype.h"
+#include "deps/stretchy_buffer.h"
 
 #include "intrinsics.h"
 #include "memory.h"
@@ -27,17 +28,14 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
     switch(Dir) {
         case DOWN: 
         case UP: {
-            s64 LineCount = mem_buf_count(&Buf->Lines, line_t);
             if((Dir == UP && Buf->Cursor.Line > 0) ||
-               (Dir == DOWN && Buf->Cursor.Line < LineCount)) {
-                s64 LineNum = CLAMP(0, LineCount - 1, Buf->Cursor.Line + ((Dir == DOWN) ? StepSize : -StepSize));
-                line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
-                Column = MIN(Buf->Cursor.ColumnWas, Line->ColumnCount - 1);
+               (Dir == DOWN && Buf->Cursor.Line < (sb_count(Buf->Lines) - 1))) {
+                s64 LineNum = CLAMP(0, sb_count(Buf->Lines) - 1, Buf->Cursor.Line + ((Dir == DOWN) ? StepSize : -StepSize));
+                Column = MIN(Buf->Cursor.ColumnWas, Buf->Lines[LineNum].ColumnCount - 1);
                 
                 Buf->Cursor.Line = LineNum;
                 Buf->Cursor.ColumnIs = Column;
-                Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
-                Buf->Cursor.ByteOffset = Line->ByteOffset;
+                Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
                 for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
                     Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
                 }
@@ -46,17 +44,15 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
         
         case RIGHT: {
             s64 LineNum = Buf->Cursor.Line;
-            line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
             Column = Buf->Cursor.ColumnIs;
-            s64 LineCount = mem_buf_count(&Buf->Lines, line_t);
+            s64 LineCount = sb_count(Buf->Lines);
             for(s64 i = 0; i < StepSize; ++i) {
-                if(Column + 1 >= Line->ColumnCount) {
+                if(Column + 1 >= Buf->Lines[LineNum].ColumnCount) {
                     if(LineNum + 1 >= LineCount) {
-                        Column = Line->ColumnCount;
+                        Column = Buf->Lines[LineNum].ColumnCount;
                         break;
                     }
                     LineNum++;
-                    Line++;
                     Column = 0;
                 } else {
                     Column++;
@@ -66,7 +62,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.Line = LineNum;
             Buf->Cursor.ColumnIs = Column;
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
-            Buf->Cursor.ByteOffset = Line->ByteOffset;
+            Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
                 Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
             }
@@ -74,7 +70,6 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
         
         case LEFT: {
             s64 LineNum = Buf->Cursor.Line;
-            line_t *Line = (line_t *)Buf->Lines.Data + LineNum;
             Column = Buf->Cursor.ColumnIs;
             for(s64 i = 0; i < StepSize; ++i) {
                 if(Column - 1 < 0) {
@@ -83,8 +78,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
                         break;
                     }
                     LineNum--;
-                    Line--;
-                    Column = Line->ColumnCount - 1;
+                    Column = Buf->Lines[LineNum].ColumnCount - 1;
                 } else {
                     Column--;
                 }
@@ -93,7 +87,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.Line = LineNum;
             Buf->Cursor.ColumnIs = Column;
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
-            Buf->Cursor.ByteOffset = Line->ByteOffset;
+            Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
                 Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
             }
@@ -105,15 +99,10 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
 void
 do_char(buffer_t *Buf, u8 *Char) {
     u8 n = utf8_char_width(Char);
-    if(Buf->Used + n > Buf->Capacity) {
-        Buf->Capacity = (Buf->Capacity + 4096) & (4096 - 1);
-        Buf->Data = realloc(Buf->Data, Buf->Capacity);
-        ASSERT(Buf->Data);
-    }
-    Buf->Used += n;
+    sb_add(Buf->Data, n);
     
-    for(u64 i = Buf->Used; i > Buf->Cursor.ByteOffset; --i) {
-        Buf->Data[i + n - 1] = Buf->Data[i - 1];
+    for(s64 i = sb_count(Buf->Data) - 1; i >= Buf->Cursor.ByteOffset; --i) {
+        Buf->Data[i + n] = Buf->Data[i];
     }
     
     for(s64 i = 0; i < n; ++i) {
@@ -121,32 +110,28 @@ do_char(buffer_t *Buf, u8 *Char) {
     }
     
     // Update following lines
-    for(s64 i = Buf->Cursor.Line + 1; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
-        ((line_t *)Buf->Lines.Data)[i].ByteOffset += n;
+    for(s64 i = Buf->Cursor.Line + 1; i < sb_count(Buf->Lines); ++i) {
+        Buf->Lines[i].ByteOffset += n;
     }
     
-    // If we realloc when pushing the struct pointers to lines might get invalidated
-    if(*Char == '\n') {
-        mem_buf_push_struct(&Buf->Lines, line_t);
-        for(s64 i = mem_buf_count(&Buf->Lines, line_t) - 1; i > Buf->Cursor.Line; --i) {
-            ((line_t *)Buf->Lines.Data)[i] = ((line_t *)Buf->Lines.Data)[i - 1];
-        }
-    }
-    
-    line_t *CurrentLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line;
-    CurrentLine->Size += n;
-    CurrentLine->ColumnCount += 1;
+    Buf->Lines[Buf->Cursor.Line].Size += n;
+    Buf->Lines[Buf->Cursor.Line].ColumnCount += 1;
     
     // TODO: CRLF 
     if(*Char == '\n') {
-        line_t *NewLine = (line_t *)Buf->Lines.Data + Buf->Cursor.Line + 1;
+        sb_add(Buf->Lines, 1);
+        for(s64 i = sb_count(Buf->Lines) - 1; i > Buf->Cursor.Line; --i) {
+            Buf->Lines[i] = Buf->Lines[i - 1];
+        }
+        
+        line_t *NewLine = &Buf->Lines[Buf->Cursor.Line + 1];
         NewLine->ByteOffset = Buf->Cursor.ByteOffset + n;
-        NewLine->Size = CurrentLine->Size - (NewLine->ByteOffset - CurrentLine->ByteOffset);
-        NewLine->ColumnCount = CurrentLine->ColumnCount - (Buf->Cursor.ColumnIs + 1);
+        NewLine->Size = Buf->Lines[Buf->Cursor.Line].Size - (NewLine->ByteOffset - Buf->Lines[Buf->Cursor.Line].ByteOffset);
+        NewLine->ColumnCount = Buf->Lines[Buf->Cursor.Line].ColumnCount - (Buf->Cursor.ColumnIs + 1);
         
         // Split current line
-        CurrentLine->Size -= NewLine->Size;
-        CurrentLine->ColumnCount -= NewLine->ColumnCount;
+        Buf->Lines[Buf->Cursor.Line].Size -= NewLine->Size;
+        Buf->Lines[Buf->Cursor.Line].ColumnCount -= NewLine->ColumnCount;
         
     } 
     
@@ -154,22 +139,16 @@ do_char(buffer_t *Buf, u8 *Char) {
     
 }
 
-
-
 void
 draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
     s32 LineHeight = Font->Ascent - Font->Descent; 
-    {
-        u32 Codepoint = 'M';
-        s32 x = Font->MWidth * (s32)Buf->Cursor.ColumnIs;
-        s32 y = LineHeight * (s32)Buf->Cursor.Line;
-        draw_rect(Fb, (irect_t){.x = x, .y = y, .w = Font->MWidth, .h = LineHeight}, 0xff117766);
-    }
     
-    for(s64 i = 0; i < mem_buf_count(&Buf->Lines, line_t); ++i) {
-        line_t *Line = (line_t *)Buf->Lines.Data + i;
-        u8 *Start = Buf->Data + Line->ByteOffset;
-        u8 *End = Start + Line->Size;
+    irect_t Cursor = {.x = Font->MWidth * (s32)Buf->Cursor.ColumnIs, .y = LineHeight * (s32)Buf->Cursor.Line, .w = Font->MWidth, .h = LineHeight};
+    draw_rect(Fb, Cursor, 0xff117766);
+    
+    for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
+        u8 *Start = Buf->Data + Buf->Lines[i].ByteOffset;
+        u8 *End = Start + Buf->Lines[i].Size;
         s32 LineY = (s32)i * LineHeight;
         s32 Center = LineY + (LineHeight >> 1);
         s32 Baseline = Center + (Font->MHeight >> 1);
@@ -193,32 +172,26 @@ load_ttf(char *Path, f32 Size) {
     Font.Descent = (s32)(Font.Descent * Scale);
     Font.LineGap = (s32)(Font.LineGap * Scale);
     
-    {
-        glyph_set_t *Set;
-        if(get_glyph_set(&Font, 'M', &Set)) {
-            stbtt_bakedchar *g = &Set->Glyphs['M'];
-            Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
-            Font.MWidth = (s32)(g->x1 - g->x0 + 0.5);
-        }
+    glyph_set_t *Set;
+    if(get_glyph_set(&Font, 'M', &Set)) {
+        stbtt_bakedchar *g = &Set->Glyphs['M'];
+        Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
+        Font.MWidth = (s32)(g->x1 - g->x0 + 0.5);
     }
-    
     
     return Font;
 }
 
 void
-load_file(char *Path, buffer_t *Dest) {
-    mem_zero_struct(Dest);
+load_file(char *Path, buffer_t *Buf) {
+    mem_zero_struct(Buf);
     {
         // TODO: Think a little harder about how files are loaded
         platform_file_data_t File;
         ASSERT(platform_read_file(Path, &File));
         
-        u64 Capacity = (File.Size + 4096) & ~(4096 - 1);
-        Dest->Data = malloc(Capacity);
-        Dest->Used = File.Size;
-        Dest->Capacity = Capacity;
-        mem_copy(Dest->Data, File.Data, File.Size);
+        sb_add(Buf->Data, File.Size);
+        mem_copy(Buf->Data, File.Data, File.Size);
         
         platform_free_file(&File);
         
@@ -227,13 +200,13 @@ load_file(char *Path, buffer_t *Dest) {
     // TODO: Detect file encoding, we assume utf-8 for now
     line_t Line = {0};
     u8 n = 0;
-    for(u64 i = 0; i < Dest->Used; i += n) {
-        n = utf8_char_width(Dest->Data + i);
+    for(s64 i = 0; i < sb_count(Buf->Data); i += n) {
+        n = utf8_char_width(Buf->Data + i);
         Line.Size += n;
         Line.ColumnCount += 1;
         
-        if(Dest->Data[i] == '\n' || (i + n) >= Dest->Used) {
-            line_t *l = mem_buf_push_struct(&Dest->Lines, line_t);
+        if(Buf->Data[i] == '\n' || (i + n) >= sb_count(Buf->Data)) {
+            line_t *l = sb_add(Buf->Lines, 1);
             *l = Line;
             mem_zero_struct(&Line);
             Line.ByteOffset = i + n;
@@ -245,9 +218,8 @@ void
 k_init(platform_shared_t *Shared) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 15);
     load_file("test.c", &Ctx.Buffer);
+    //load_file("../test/test.txt", &Ctx.Buffer);
 }
-
-extern input_modifier Modifiers;
 
 void
 k_do_editor(platform_shared_t *Shared) {

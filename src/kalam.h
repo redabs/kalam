@@ -2,22 +2,20 @@
 #define KALAM_H
 
 typedef struct {
-    u64 ByteOffset;
-    u64 Size;
+    s64 ByteOffset;
+    s64 Size;
     s64 ColumnCount; // in characters
 } line_t;
 
 typedef 
 struct {
-    u8 *Data;
-    u64 Capacity;
-    u64 Used; // In bytes of contents
-    mem_buffer_t Lines; // line_t
+    u8 *Data; // stb
+    line_t *Lines; // stb
     struct {
         s64 Line; // 0 based
         s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
         s64 ColumnWas;
-        u64 ByteOffset;
+        s64 ByteOffset;
     } Cursor;
 } buffer_t;
 
