@@ -175,7 +175,8 @@ draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u8 *Start, 
             stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
             irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
             s32 yOff = (s32)(g->yoff + 0.5);
-            draw_glyph_bitmap(Fb, CursorX, Baseline + yOff, gRect, &Set->Bitmap);
+            s32 xOff = (s32)(g->xoff + 0.5);
+            draw_glyph_bitmap(Fb, CursorX + xOff, Baseline + yOff, gRect, &Set->Bitmap);
             
             CursorX += (s32)(g->xadvance + 0.5);
         }

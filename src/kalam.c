@@ -221,32 +221,173 @@ k_init(platform_shared_t *Shared) {
     //load_file("../test/test.txt", &Ctx.Buffer);
 }
 
+panel_t *
+panel_alloc() {
+    panel_t *Result = malloc(sizeof(panel_t));
+    mem_zero_struct(Result);
+    return Result;
+}
+
+void
+panel_create(panel_ctx *PanelCtx) {
+    if(!PanelCtx->Root) {
+        PanelCtx->Root = panel_alloc();
+        PanelCtx->Root->Buffer = &Ctx.Buffer;
+        PanelCtx->Selected = PanelCtx->Root;
+    } else {
+        panel_t *Parent = PanelCtx->Selected;
+        panel_t *Left = panel_alloc();
+        panel_t *Right = panel_alloc();
+        Left->Parent = Right->Parent = Parent;
+        
+        Parent->Children[0] = Left;
+        Parent->Children[1] = Right;
+        
+        Left->Buffer = Right->Buffer = Parent->Buffer;
+        Parent->Buffer = 0;
+        
+        PanelCtx->Selected = Left;
+    }
+}
+
+void
+panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
+    if(Panel->Parent) {
+        panel_t *Parent = Panel->Parent;
+        panel_t *OtherChild = Parent->Children[0] == Panel ? Parent->Children[1] : Parent->Children[0];
+        if(Parent->Parent) {
+            panel_t **p = Parent->Parent->Children[0] == Parent ? &Parent->Parent->Children[0] : &Parent->Parent->Children[1];
+            *p = OtherChild;
+            OtherChild->Parent = Parent->Parent;
+        } else {
+            OtherChild->Parent = 0;
+            PanelCtx->Root = OtherChild;
+        }
+        free(Parent);
+        free(Panel);
+        PanelCtx->Selected = OtherChild;
+    } else {
+        free(Panel);
+        PanelCtx->Root = 0;
+        PanelCtx->Selected = 0;
+    }
+}
+
+
+void
+panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
+    if(Panel->Buffer) {
+        u32 c = 0xff000000 | (u32)((u64)(Panel) * 0x127382 ^ 0x138293);
+        draw_rect(Fb, Rect, c);
+        if(Ctx.PanelCtx.Selected == Panel) {
+            if(Panel->Split == SPLIT_Vertical) {
+                draw_rect(Fb, (irect_t){Rect.x + Rect.w - 4, Rect.y, 4, Rect.h}, 0xffff00ff);
+            } else {
+                draw_rect(Fb, (irect_t){Rect.x, Rect.y + Rect.h - 4, Rect.w, 4}, 0xffff00ff);
+            }
+        }
+    } else {
+        if(Panel->Split == SPLIT_Vertical) {
+            s32 Hw = Rect.w / 2;
+            panel_draw(Fb, Panel->Children[0], (irect_t){Rect.x, Rect.y, Hw, Rect.h});
+            s32 RoundedHw = (s32)((f32)Rect.w / 2 + 0.5);
+            panel_draw(Fb, Panel->Children[1], (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h});
+        } else if (Panel->Split == SPLIT_Horizontal) {
+            s32 Hh = Rect.h / 2;
+            panel_draw(Fb, Panel->Children[0], (irect_t){Rect.x, Rect.y, Rect.w, Hh});
+            s32 RoundedHh = (s32)((f32)Rect.h / 2 + 0.5);
+            panel_draw(Fb, Panel->Children[1], (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh});
+        }
+    }
+}
+
+void
+draw_panels(framebuffer_t *Fb) {
+    if(Ctx.PanelCtx.Root) {
+        irect_t Rect = {0, 0, Fb->Width, Fb->Height};
+        panel_draw(Fb, Ctx.PanelCtx.Root, Rect);
+    }
+}
+
+s32
+panel_child_index(panel_t *Panel) {
+    s32 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
+    return i;
+}
+
+void
+panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
+    // Panel->Children[0] is always left or above 
+    panel_t *Panel = PanelCtx->Selected;
+    if(PanelCtx->Root == Panel) {
+        return;
+    }
+    
+    if(Dir == LEFT) {
+    } else if(Dir == RIGHT) {
+        s32 Ci = panel_child_index(Panel);
+        panel_t *p = (Ci == 0) ? Panel->Parent : Panel->Parent->Parent;
+        while(p && p->Split != SPLIT_Vertical) {
+            Ci = panel_child_index(p);
+            p = p->Parent;
+        }
+        
+        if(p) {
+            p = p->Children[Ci ^ 1];
+            while(!p->Buffer) {
+                p = p->Children[0];
+            }
+            PanelCtx->Selected = p;
+        }
+        
+    } else if(Dir == UP) {
+    } else if(Dir == DOWN) {
+    }
+}
+
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
     for(s32 i = 0; i < Events->Count; ++i) {
         input_event_t *e = &Events->Events[i];
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
-            s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
-            switch(e->Key.KeyCode) {
-                case KEY_Left: {
-                    cursor_move(&Ctx.Buffer, LEFT, StepSize);
-                } break;
-                case KEY_Right: {
-                    cursor_move(&Ctx.Buffer, RIGHT, StepSize);
-                } break;
-                case KEY_Up: {
-                    cursor_move(&Ctx.Buffer, UP, StepSize);
-                } break;
-                case KEY_Down: {
-                    cursor_move(&Ctx.Buffer, DOWN, StepSize);
-                } break;
+            if(Ctx.Mode == MODE_Normal) {
                 
-                default: {
-                    if(e->Key.HasCharacterTranslation) {
-                        do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
-                    }
-                } break;
+            } else if(Ctx.Mode == MODE_Insert) {
+                
+                s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
+                switch(e->Key.KeyCode) {
+                    case KEY_Left: { cursor_move(&Ctx.Buffer, LEFT, StepSize); } continue;
+                    case KEY_Right: { cursor_move(&Ctx.Buffer, RIGHT, StepSize); } continue;
+                    case KEY_Up: { cursor_move(&Ctx.Buffer, UP, StepSize); } continue;
+                    case KEY_Down: { cursor_move(&Ctx.Buffer, DOWN, StepSize); } continue;
+                    default: {
+                        if(e->Key.HasCharacterTranslation) {
+                            do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
+                        }
+                    } continue;
+                }
+            }
+            
+            // Global
+            if(e->Key.KeyCode == KEY_N && e->Modifiers & INPUT_MOD_Ctrl) {
+                panel_create(&Ctx.PanelCtx);
+            } else if(e->Key.KeyCode == KEY_X && e->Modifiers & INPUT_MOD_Ctrl) { 
+                if(Ctx.PanelCtx.Selected) {
+                    Ctx.PanelCtx.Selected->Split ^= 1;
+                }
+            } else if(e->Key.KeyCode == KEY_W && e->Modifiers & INPUT_MOD_Ctrl) { 
+                if(Ctx.PanelCtx.Selected) {
+                    panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+                }
+            } else if(e->Key.KeyCode == KEY_Left && e->Modifiers & INPUT_MOD_Ctrl) {
+                panel_move_selected(&Ctx.PanelCtx, LEFT);
+            } else if(e->Key.KeyCode == KEY_Right && e->Modifiers & INPUT_MOD_Ctrl) {
+                panel_move_selected(&Ctx.PanelCtx, RIGHT);
+            } else if(e->Key.KeyCode == KEY_Up && e->Modifiers & INPUT_MOD_Ctrl) {
+                panel_move_selected(&Ctx.PanelCtx, UP);
+            } else if(e->Key.KeyCode == KEY_Down && e->Modifiers & INPUT_MOD_Ctrl) {
+                panel_move_selected(&Ctx.PanelCtx, DOWN);
             }
             
         } else if(e->Type == INPUT_EVENT_Scroll) {
@@ -264,4 +405,6 @@ k_do_editor(platform_shared_t *Shared) {
         draw_glyph_bitmap(Shared->Framebuffer, x, Shared->Framebuffer->Height - Rect.h, Rect, b);
         x += b->w + 10;
     }
+    
+    draw_panels(Shared->Framebuffer);
 }

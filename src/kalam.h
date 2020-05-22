@@ -7,8 +7,7 @@ typedef struct {
     s64 ColumnCount; // in characters
 } line_t;
 
-typedef 
-struct {
+typedef struct {
     u8 *Data; // stb
     line_t *Lines; // stb
     struct {
@@ -53,10 +52,40 @@ typedef struct {
     
 } font_t;
 
+typedef enum {
+    SPLIT_Vertical = 0,
+    SPLIT_Horizontal
+} split_mode;
+
+// Only the leaf nodes are actually regions where text is drawn.
+typedef struct panel_t panel_t;
+struct panel_t {
+    panel_t *Parent;
+    split_mode Split; 
+    
+    // Used when leaf node
+    buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
+    
+    // Used when non-leaf node
+    panel_t *Children[2]; 
+};
+
+typedef struct {
+    panel_t *Root;
+    panel_t *Selected;
+} panel_ctx; 
+
+typedef enum {
+    MODE_Normal = 0,
+    MODE_Insert
+} mode;
+
 typedef struct {
     font_t Font;
     ivec2_t p;
     buffer_t Buffer;
+    panel_ctx PanelCtx;
+    mode Mode;
 } ctx_t;
 
 #endif //KALAM_H
