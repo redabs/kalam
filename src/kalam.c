@@ -346,9 +346,17 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         
         if(Found) {
             while(!p->Buffer) {
-                p = p->Children[Idx];//p->Split == SPLIT_Vertical ? 1 : 0];
+                p = p->Children[Idx];
             }
-            PanelCtx->Selected = p;
+            
+            panel_t *Par = p->Parent;
+            // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
+            if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
+                PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
+            } else {
+                PanelCtx->Selected = p;
+                p->Parent->LastSelected = (u8)panel_child_index(p);
+            }
         }
         
     } else if(Dir == UP || Dir == DOWN) {
@@ -370,7 +378,15 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
             while(!p->Buffer) {
                 p = p->Children[Idx];
             }
-            PanelCtx->Selected = p;
+            
+            panel_t *Par = p->Parent;
+            // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
+            if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
+                PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
+            } else {
+                PanelCtx->Selected = p;
+                p->Parent->LastSelected = (u8)panel_child_index(p);
+            }
         }
         
     }

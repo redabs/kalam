@@ -68,6 +68,7 @@ struct panel_t {
     
     // Used when non-leaf node
     panel_t *Children[2]; 
+    u8 LastSelected;
 };
 
 typedef struct {
