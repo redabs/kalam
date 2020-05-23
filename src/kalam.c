@@ -223,6 +223,7 @@ k_init(platform_shared_t *Shared) {
 
 panel_t *
 panel_alloc() {
+    // TODO: free list with a set number of panels, you dont need more than like 16 anyway.
     panel_t *Result = malloc(sizeof(panel_t));
     mem_zero_struct(Result);
     return Result;
@@ -238,8 +239,8 @@ panel_create(panel_ctx *PanelCtx) {
         panel_t *Parent = PanelCtx->Selected;
         panel_t *Left = panel_alloc();
         panel_t *Right = panel_alloc();
-        Left->Parent = Right->Parent = Parent;
         
+        Left->Parent = Right->Parent = Parent;
         Parent->Children[0] = Left;
         Parent->Children[1] = Right;
         
@@ -280,24 +281,29 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
         u32 c = 0xff000000 | (u32)((u64)(Panel) * 0x127382 ^ 0x138293);
         draw_rect(Fb, Rect, c);
         if(Ctx.PanelCtx.Selected == Panel) {
+            irect_t r;
             if(Panel->Split == SPLIT_Vertical) {
-                draw_rect(Fb, (irect_t){Rect.x + Rect.w - 4, Rect.y, 4, Rect.h}, 0xffff00ff);
+                r = (irect_t){Rect.x + Rect.w - 4, Rect.y, 4, Rect.h};
             } else {
-                draw_rect(Fb, (irect_t){Rect.x, Rect.y + Rect.h - 4, Rect.w, 4}, 0xffff00ff);
+                r = (irect_t){Rect.x, Rect.y + Rect.h - 4, Rect.w, 4};
             }
+            draw_rect(Fb, r, 0xffffffff);
         }
     } else {
+        irect_t r0, r1;
         if(Panel->Split == SPLIT_Vertical) {
             s32 Hw = Rect.w / 2;
-            panel_draw(Fb, Panel->Children[0], (irect_t){Rect.x, Rect.y, Hw, Rect.h});
             s32 RoundedHw = (s32)((f32)Rect.w / 2 + 0.5);
-            panel_draw(Fb, Panel->Children[1], (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h});
-        } else if (Panel->Split == SPLIT_Horizontal) {
+            r0 = (irect_t){Rect.x, Rect.y, Hw, Rect.h};
+            r1 = (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h};
+        } else {
             s32 Hh = Rect.h / 2;
-            panel_draw(Fb, Panel->Children[0], (irect_t){Rect.x, Rect.y, Rect.w, Hh});
             s32 RoundedHh = (s32)((f32)Rect.h / 2 + 0.5);
-            panel_draw(Fb, Panel->Children[1], (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh});
+            r0 = (irect_t){Rect.x, Rect.y, Rect.w, Hh};
+            r1 = (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh};
         }
+        panel_draw(Fb, Panel->Children[0], r0);
+        panel_draw(Fb, Panel->Children[1], r1);
     }
 }
 
@@ -323,25 +329,48 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         return;
     }
     
-    if(Dir == LEFT) {
-    } else if(Dir == RIGHT) {
-        s32 Ci = panel_child_index(Panel);
-        panel_t *p = (Ci == 0) ? Panel->Parent : Panel->Parent->Parent;
-        while(p && p->Split != SPLIT_Vertical) {
-            Ci = panel_child_index(p);
+    if(Dir == LEFT || Dir == RIGHT) {
+        s32 Idx = panel_child_index(Panel);
+        panel_t *p = Panel;
+        b32 Found = false;
+        while(p != PanelCtx->Root) {
+            s32 n = (Dir == LEFT) ? 1 : 0;
+            if(panel_child_index(p) == n && p->Parent->Split == SPLIT_Vertical) {
+                p = p->Parent->Children[n ^ 1];
+                Found = true;
+                break;
+            }
             p = p->Parent;
         }
         
-        if(p) {
-            p = p->Children[Ci ^ 1];
+        if(Found) {
             while(!p->Buffer) {
-                p = p->Children[0];
+                p = p->Children[p->Split == SPLIT_Vertical ? 1 : 0];
             }
             PanelCtx->Selected = p;
         }
         
-    } else if(Dir == UP) {
-    } else if(Dir == DOWN) {
+    } else if(Dir == UP || Dir == DOWN) {
+        s32 Idx = panel_child_index(Panel);
+        panel_t *p = Panel;
+        b32 Found = false;
+        while(p != PanelCtx->Root) {
+            s32 n = (Dir == UP) ? 1 : 0;
+            if(panel_child_index(p) == n && p->Parent->Split == SPLIT_Horizontal) {
+                p = p->Parent->Children[n ^ 1];
+                Found = true;
+                break;
+            }
+            p = p->Parent;
+        }
+        
+        if(Found) {
+            while(!p->Buffer) {
+                p = p->Children[Idx];
+            }
+            PanelCtx->Selected = p;
+        }
+        
     }
 }
 
