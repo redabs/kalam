@@ -274,6 +274,11 @@ panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
     }
 }
 
+s32
+panel_child_index(panel_t *Panel) {
+    s32 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
+    return i;
+}
 
 void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
@@ -288,6 +293,9 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
                 r = (irect_t){Rect.x, Rect.y + Rect.h - 4, Rect.w, 4};
             }
             draw_rect(Fb, r, 0xffffffff);
+        }
+        if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
+            draw_rect(Fb, (irect_t){Rect.x + 8, Rect.y, 4, Rect.h}, 0xFF000000);
         }
     } else {
         irect_t r0, r1;
@@ -315,12 +323,6 @@ draw_panels(framebuffer_t *Fb) {
     }
 }
 
-s32
-panel_child_index(panel_t *Panel) {
-    s32 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
-    return i;
-}
-
 void
 panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
     // Panel->Children[0] is always left or above 
@@ -338,6 +340,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
             Idx = panel_child_index(p);
             if(Idx == n && p->Parent->Split == SPLIT_Vertical) {
                 p = p->Parent->Children[n ^ 1];
+                p->Parent->LastSelected = n ^ 1;
                 Found = true;
                 break;
             }
@@ -346,7 +349,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         
         if(Found) {
             while(!p->Buffer) {
-                p = p->Children[Idx];
+                p = p->Children[p->LastSelected];
             }
             
             panel_t *Par = p->Parent;
@@ -368,6 +371,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
             Idx = panel_child_index(p);
             if(Idx == n && p->Parent->Split == SPLIT_Horizontal) {
                 p = p->Parent->Children[n ^ 1];
+                p->Parent->LastSelected = n ^ 1;
                 Found = true;
                 break;
             }
@@ -376,7 +380,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         
         if(Found) {
             while(!p->Buffer) {
-                p = p->Children[Idx];
+                p = p->Children[p->LastSelected];
             }
             
             panel_t *Par = p->Parent;
