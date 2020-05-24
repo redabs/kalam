@@ -336,7 +336,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         panel_t *p = Panel;
         b32 Found = false;
         while(p != PanelCtx->Root) {
-            s32 n = (Dir == LEFT) ? 1 : 0;
+            u8 n = (Dir == LEFT) ? 1 : 0;
             Idx = panel_child_index(p);
             if(Idx == n && p->Parent->Split == SPLIT_Vertical) {
                 p = p->Parent->Children[n ^ 1];
@@ -367,7 +367,7 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         panel_t *p = Panel;
         b32 Found = false;
         while(p != PanelCtx->Root) {
-            s32 n = (Dir == UP) ? 1 : 0;
+            u8 n = (Dir == UP) ? 1 : 0;
             Idx = panel_child_index(p);
             if(Idx == n && p->Parent->Split == SPLIT_Horizontal) {
                 p = p->Parent->Children[n ^ 1];
