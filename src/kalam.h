@@ -71,9 +71,18 @@ struct panel_t {
     u8 LastSelected;
 };
 
+typedef struct panel_free_node_t panel_free_node_t;
+struct panel_free_node_t {
+    panel_t Panel;
+    panel_free_node_t *Next;
+};
+
+#define PANEL_MAX 16
 typedef struct {
     panel_t *Root;
     panel_t *Selected;
+    panel_free_node_t Panels[PANEL_MAX];
+    panel_free_node_t *FreeList;
 } panel_ctx; 
 
 typedef enum {

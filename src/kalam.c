@@ -214,31 +214,44 @@ load_file(char *Path, buffer_t *Buf) {
     }
 }
 
-void
-k_init(platform_shared_t *Shared) {
-    Ctx.Font = load_ttf("fonts/consola.ttf", 15);
-    load_file("test.c", &Ctx.Buffer);
-    //load_file("../test/test.txt", &Ctx.Buffer);
+panel_t *
+panel_alloc(panel_ctx *PanelCtx) {
+    if(PanelCtx->FreeList) {
+        panel_t *Result = &PanelCtx->FreeList->Panel;
+        PanelCtx->FreeList = PanelCtx->FreeList->Next;
+        return Result;
+    }
+    return 0;
 }
 
-panel_t *
-panel_alloc() {
-    // TODO: free list with a set number of panels, you dont need more than like 16 anyway.
-    panel_t *Result = malloc(sizeof(panel_t));
-    mem_zero_struct(Result);
-    return Result;
+void
+panel_free(panel_ctx *PanelCtx, panel_t *Panel) {
+    if(!Panel) { return; }
+    panel_free_node_t *n = (panel_free_node_t *)Panel;
+    n->Next = PanelCtx->FreeList;
+    PanelCtx->FreeList = n;
 }
 
 void
 panel_create(panel_ctx *PanelCtx) {
+    // no hay nada mas
+    if(!PanelCtx->FreeList) {
+        return;
+    }
+    
     if(!PanelCtx->Root) {
-        PanelCtx->Root = panel_alloc();
+        PanelCtx->Root = panel_alloc(PanelCtx);
         PanelCtx->Root->Buffer = &Ctx.Buffer;
         PanelCtx->Selected = PanelCtx->Root;
     } else {
         panel_t *Parent = PanelCtx->Selected;
-        panel_t *Left = panel_alloc();
-        panel_t *Right = panel_alloc();
+        panel_t *Left = panel_alloc(PanelCtx);
+        panel_t *Right = panel_alloc(PanelCtx);
+        
+        if(!Right) { 
+            panel_free(PanelCtx, Left); 
+            return;
+        }
         
         Left->Parent = Right->Parent = Parent;
         Parent->Children[0] = Left;
@@ -251,29 +264,6 @@ panel_create(panel_ctx *PanelCtx) {
     }
 }
 
-void
-panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
-    if(Panel->Parent) {
-        panel_t *Parent = Panel->Parent;
-        panel_t *OtherChild = Parent->Children[0] == Panel ? Parent->Children[1] : Parent->Children[0];
-        if(Parent->Parent) {
-            panel_t **p = Parent->Parent->Children[0] == Parent ? &Parent->Parent->Children[0] : &Parent->Parent->Children[1];
-            *p = OtherChild;
-            OtherChild->Parent = Parent->Parent;
-        } else {
-            OtherChild->Parent = 0;
-            PanelCtx->Root = OtherChild;
-        }
-        free(Parent);
-        free(Panel);
-        PanelCtx->Selected = OtherChild;
-    } else {
-        free(Panel);
-        PanelCtx->Root = 0;
-        PanelCtx->Selected = 0;
-    }
-}
-
 s32
 panel_child_index(panel_t *Panel) {
     s32 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
@@ -281,9 +271,29 @@ panel_child_index(panel_t *Panel) {
 }
 
 void
+panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
+    PanelCtx->Selected = Panel->Parent;
+    if(Panel->Parent) {
+        s32 Idx = panel_child_index(Panel);
+        panel_t *Sibling = Panel->Parent->Children[Idx ^ 1];
+        
+        // Copy sibling to parent as panels are leaf nodes so parent can't have only one valid child.
+        Sibling->Parent = Panel->Parent->Parent;
+        *Panel->Parent = *Sibling;
+        
+        panel_free(PanelCtx, Sibling);
+        panel_free(PanelCtx, Panel);
+    } else {
+        panel_free(PanelCtx, Panel);
+        PanelCtx->Root = 0;
+    }
+    
+}
+
+void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
     if(Panel->Buffer) {
-        u32 c = 0xff000000 | (u32)((u64)(Panel) * 0x127382 ^ 0x138293);
+        u32 c = 0xff000000 | (u32)((u64)(Panel) * 0x9a7fdb ^ 0xe38fc3);
         draw_rect(Fb, Rect, c);
         if(Ctx.PanelCtx.Selected == Panel) {
             irect_t r;
@@ -394,6 +404,20 @@ panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
         }
         
     }
+}
+
+void
+k_init(platform_shared_t *Shared) {
+    Ctx.Font = load_ttf("fonts/consola.ttf", 15);
+    load_file("test.c", &Ctx.Buffer);
+    //load_file("../test/test.txt", &Ctx.Buffer);
+    
+    u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
+    for(u32 i = 0; i < n - 1; ++i) {
+        Ctx.PanelCtx.Panels[i].Next = &Ctx.PanelCtx.Panels[i + 1];
+    }
+    Ctx.PanelCtx.Panels[n - 1].Next = 0;
+    Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
 }
 
 void
