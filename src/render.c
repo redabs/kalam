@@ -115,7 +115,7 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
 #include <math.h>
 
 void
-draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t *Bitmap) {
+draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect, bitmap_t *Bitmap) {
     s32 BoxMinX = MAX(xPos, 0);
     s32 BoxMaxX = MIN(MAX(xPos + Rect.w, 0), Fb->Width);
     s32 xOff = MIN(BoxMinX - xPos, Rect.w); 
@@ -128,6 +128,10 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t 
     
     s32 w = BoxMaxX - BoxMinX;
     s32 h = BoxMaxY - BoxMinY;
+    
+    u8 sr = (Color >> 16 & 0xff);
+    u8 sg = (Color >> 8) & 0xff; 
+    u8 sb = Color & 0xff;
     
     u32 *DestRow = (u32 *)Fb->Data + BoxMinY * Fb->Width;
     u8 *SrcRow = Bitmap->Data + (Rect.y + yOff) * Bitmap->Stride;
@@ -142,9 +146,9 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t 
             
             f32 a = (f32)(*SrcPixel) / 255.f;
             
-            u8 r = (u8)((1. - a) * dr + a * s);
-            u8 g = (u8)((1. - a) * dg + a * s);
-            u8 b = (u8)((1. - a) * db + a * s);
+            u8 r = (u8)((1. - a) * dr + a * sr);
+            u8 g = (u8)((1. - a) * dg + a * sg);
+            u8 b = (u8)((1. - a) * db + a * sb);
             
             *DestPixel = 0xff000000 | r << 16 | g << 8 | b;
             ++DestPixel;
@@ -155,17 +159,22 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, irect_t Rect, bitmap_t 
     }
 }
 
-void 
-draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u8 *Start, u8 *End) {
+
+// Text is null-terminated if End is 0
+void
+draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, u8 *Start, u8 *End) {
+    if(!End) {
+        End = Start;
+        while(*End) { ++End; }
+    }
+    
     u8 *c = Start; 
     s32 CursorX = x;
     while(c < End) {
         u32 Codepoint;
         if(*c == '\n') { 
-#if 0
             c += utf8_char_width(c);
             continue;
-#endif
         }
         c = utf8_to_codepoint(c, &Codepoint);
         
@@ -176,9 +185,10 @@ draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u8 *Start, 
             irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
             s32 yOff = (s32)(g->yoff + 0.5);
             s32 xOff = (s32)(g->xoff + 0.5);
-            draw_glyph_bitmap(Fb, CursorX + xOff, Baseline + yOff, gRect, &Set->Bitmap);
+            draw_glyph_bitmap(Fb, CursorX + xOff, Baseline + yOff, Color, gRect, &Set->Bitmap);
             
             CursorX += (s32)(g->xadvance + 0.5);
         }
     }
 }
+

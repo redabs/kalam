@@ -39,6 +39,8 @@ enum input_key {
     
     KEY_CapsLock = 0x14,
     
+    KEY_Escape = 0x1b,
+    
     KEY_Space = 0x20,
     KEY_PageUp = 0x21,
     KEY_PageDown = 0x22,
@@ -105,12 +107,12 @@ typedef struct {
         } Key;
         
         struct {
-            ivec2_t Position;
+            iv2_t Position;
             input_mouse_button Button;
         } Mouse;
         
         struct {
-            ivec2_t Position;
+            iv2_t Position;
             s32 Delta; // TODO(Redab): Canonicalize scroll values across platforms.
         } Scroll;
     };

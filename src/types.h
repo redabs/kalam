@@ -4,7 +4,7 @@
 typedef struct {
     s32 x;
     s32 y;
-} ivec2_t;
+} iv2_t;
 
 typedef struct {
     // Top left

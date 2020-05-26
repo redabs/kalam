@@ -92,7 +92,7 @@ typedef enum {
 
 typedef struct {
     font_t Font;
-    ivec2_t p;
+    iv2_t p;
     buffer_t Buffer;
     panel_ctx PanelCtx;
     mode Mode;

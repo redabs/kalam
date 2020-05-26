@@ -153,8 +153,46 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
         s32 Center = LineY + (LineHeight >> 1);
         s32 Baseline = Center + (Font->MHeight >> 1);
         
-        draw_text_line(Fb, Font, 0, Baseline, Start, End);
+        draw_text_line(Fb, Font, 0, Baseline, 0xff90b080, Start, End);
     }
+}
+
+s32
+text_width(font_t *Font, u8 *Start, u8 *End) {
+    if(!End) {
+        End = Start;
+        while(*End) { ++End; }
+    }
+    
+    s32 Result = 0;
+    u8 *c = Start;
+    u32 Codepoint;
+    while(c < End) {
+        c = utf8_to_codepoint(c, &Codepoint);
+        
+        glyph_set_t *Set;
+        if(get_glyph_set(Font, Codepoint, &Set)) {
+            stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
+            Result += (s32)(g->xadvance + 0.5);
+        }
+    }
+    
+    return Result;
+}
+
+// Returns {x, baseline}
+iv2_t 
+center_text_in_rect(font_t *Font, irect_t Rect, u8 *Start, u8 *End) {
+    if(!End) {
+        End = Start;
+        while(*End) { ++End; }
+    }
+    
+    s32 TextWidth = text_width(Font, Start, End);
+    iv2_t Result;
+    Result.x = Rect.x + (Rect.w - TextWidth) / 2;
+    Result.y = Rect.y + (Rect.h + Font->MHeight) / 2;
+    return Result;
 }
 
 font_t
@@ -427,59 +465,94 @@ k_do_editor(platform_shared_t *Shared) {
         input_event_t *e = &Events->Events[i];
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
             if(Ctx.Mode == MODE_Normal) {
-                
+                if(e->Key.KeyCode == KEY_N && e->Modifiers & INPUT_MOD_Ctrl) {
+                    panel_create(&Ctx.PanelCtx);
+                    
+                } else if(e->Key.KeyCode == KEY_X && e->Modifiers & INPUT_MOD_Ctrl) { 
+                    if(Ctx.PanelCtx.Selected) {
+                        Ctx.PanelCtx.Selected->Split ^= 1;
+                    }
+                    
+                } else if(e->Key.KeyCode == KEY_W && e->Modifiers & INPUT_MOD_Ctrl) { 
+                    if(Ctx.PanelCtx.Selected) {
+                        panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+                    }
+                    
+                } else if(e->Key.KeyCode == KEY_Left && e->Modifiers & INPUT_MOD_Ctrl) {
+                    panel_move_selected(&Ctx.PanelCtx, LEFT);
+                    
+                } else if(e->Key.KeyCode == KEY_Right && e->Modifiers & INPUT_MOD_Ctrl) {
+                    panel_move_selected(&Ctx.PanelCtx, RIGHT);
+                    
+                } else if(e->Key.KeyCode == KEY_Up && e->Modifiers & INPUT_MOD_Ctrl) {
+                    panel_move_selected(&Ctx.PanelCtx, UP);
+                    
+                } else if(e->Key.KeyCode == KEY_Down && e->Modifiers & INPUT_MOD_Ctrl) {
+                    panel_move_selected(&Ctx.PanelCtx, DOWN);
+                } else if(e->Key.KeyCode == KEY_I) {
+                    Ctx.Mode = MODE_Insert;
+                }
             } else if(Ctx.Mode == MODE_Insert) {
-                
-                s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
-                switch(e->Key.KeyCode) {
-                    case KEY_Left: { cursor_move(&Ctx.Buffer, LEFT, StepSize); } continue;
-                    case KEY_Right: { cursor_move(&Ctx.Buffer, RIGHT, StepSize); } continue;
-                    case KEY_Up: { cursor_move(&Ctx.Buffer, UP, StepSize); } continue;
-                    case KEY_Down: { cursor_move(&Ctx.Buffer, DOWN, StepSize); } continue;
-                    default: {
-                        if(e->Key.HasCharacterTranslation) {
-                            do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
-                        }
-                    } continue;
+                if(e->Key.KeyCode == KEY_Escape) {
+                    Ctx.Mode = MODE_Normal;
+                } else if(e->Key.HasCharacterTranslation) {
+                    do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
                 }
             }
-            
             // Global
-            if(e->Key.KeyCode == KEY_N && e->Modifiers & INPUT_MOD_Ctrl) {
-                panel_create(&Ctx.PanelCtx);
-            } else if(e->Key.KeyCode == KEY_X && e->Modifiers & INPUT_MOD_Ctrl) { 
-                if(Ctx.PanelCtx.Selected) {
-                    Ctx.PanelCtx.Selected->Split ^= 1;
-                }
-            } else if(e->Key.KeyCode == KEY_W && e->Modifiers & INPUT_MOD_Ctrl) { 
-                if(Ctx.PanelCtx.Selected) {
-                    panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
-                }
-            } else if(e->Key.KeyCode == KEY_Left && e->Modifiers & INPUT_MOD_Ctrl) {
-                panel_move_selected(&Ctx.PanelCtx, LEFT);
-            } else if(e->Key.KeyCode == KEY_Right && e->Modifiers & INPUT_MOD_Ctrl) {
-                panel_move_selected(&Ctx.PanelCtx, RIGHT);
-            } else if(e->Key.KeyCode == KEY_Up && e->Modifiers & INPUT_MOD_Ctrl) {
-                panel_move_selected(&Ctx.PanelCtx, UP);
-            } else if(e->Key.KeyCode == KEY_Down && e->Modifiers & INPUT_MOD_Ctrl) {
-                panel_move_selected(&Ctx.PanelCtx, DOWN);
+            s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
+            switch(e->Key.KeyCode) {
+                case KEY_Left: { cursor_move(&Ctx.Buffer, LEFT, StepSize); } continue;
+                case KEY_Right: { cursor_move(&Ctx.Buffer, RIGHT, StepSize); } continue;
+                case KEY_Up: { cursor_move(&Ctx.Buffer, UP, StepSize); } continue;
+                case KEY_Down: { cursor_move(&Ctx.Buffer, DOWN, StepSize); } continue;
             }
-            
         } else if(e->Type == INPUT_EVENT_Scroll) {
             
         }
     } Events->Count = 0;
     
-    clear_framebuffer(Shared->Framebuffer, 0xff110f58);
+    u32 c = 0xff191919;
+    
+    u32 c0 = 0xff162447;
+    u32 c1 = 0xff1f4068;
+    u32 c2 = 0xff1b1b2f;
+    u32 c3 = 0xffe43f5a;
+    u32 Insert = c3;
+    u32 Normal = 0xffa8df65;
+    
+    clear_framebuffer(Shared->Framebuffer, c0);
     
     draw_buffer(Shared->Framebuffer, &Ctx.Font, &Ctx.Buffer);
     
+    irect_t StatusBar = {0, Shared->Framebuffer->Height - 20, Shared->Framebuffer->Width, 20};
+    draw_rect(Shared->Framebuffer, StatusBar, c2);
+    
+    u8 *ModeStr = (u8 *)"Invalid mode";
+    u32 ModeStrColor = 0xffffffff;
+    switch(Ctx.Mode) {
+        case MODE_Normal: {
+            ModeStr = (u8 *)"NORMAL";
+            ModeStrColor = Normal;
+        } break;
+        
+        case MODE_Insert: {
+            ModeStr = (u8 *)"INSERT";
+            ModeStrColor = Insert;
+        } break;
+    }
+    
+    iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
+    draw_text_line(Shared->Framebuffer, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
+    
+#if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
         bitmap_t *b = &Ctx.Font.GlyphSets[i].Set->Bitmap;
         irect_t Rect = {0, 0, b->w, b->h};
-        draw_glyph_bitmap(Shared->Framebuffer, x, Shared->Framebuffer->Height - Rect.h, Rect, b);
+        draw_glyph_bitmap(Shared->Framebuffer, x, Shared->Framebuffer->Height - Rect.h, 0xffffffff, Rect, b);
         x += b->w + 10;
     }
+#endif
     
     draw_panels(Shared->Framebuffer);
 }

@@ -150,7 +150,6 @@ utf16_to_utf8(u32 Utf16, u8 *Utf8) {
     }
 }
 
-
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier Modifiers; 
