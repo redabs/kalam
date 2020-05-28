@@ -1,10 +1,12 @@
 #ifndef KALAM_H
 #define KALAM_H
 
+#define TAB_WIDTH 4 
+
 typedef struct {
-    s64 ByteOffset;
-    s64 Size;
-    s64 ColumnCount; // in characters
+    s64 Offset;
+    s64 Size; // bytes
+    s64 Length; // characters
 } line_t;
 
 typedef struct {
@@ -14,7 +16,7 @@ typedef struct {
         s64 Line; // 0 based
         s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
         s64 ColumnWas;
-        s64 ByteOffset;
+        s64 Offset;
     } Cursor;
 } buffer_t;
 
@@ -42,6 +44,7 @@ typedef struct {
     
     s32 MHeight; // The height in pixels of 'M'
     s32 MWidth; // The width in pixels of 'M'. This is used under the presumption of a monospace font.
+    s32 SpaceWidth;
     
     u32 SetCount;
     struct {

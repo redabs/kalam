@@ -31,13 +31,13 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             if((Dir == UP && Buf->Cursor.Line > 0) ||
                (Dir == DOWN && Buf->Cursor.Line < (sb_count(Buf->Lines) - 1))) {
                 s64 LineNum = CLAMP(0, sb_count(Buf->Lines) - 1, Buf->Cursor.Line + ((Dir == DOWN) ? StepSize : -StepSize));
-                Column = MIN(Buf->Cursor.ColumnWas, Buf->Lines[LineNum].ColumnCount - 1);
+                Column = MIN(Buf->Cursor.ColumnWas, Buf->Lines[LineNum].Length - 1);
                 
                 Buf->Cursor.Line = LineNum;
                 Buf->Cursor.ColumnIs = Column;
-                Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
+                Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
                 for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                    Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
+                    Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
                 }
             }
         } break;
@@ -47,9 +47,9 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Column = Buf->Cursor.ColumnIs;
             s64 LineCount = sb_count(Buf->Lines);
             for(s64 i = 0; i < StepSize; ++i) {
-                if(Column + 1 >= Buf->Lines[LineNum].ColumnCount) {
+                if(Column + 1 >= Buf->Lines[LineNum].Length) {
                     if(LineNum + 1 >= LineCount) {
-                        Column = Buf->Lines[LineNum].ColumnCount;
+                        Column = Buf->Lines[LineNum].Length;
                         break;
                     }
                     LineNum++;
@@ -62,9 +62,9 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.Line = LineNum;
             Buf->Cursor.ColumnIs = Column;
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
-            Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
+            Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
+                Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
             }
         } break;
         
@@ -78,7 +78,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
                         break;
                     }
                     LineNum--;
-                    Column = Buf->Lines[LineNum].ColumnCount - 1;
+                    Column = Buf->Lines[LineNum].Length - 1;
                 } else {
                     Column--;
                 }
@@ -87,9 +87,9 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.Line = LineNum;
             Buf->Cursor.ColumnIs = Column;
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
-            Buf->Cursor.ByteOffset = Buf->Lines[LineNum].ByteOffset;
+            Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                Buf->Cursor.ByteOffset += utf8_char_width(Buf->Data + Buf->Cursor.ByteOffset);
+                Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
             }
         } break;
         
@@ -101,21 +101,21 @@ do_char(buffer_t *Buf, u8 *Char) {
     u8 n = utf8_char_width(Char);
     sb_add(Buf->Data, n);
     
-    for(s64 i = sb_count(Buf->Data) - 1; i >= Buf->Cursor.ByteOffset; --i) {
+    for(s64 i = sb_count(Buf->Data) - 1; i >= Buf->Cursor.Offset; --i) {
         Buf->Data[i + n] = Buf->Data[i];
     }
     
     for(s64 i = 0; i < n; ++i) {
-        Buf->Data[Buf->Cursor.ByteOffset] = Char[i];
+        Buf->Data[Buf->Cursor.Offset] = Char[i];
     }
     
     // Update following lines
     for(s64 i = Buf->Cursor.Line + 1; i < sb_count(Buf->Lines); ++i) {
-        Buf->Lines[i].ByteOffset += n;
+        Buf->Lines[i].Offset += n;
     }
     
     Buf->Lines[Buf->Cursor.Line].Size += n;
-    Buf->Lines[Buf->Cursor.Line].ColumnCount += 1;
+    Buf->Lines[Buf->Cursor.Line].Length += 1;
     
     // TODO: CRLF 
     if(*Char == '\n') {
@@ -125,29 +125,69 @@ do_char(buffer_t *Buf, u8 *Char) {
         }
         
         line_t *NewLine = &Buf->Lines[Buf->Cursor.Line + 1];
-        NewLine->ByteOffset = Buf->Cursor.ByteOffset + n;
-        NewLine->Size = Buf->Lines[Buf->Cursor.Line].Size - (NewLine->ByteOffset - Buf->Lines[Buf->Cursor.Line].ByteOffset);
-        NewLine->ColumnCount = Buf->Lines[Buf->Cursor.Line].ColumnCount - (Buf->Cursor.ColumnIs + 1);
+        NewLine->Offset = Buf->Cursor.Offset + n;
+        NewLine->Size = Buf->Lines[Buf->Cursor.Line].Size - (NewLine->Offset - Buf->Lines[Buf->Cursor.Line].Offset);
+        NewLine->Length = Buf->Lines[Buf->Cursor.Line].Length - (Buf->Cursor.ColumnIs + 1);
         
         // Split current line
         Buf->Lines[Buf->Cursor.Line].Size -= NewLine->Size;
-        Buf->Lines[Buf->Cursor.Line].ColumnCount -= NewLine->ColumnCount;
-        
+        Buf->Lines[Buf->Cursor.Line].Length -= NewLine->Length;
     } 
     
     cursor_move(Buf, RIGHT, 1);
-    
+}
+
+u32 
+codepoint_under_cursor(buffer_t *Buf) {
+    u8 *c = Buf->Data + Buf->Lines[Buf->Cursor.Line].Offset;
+    for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
+        c += utf8_char_width(c);
+    }
+    u32 Codepoint = 0;
+    utf8_to_codepoint(c, &Codepoint);
+    return Codepoint;
+}
+
+stbtt_bakedchar *
+get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
+    glyph_set_t *Set;
+    if(get_glyph_set(Font, Codepoint, &Set)) {
+        return &Set->Glyphs[Codepoint % 256];
+    }
+    return 0;
+}
+
+s32
+get_x_advance(font_t *Font, u32 Codepoint) {
+    s32 Result = Font->MWidth;
+    if(Codepoint == '\t') {
+        Result = Font->SpaceWidth * TAB_WIDTH;
+    } else {
+        stbtt_bakedchar *g = get_stbtt_bakedchar(Font, Codepoint);
+        if(g) {
+            Result = (s32)(g->xadvance + 0.5);
+        }
+    }
+    return Result;
 }
 
 void
 draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
     s32 LineHeight = Font->Ascent - Font->Descent; 
     
-    irect_t Cursor = {.x = Font->MWidth * (s32)Buf->Cursor.ColumnIs, .y = LineHeight * (s32)Buf->Cursor.Line, .w = Font->MWidth, .h = LineHeight};
-    draw_rect(Fb, Cursor, 0xff117766);
+    irect_t Cursor = {.x = 0, .y = LineHeight * (s32)Buf->Cursor.Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf)), .h = LineHeight};
+    
+    u8 *c = Buf->Data + Buf->Lines[Buf->Cursor.Line].Offset;
+    for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
+        u32 Codepoint;
+        c = utf8_to_codepoint(c, &Codepoint);
+        Cursor.x += get_x_advance(Font, Codepoint);
+    }
+    
+    draw_rect(Fb, Cursor, 0xffddee66);
     
     for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-        u8 *Start = Buf->Data + Buf->Lines[i].ByteOffset;
+        u8 *Start = Buf->Data + Buf->Lines[i].Offset;
         u8 *End = Start + Buf->Lines[i].Size;
         s32 LineY = (s32)i * LineHeight;
         s32 Center = LineY + (LineHeight >> 1);
@@ -169,12 +209,7 @@ text_width(font_t *Font, u8 *Start, u8 *End) {
     u32 Codepoint;
     while(c < End) {
         c = utf8_to_codepoint(c, &Codepoint);
-        
-        glyph_set_t *Set;
-        if(get_glyph_set(Font, Codepoint, &Set)) {
-            stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
-            Result += (s32)(g->xadvance + 0.5);
-        }
+        Result += get_x_advance(Font, Codepoint);
     }
     
     return Result;
@@ -210,12 +245,13 @@ load_ttf(char *Path, f32 Size) {
     Font.Descent = (s32)(Font.Descent * Scale);
     Font.LineGap = (s32)(Font.LineGap * Scale);
     
-    glyph_set_t *Set;
-    if(get_glyph_set(&Font, 'M', &Set)) {
-        stbtt_bakedchar *g = &Set->Glyphs['M'];
+    stbtt_bakedchar *g = get_stbtt_bakedchar(&Font, 'M');
+    if(g) {
         Font.MHeight = (s32)(g->y1 - g->y0 + 0.5);
         Font.MWidth = (s32)(g->x1 - g->x0 + 0.5);
     }
+    
+    Font.SpaceWidth = get_x_advance(&Font, ' ');
     
     return Font;
 }
@@ -241,13 +277,13 @@ load_file(char *Path, buffer_t *Buf) {
     for(s64 i = 0; i < sb_count(Buf->Data); i += n) {
         n = utf8_char_width(Buf->Data + i);
         Line.Size += n;
-        Line.ColumnCount += 1;
+        Line.Length += 1;
         
         if(Buf->Data[i] == '\n' || (i + n) >= sb_count(Buf->Data)) {
             line_t *l = sb_add(Buf->Lines, 1);
             *l = Line;
             mem_zero_struct(&Line);
-            Line.ByteOffset = i + n;
+            Line.Offset = i + n;
         }
     }
 }
@@ -465,38 +501,44 @@ k_do_editor(platform_shared_t *Shared) {
         input_event_t *e = &Events->Events[i];
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
             if(Ctx.Mode == MODE_Normal) {
-                if(e->Key.KeyCode == KEY_N && e->Modifiers & INPUT_MOD_Ctrl) {
-                    panel_create(&Ctx.PanelCtx);
-                    
-                } else if(e->Key.KeyCode == KEY_X && e->Modifiers & INPUT_MOD_Ctrl) { 
-                    if(Ctx.PanelCtx.Selected) {
-                        Ctx.PanelCtx.Selected->Split ^= 1;
+                if(e->Modifiers & INPUT_MOD_Ctrl) {
+                    switch(e->Key.KeyCode) {
+                        case KEY_N: { panel_create(&Ctx.PanelCtx); } break;
+                        case KEY_X: { 
+                            if(Ctx.PanelCtx.Selected) {
+                                Ctx.PanelCtx.Selected->Split ^= 1;
+                            }
+                        } break;
+                        
+                        case KEY_W: {
+                            if(Ctx.PanelCtx.Selected) {
+                                panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+                            }
+                        } break;
+                        
+                        case KEY_Left: { panel_move_selected(&Ctx.PanelCtx, LEFT); } break;
+                        case KEY_Right: { panel_move_selected(&Ctx.PanelCtx, RIGHT); } break;
+                        case KEY_Up: { panel_move_selected(&Ctx.PanelCtx, UP); } break;
+                        case KEY_Down: { panel_move_selected(&Ctx.PanelCtx, DOWN); } break;
                     }
-                    
-                } else if(e->Key.KeyCode == KEY_W && e->Modifiers & INPUT_MOD_Ctrl) { 
-                    if(Ctx.PanelCtx.Selected) {
-                        panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
-                    }
-                    
-                } else if(e->Key.KeyCode == KEY_Left && e->Modifiers & INPUT_MOD_Ctrl) {
-                    panel_move_selected(&Ctx.PanelCtx, LEFT);
-                    
-                } else if(e->Key.KeyCode == KEY_Right && e->Modifiers & INPUT_MOD_Ctrl) {
-                    panel_move_selected(&Ctx.PanelCtx, RIGHT);
-                    
-                } else if(e->Key.KeyCode == KEY_Up && e->Modifiers & INPUT_MOD_Ctrl) {
-                    panel_move_selected(&Ctx.PanelCtx, UP);
-                    
-                } else if(e->Key.KeyCode == KEY_Down && e->Modifiers & INPUT_MOD_Ctrl) {
-                    panel_move_selected(&Ctx.PanelCtx, DOWN);
-                } else if(e->Key.KeyCode == KEY_I) {
-                    Ctx.Mode = MODE_Insert;
+                }
+                switch(e->Key.KeyCode) {
+                    case KEY_I: { Ctx.Mode = MODE_Insert; } break;
                 }
             } else if(Ctx.Mode == MODE_Insert) {
-                if(e->Key.KeyCode == KEY_Escape) {
-                    Ctx.Mode = MODE_Normal;
-                } else if(e->Key.HasCharacterTranslation) {
-                    do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
+                switch(e->Key.KeyCode) {
+                    case KEY_Escape: {
+                        Ctx.Mode = MODE_Normal;
+                    } break;
+                    
+                    case KEY_Backspace: {
+                    } break;
+                    
+                    default: {
+                        if(e->Key.HasCharacterTranslation) {
+                            do_char(&Ctx.Buffer, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
+                        }
+                    }
                 }
             }
             // Global

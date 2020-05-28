@@ -159,7 +159,6 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect
     }
 }
 
-
 // Text is null-terminated if End is 0
 void
 draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, u8 *Start, u8 *End) {
@@ -174,21 +173,22 @@ draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, 
         u32 Codepoint;
         if(*c == '\n') { 
             c += utf8_char_width(c);
-            continue;
-        }
-        c = utf8_to_codepoint(c, &Codepoint);
-        
-        glyph_set_t *Set;
-        
-        if(get_glyph_set(Font, Codepoint, &Set)) {
-            stbtt_bakedchar *g = &Set->Glyphs[Codepoint];
-            irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
-            s32 yOff = (s32)(g->yoff + 0.5);
-            s32 xOff = (s32)(g->xoff + 0.5);
-            draw_glyph_bitmap(Fb, CursorX + xOff, Baseline + yOff, Color, gRect, &Set->Bitmap);
+        } else if(*c == '\t') {
+            CursorX += Font->SpaceWidth * TAB_WIDTH;
+            c += utf8_char_width(c);
+        } else {
+            c = utf8_to_codepoint(c, &Codepoint);
             
-            CursorX += (s32)(g->xadvance + 0.5);
+            glyph_set_t *Set;
+            if(get_glyph_set(Font, Codepoint, &Set)) {
+                stbtt_bakedchar *g = &Set->Glyphs[Codepoint % 256];
+                irect_t gRect = {g->x0, g->y0, g->x1 - g->x0, g->y1 - g->y0};
+                s32 yOff = (s32)(g->yoff + 0.5);
+                s32 xOff = (s32)(g->xoff + 0.5);
+                draw_glyph_bitmap(Fb, CursorX + xOff, Baseline + yOff, Color, gRect, &Set->Bitmap);
+                
+                CursorX += (s32)(g->xadvance + 0.5);
+            }
         }
     }
 }
-
