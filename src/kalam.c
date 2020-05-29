@@ -106,7 +106,7 @@ do_char(buffer_t *Buf, u8 *Char) {
     }
     
     for(s64 i = 0; i < n; ++i) {
-        Buf->Data[Buf->Cursor.Offset] = Char[i];
+        Buf->Data[Buf->Cursor.Offset + i] = Char[i];
     }
     
     // Update following lines
