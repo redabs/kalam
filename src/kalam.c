@@ -138,7 +138,7 @@ do_backspace(buffer_t *Buf) {
     }
     u8 *c = Buf->Text.Data + Buf->Cursor.Offset;
     s32 n = 1;
-    while((*c & 0xc0) == 0x80) {
+    while((*(--c) & 0xc0) == 0x80) {
         --c;
         ++n;
     }
