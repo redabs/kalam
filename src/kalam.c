@@ -139,12 +139,11 @@ do_backspace(buffer_t *Buf) {
     u8 *c = Buf->Text.Data + Buf->Cursor.Offset;
     s32 n = 1;
     while((*(--c) & 0xc0) == 0x80) {
-        --c;
         ++n;
     }
     
-    mem_buf_delete_range(&Buf->Text, Buf->Cursor.Offset - n, n);
     cursor_move(Buf, LEFT, 1);
+    mem_buf_delete_range(&Buf->Text, Buf->Cursor.Offset, n);
     make_lines(Buf);
 }
 
