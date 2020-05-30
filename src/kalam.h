@@ -10,7 +10,8 @@ typedef struct {
 } line_t;
 
 typedef struct {
-    u8 *Data; // stb
+    //u8 *Data; // stb
+    mem_buffer_t Text;
     line_t *Lines; // stb
     struct {
         s64 Line; // 0 based

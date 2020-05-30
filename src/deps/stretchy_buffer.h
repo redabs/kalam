@@ -182,6 +182,7 @@
 #define sb_add    stb_sb_add
 #define sb_last   stb_sb_last
 #define sb_pop(a) (--stb__sbn(a), (a)[stb__sbn(a)])
+#define sb_set_count(a, n) ((a) ? stb__sbn(a) = n : 0)
 #endif
 
 #define stb_sb_free(a)         ((a) ? free(stb__sbraw(a)),0 : 0)

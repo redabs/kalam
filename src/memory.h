@@ -57,10 +57,17 @@ mem_buf_need_grow(mem_buffer_t *Buffer, s64 Size) {
     return (Buffer->Used + Size) > Buffer->Capacity;
 }
 
-#define mem_buf_push_array(BUFFER, STRUCT_TYPE, COUNT) (STRUCT_TYPE *)mem_buf_push(BUFFER, sizeof(STRUCT_TYPE) * COUNT)
-#define mem_buf_push_struct(BUFFER, STRUCT_TYPE) (STRUCT_TYPE *)mem_buf_push(BUFFER, sizeof(STRUCT_TYPE))
+inline void
+mem_buf_maybe_grow(mem_buffer_t *Buffer, s64 Size) {
+    if(mem_buf_need_grow(Buffer, Size)) {
+        mem_buf_grow(Buffer, Size);
+    }
+}
+
+#define mem_buf_add_array(BUFFER, STRUCT_TYPE, COUNT) (STRUCT_TYPE *)mem_buf_add(BUFFER, sizeof(STRUCT_TYPE) * COUNT)
+#define mem_buf_add_struct(BUFFER, STRUCT_TYPE) (STRUCT_TYPE *)mem_buf_add(BUFFER, sizeof(STRUCT_TYPE))
 inline void *
-mem_buf_push(mem_buffer_t *Buffer, s64 Size) {
+mem_buf_add(mem_buffer_t *Buffer, s64 Size) {
     if(mem_buf_need_grow(Buffer, Size)) {
         mem_buf_grow(Buffer, Size);
     }
@@ -70,13 +77,37 @@ mem_buf_push(mem_buffer_t *Buffer, s64 Size) {
     return Dest;
 }
 
-#define mem_buf_push_array_idx(BUFFER, STRUCT_TYPE, COUNT, INDEX_PTR) (STRUCT_TYPE *)mem_buf_push_idx(BUFFER, COUNT, sizeof(STRUCT_TYPE), INDEX_PTR)
-#define mem_buf_push_struct_idx(BUFFER, STRUCT_TYPE, INDEX_PTR) (STRUCT_TYPE *)mem_buf_push_idx(BUFFER, 1, sizeof(STRUCT_TYPE), INDEX_PTR)
+#define mem_buf_add_array_idx(BUFFER, STRUCT_TYPE, COUNT, INDEX_PTR) (STRUCT_TYPE *)mem_buf_add_idx(BUFFER, COUNT, sizeof(STRUCT_TYPE), INDEX_PTR)
+#define mem_buf_add_struct_idx(BUFFER, STRUCT_TYPE, INDEX_PTR) (STRUCT_TYPE *)mem_buf_add_idx(BUFFER, 1, sizeof(STRUCT_TYPE), INDEX_PTR)
 inline void *
-mem_buf_push_idx(mem_buffer_t *Buffer, s64 Count, s64 ElementSize, s64 *IndexOut) {
+mem_buf_add_idx(mem_buffer_t *Buffer, s64 Count, s64 ElementSize, s64 *IndexOut) {
     *IndexOut = Buffer->Used / ElementSize;
-    u8 *Result = (u8 *)mem_buf_push(Buffer, Count * ElementSize);
+    u8 *Result = (u8 *)mem_buf_add(Buffer, Count * ElementSize);
     return (void *)Result;
+}
+
+inline void
+mem_buf_insert(mem_buffer_t *Buffer, u64 Offset, u64 Size, u8 *Data) {
+    mem_buf_maybe_grow(Buffer, Size);
+    
+    // Swiss cheese
+    for(u64 i = (s64)Buffer->Used; i >= Offset; --i) {
+        Buffer->Data[i + Size - 1] = Buffer->Data[i - 1];
+    }
+    
+    // Stuffing
+    for(u64 i = Offset; i < Size; ++i) {
+        Buffer->Data[Offset + i] = Data[i];
+    }
+}
+
+inline void
+mem_buf_delete_range(mem_buffer_t *Buffer, u64 Offset, u64 Size) {
+    for(u64 i = 0; i < (Buffer->Used - Offset - Size); ++i) {
+        Buffer->Data[Offset + i] = Buffer->Data[Offset + Size + i];
+    }
+    
+    Buffer->Used -= Size;
 }
 
 #endif //MEMORY_H

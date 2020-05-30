@@ -37,7 +37,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
                 Buf->Cursor.ColumnIs = Column;
                 Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
                 for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                    Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
+                    Buf->Cursor.Offset += utf8_char_width(Buf->Text.Data + Buf->Cursor.Offset);
                 }
             }
         } break;
@@ -64,7 +64,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
             Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
+                Buf->Cursor.Offset += utf8_char_width(Buf->Text.Data + Buf->Cursor.Offset);
             }
         } break;
         
@@ -89,7 +89,7 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
             Buf->Cursor.ColumnWas = Buf->Cursor.ColumnIs;
             Buf->Cursor.Offset = Buf->Lines[LineNum].Offset;
             for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
-                Buf->Cursor.Offset += utf8_char_width(Buf->Data + Buf->Cursor.Offset);
+                Buf->Cursor.Offset += utf8_char_width(Buf->Text.Data + Buf->Cursor.Offset);
             }
         } break;
         
@@ -97,49 +97,60 @@ cursor_move(buffer_t *Buf, dir Dir, s64 StepSize) {
 }
 
 void
+make_lines(buffer_t *Buf) {
+    sb_set_count(Buf->Lines, 0);
+    line_t Line = {0};
+    u8 n = 0;
+    for(u64 i = 0; i < Buf->Text.Used; i += n) {
+        n = utf8_char_width(Buf->Text.Data + i);
+        Line.Size += n;
+        Line.Length += 1;
+        
+        if(Buf->Text.Data[i] == '\n' || (i + n) >= Buf->Text.Used) {
+            sb_push(Buf->Lines, Line);
+            mem_zero_struct(&Line);
+            Line.Offset = i + n;
+        }
+    }
+}
+
+void
 do_char(buffer_t *Buf, u8 *Char) {
     u8 n = utf8_char_width(Char);
-    sb_add(Buf->Data, n);
+    mem_buf_add(&Buf->Text, n);
     
-    for(s64 i = sb_count(Buf->Data) - 1; i >= Buf->Cursor.Offset; --i) {
-        Buf->Data[i + n] = Buf->Data[i];
+    for(s64 i = Buf->Text.Used - 1; i >= Buf->Cursor.Offset; --i) {
+        Buf->Text.Data[i + n] = Buf->Text.Data[i];
     }
     
     for(s64 i = 0; i < n; ++i) {
-        Buf->Data[Buf->Cursor.Offset + i] = Char[i];
+        Buf->Text.Data[Buf->Cursor.Offset + i] = Char[i];
     }
-    
-    // Update following lines
-    for(s64 i = Buf->Cursor.Line + 1; i < sb_count(Buf->Lines); ++i) {
-        Buf->Lines[i].Offset += n;
-    }
-    
-    Buf->Lines[Buf->Cursor.Line].Size += n;
-    Buf->Lines[Buf->Cursor.Line].Length += 1;
-    
-    // TODO: CRLF 
-    if(*Char == '\n') {
-        sb_add(Buf->Lines, 1);
-        for(s64 i = sb_count(Buf->Lines) - 1; i > Buf->Cursor.Line; --i) {
-            Buf->Lines[i] = Buf->Lines[i - 1];
-        }
-        
-        line_t *NewLine = &Buf->Lines[Buf->Cursor.Line + 1];
-        NewLine->Offset = Buf->Cursor.Offset + n;
-        NewLine->Size = Buf->Lines[Buf->Cursor.Line].Size - (NewLine->Offset - Buf->Lines[Buf->Cursor.Line].Offset);
-        NewLine->Length = Buf->Lines[Buf->Cursor.Line].Length - (Buf->Cursor.ColumnIs + 1);
-        
-        // Split current line
-        Buf->Lines[Buf->Cursor.Line].Size -= NewLine->Size;
-        Buf->Lines[Buf->Cursor.Line].Length -= NewLine->Length;
-    } 
+    make_lines(Buf);
     
     cursor_move(Buf, RIGHT, 1);
 }
 
+void
+do_backspace(buffer_t *Buf) {
+    if(Buf->Cursor.Offset == 0) {
+        return;
+    }
+    u8 *c = Buf->Text.Data + Buf->Cursor.Offset;
+    s32 n = 1;
+    while((*c & 0xc0) == 0x80) {
+        --c;
+        ++n;
+    }
+    
+    mem_buf_delete_range(&Buf->Text, Buf->Cursor.Offset - n, n);
+    cursor_move(Buf, LEFT, 1);
+    make_lines(Buf);
+}
+
 u32 
 codepoint_under_cursor(buffer_t *Buf) {
-    u8 *c = Buf->Data + Buf->Lines[Buf->Cursor.Line].Offset;
+    u8 *c = Buf->Text.Data + Buf->Lines[Buf->Cursor.Line].Offset;
     for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
         c += utf8_char_width(c);
     }
@@ -177,7 +188,7 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
     
     irect_t Cursor = {.x = 0, .y = LineHeight * (s32)Buf->Cursor.Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf)), .h = LineHeight};
     
-    u8 *c = Buf->Data + Buf->Lines[Buf->Cursor.Line].Offset;
+    u8 *c = Buf->Text.Data + Buf->Lines[Buf->Cursor.Line].Offset;
     for(s64 i = 0; i < Buf->Cursor.ColumnIs; ++i) {
         u32 Codepoint;
         c = utf8_to_codepoint(c, &Codepoint);
@@ -187,7 +198,7 @@ draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
     draw_rect(Fb, Cursor, 0xffddee66);
     
     for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-        u8 *Start = Buf->Data + Buf->Lines[i].Offset;
+        u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
         u8 *End = Start + Buf->Lines[i].Size;
         s32 LineY = (s32)i * LineHeight;
         s32 Center = LineY + (LineHeight >> 1);
@@ -259,33 +270,17 @@ load_ttf(char *Path, f32 Size) {
 void
 load_file(char *Path, buffer_t *Buf) {
     mem_zero_struct(Buf);
-    {
-        // TODO: Think a little harder about how files are loaded
-        platform_file_data_t File;
-        ASSERT(platform_read_file(Path, &File));
-        
-        sb_add(Buf->Data, File.Size);
-        mem_copy(Buf->Data, File.Data, File.Size);
-        
-        platform_free_file(&File);
-        
-    }
+    // TODO: Think a little harder about how files are loaded
+    platform_file_data_t File;
+    ASSERT(platform_read_file(Path, &File));
+    
+    mem_buf_add(&Buf->Text, File.Size);
+    mem_copy(Buf->Text.Data, File.Data, File.Size);
+    
+    platform_free_file(&File);
     
     // TODO: Detect file encoding, we assume utf-8 for now
-    line_t Line = {0};
-    u8 n = 0;
-    for(s64 i = 0; i < sb_count(Buf->Data); i += n) {
-        n = utf8_char_width(Buf->Data + i);
-        Line.Size += n;
-        Line.Length += 1;
-        
-        if(Buf->Data[i] == '\n' || (i + n) >= sb_count(Buf->Data)) {
-            line_t *l = sb_add(Buf->Lines, 1);
-            *l = Line;
-            mem_zero_struct(&Line);
-            Line.Offset = i + n;
-        }
-    }
+    make_lines(Buf);
 }
 
 panel_t *
@@ -532,6 +527,7 @@ k_do_editor(platform_shared_t *Shared) {
                     } break;
                     
                     case KEY_Backspace: {
+                        do_backspace(&Ctx.Buffer);
                     } break;
                     
                     default: {
@@ -587,14 +583,12 @@ k_do_editor(platform_shared_t *Shared) {
     iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
     draw_text_line(Shared->Framebuffer, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
     
-#if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
         bitmap_t *b = &Ctx.Font.GlyphSets[i].Set->Bitmap;
         irect_t Rect = {0, 0, b->w, b->h};
         draw_glyph_bitmap(Shared->Framebuffer, x, Shared->Framebuffer->Height - Rect.h, 0xffffffff, Rect, b);
         x += b->w + 10;
     }
-#endif
     
     draw_panels(Shared->Framebuffer);
 }
