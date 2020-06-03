@@ -171,7 +171,7 @@ draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, 
     s32 CursorX = x;
     while(c < End) {
         u32 Codepoint;
-        if(*c == '\n') { 
+        if(*c == '\n' || *c == '\r') { 
             c += utf8_char_width(c);
         } else if(*c == '\t') {
             CursorX += Font->SpaceWidth * TAB_WIDTH;

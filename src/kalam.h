@@ -10,15 +10,16 @@ typedef struct {
 } line_t;
 
 typedef struct {
-    //u8 *Data; // stb
+    s64 Line; // 0 based
+    s64 ColumnIs; // 0 based
+    s64 ColumnWas; // 0 based
+    s64 Offset;
+} cursor_t;
+
+typedef struct {
     mem_buffer_t Text;
     line_t *Lines; // stb
-    struct {
-        s64 Line; // 0 based
-        s64 ColumnIs; // 0 based, see README.md on defining cursor movement behavior
-        s64 ColumnWas;
-        s64 Offset;
-    } Cursor;
+    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
 } buffer_t;
 
 typedef struct {

@@ -162,7 +162,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             
             Event.Device = INPUT_DEVICE_Keyboard;
             Event.Type = IsDown ? INPUT_EVENT_Press : INPUT_EVENT_Release;
-            Event.Key.KeyCode = Message->wParam;
+            Event.Key.KeyCode = Message->wParam == VK_DELETE ? KEY_Delete : Message->wParam; 
             Event.Key.IsRepeatKey = WasDown && IsDown;
             
             Modifiers = GetKeyState(VK_CONTROL) & 0x8000 ? Modifiers | INPUT_MOD_Ctrl : Modifiers & ~(INPUT_MOD_Ctrl);
@@ -247,7 +247,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     s32 WindowWidth = 900;
     s32 WindowHeight = 900;
     
-    HWND WindowHandle = CreateWindowExW(0, WindowClass.lpszClassName, L"kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, WindowWidth, WindowHeight, 0, 0, Instance, 0);
+    HWND WindowHandle = CreateWindowExW(0, WindowClass.lpszClassName, L"kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 820, 380, WindowWidth, WindowHeight, 0, 0, Instance, 0);
     if(WindowHandle) {
         {
             RECT ClientRect;

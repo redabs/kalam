@@ -14,6 +14,7 @@ i3/vim style tiling with sane navigation.
         [ ] DPI awareness
         [ ] Ligatures
     [ ] Scaling?
+	[ ] Arabic text shaping
 
 * UI
     [ ] i3 style tiling
