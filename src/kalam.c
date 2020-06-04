@@ -103,14 +103,21 @@ make_lines(buffer_t *Buf) {
     u8 n = 0;
     for(u64 i = 0; i < Buf->Text.Used; i += n) {
         n = utf8_char_width(Buf->Text.Data + i);
+        Line.Size += n;
         
-        if(Buf->Text.Data[i] == '\n' || (i + n) >= Buf->Text.Used) {
+        if(Buf->Text.Data[i] == '\n') {
             sb_push(Buf->Lines, Line);
+            
+            // Reset for next line
             mem_zero_struct(&Line);
             Line.Offset = i + n;
         } else {
-            Line.Size += n;
             Line.Length += 1;
+            if((i + n) >= Buf->Text.Used) {
+                // Last character in buffer without trailing newline character
+                sb_push(Buf->Lines, Line);
+                break;
+            }
         }
     }
 }
@@ -581,7 +588,7 @@ do_insert_keybinds(buffer_t *Buf, input_event_t *e) {
         } break;
         
         default: {
-            if(e->Key.HasCharacterTranslation && !(e->Modifiers & INPUT_MOD_Ctrl)) {
+            if(e->Key.HasCharacterTranslation && !(e->Modifiers == INPUT_MOD_Ctrl)) {
                 do_char(Buf, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
             } else {
                 DidHandle = false;
