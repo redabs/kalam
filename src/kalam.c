@@ -93,7 +93,6 @@ cursor_move(buffer_t *Buf, cursor_t *Cursor, dir Dir, s64 StepSize) {
                 Cursor->Offset += utf8_char_width(Buf->Text.Data + Cursor->Offset);
             }
         } break;
-        
     }
 }
 
@@ -582,7 +581,7 @@ do_insert_keybinds(buffer_t *Buf, input_event_t *e) {
         } break;
         
         default: {
-            if(e->Key.HasCharacterTranslation) {
+            if(e->Key.HasCharacterTranslation && !(e->Modifiers & INPUT_MOD_Ctrl)) {
                 do_char(Buf, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
             } else {
                 DidHandle = false;
@@ -664,6 +663,23 @@ k_do_editor(platform_shared_t *Shared) {
             
         }
     } Events->Count = 0;
+    
+    
+    // Remove any cursors that overlap
+    for(s64 i = 0; i < sb_count(Ctx.Buffer.Cursors); ++i) {
+        cursor_t *c0 = &Ctx.Buffer.Cursors[i];
+        
+        for(s64 j = i + 1; j < sb_count(Ctx.Buffer.Cursors); ++j) {
+            cursor_t *c1 = &Ctx.Buffer.Cursors[j];
+            
+            if(c1->Offset == c0->Offset) {
+                for(s64 k = j; k < sb_count(Ctx.Buffer.Cursors) - 1; ++k) {
+                    Ctx.Buffer.Cursors[k] = Ctx.Buffer.Cursors[k + 1];
+                }
+                sb_set_count(Ctx.Buffer.Cursors, sb_count(Ctx.Buffer.Cursors) - 1);
+            }
+        }
+    }
     
     u32 c = 0xff191919;
     
