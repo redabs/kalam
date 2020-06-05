@@ -406,22 +406,34 @@ panel_child_index(panel_t *Panel) {
 
 void
 panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
-    PanelCtx->Selected = Panel->Parent;
     if(Panel->Parent) {
         s32 Idx = panel_child_index(Panel);
         panel_t *Sibling = Panel->Parent->Children[Idx ^ 1];
         
         // Copy sibling to parent as panels are leaf nodes so parent can't have only one valid child.
         Sibling->Parent = Panel->Parent->Parent;
+        if(Sibling->Children[0]) {
+            Sibling->Children[0]->Parent = Panel->Parent;
+        }
+        if(Sibling->Children[1]) {
+            Sibling->Children[1]->Parent = Panel->Parent;
+        }
+        
         *Panel->Parent = *Sibling;
+        
+        panel_t *p = Panel->Parent;
+        while(!p->Buffer) {
+            p = p->Children[p->LastSelected];
+        }
+        PanelCtx->Selected = p;
         
         panel_free(PanelCtx, Sibling);
         panel_free(PanelCtx, Panel);
     } else {
+        PanelCtx->Selected = Panel->Parent;
         panel_free(PanelCtx, Panel);
         PanelCtx->Root = 0;
     }
-    
 }
 
 void
