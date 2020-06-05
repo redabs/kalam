@@ -229,21 +229,34 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 }
 
 void
-draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
-    s32 LineHeight = Font->Ascent - Font->Descent; 
+draw_cursor(framebuffer_t *Fb, font_t *Font, buffer_t *Buf, cursor_t *Cursor) {
+    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+    irect_t Rect = {.x = 0, .y = LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf, Cursor)), .h = LineHeight};
     
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-        cursor_t *Cursor = &Buf->Cursors[CursorIndex];
-        irect_t Rect = {.x = 0, .y = LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf, Cursor)), .h = LineHeight};
-        
-        u8 *c = Buf->Text.Data + Buf->Lines[Cursor->Line].Offset;
-        for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-            u32 Codepoint;
-            c = utf8_to_codepoint(c, &Codepoint);
-            Rect.x += get_x_advance(Font, Codepoint);
-        }
-        
-        draw_rect(Fb, Rect, 0xffddee66);
+    u8 *c = Buf->Text.Data + Buf->Lines[Cursor->Line].Offset;
+    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
+        u32 Codepoint;
+        c = utf8_to_codepoint(c, &Codepoint);
+        Rect.x += get_x_advance(Font, Codepoint);
+    }
+    
+    draw_rect(Fb, Rect, 0xffddee66);
+}
+
+void
+draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
+    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+    
+    {
+        cursor_t *Cursor = &Buf->Cursors[0];
+        s32 y = (s32)Cursor->Line * LineHeight;
+        irect_t LineRect = {0, y, Fb->Width, LineHeight};
+        draw_rect(Fb, LineRect, 0xff1f4068);
+        draw_cursor(Fb, Font, Buf, Cursor);
+    }
+    
+    for(s64 CursorIndex = 1; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
+        draw_cursor(Fb, Font, Buf, &Buf->Cursors[CursorIndex]);
     }
     
     for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
@@ -301,9 +314,9 @@ load_ttf(char *Path, f32 Size) {
     
     stbtt_GetFontVMetrics(&Font.StbInfo, &Font.Ascent, &Font.Descent, &Font.LineGap);
     f32 Scale = stbtt_ScaleForMappingEmToPixels(&Font.StbInfo, Size);
-    Font.Ascent = (s32)(Font.Ascent * Scale);
-    Font.Descent = (s32)(Font.Descent * Scale);
-    Font.LineGap = (s32)(Font.LineGap * Scale);
+    Font.Ascent = (s32)(Font.Ascent * Scale + 0.5);
+    Font.Descent = (s32)(Font.Descent * Scale + 0.5);
+    Font.LineGap = (s32)(Font.LineGap * Scale + 0.5);
     
     stbtt_bakedchar *g = get_stbtt_bakedchar(&Font, 'M');
     if(g) {
@@ -588,7 +601,10 @@ do_insert_keybinds(buffer_t *Buf, input_event_t *e) {
         } break;
         
         default: {
-            if(e->Key.HasCharacterTranslation && !(e->Modifiers == INPUT_MOD_Ctrl)) {
+            // Only handle character input if Ctrl is not the only modifier (among the non-toggled modifiers, i.e. not Caps, Num-lock) that is currently active for the event.
+            // The intent here is to filter out control characters; we only want actual readable characters.
+            u64 ModCond = (e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl;
+            if(e->Key.HasCharacterTranslation && ModCond) {
                 do_char(Buf, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
             } else {
                 DidHandle = false;
