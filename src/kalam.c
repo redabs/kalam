@@ -23,7 +23,6 @@ typedef enum {
 
 void
 cursor_move(buffer_t *Buf, cursor_t *Cursor, dir Dir, s64 StepSize) {
-    // TODO: Cursor should never overlap!!
     int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
     s64 Column = 0;
     switch(Dir) {
@@ -173,7 +172,6 @@ do_backspace_ex(buffer_t *Buf, cursor_t *Cursor) {
 
 void
 do_backspace(buffer_t *Buf) {
-    // TODO: Cursor should never overlap!!
     for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
         do_backspace_ex(Buf, &Buf->Cursors[CursorIndex]);
     }
@@ -181,7 +179,6 @@ do_backspace(buffer_t *Buf) {
 
 void
 do_delete(buffer_t *Buf) {
-    // TODO: Cursor should never overlap!!
     for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
         cursor_t *Cursor = &Buf->Cursors[CursorIndex];
         line_t *Line = &Buf->Lines[Cursor->Line];
@@ -229,9 +226,9 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 }
 
 void
-draw_cursor(framebuffer_t *Fb, font_t *Font, buffer_t *Buf, cursor_t *Cursor) {
+draw_cursor(framebuffer_t *Fb, irect_t PanelRect, font_t *Font, buffer_t *Buf, cursor_t *Cursor) {
     s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
-    irect_t Rect = {.x = 0, .y = LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf, Cursor)), .h = LineHeight};
+    irect_t Rect = {.x = PanelRect.x, .y = PanelRect.y + LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf, Cursor)), .h = LineHeight};
     
     u8 *c = Buf->Text.Data + Buf->Lines[Cursor->Line].Offset;
     for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
@@ -241,33 +238,6 @@ draw_cursor(framebuffer_t *Fb, font_t *Font, buffer_t *Buf, cursor_t *Cursor) {
     }
     
     draw_rect(Fb, Rect, 0xffddee66);
-}
-
-void
-draw_buffer(framebuffer_t *Fb, font_t *Font, buffer_t *Buf) {
-    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
-    
-    {
-        cursor_t *Cursor = &Buf->Cursors[0];
-        s32 y = (s32)Cursor->Line * LineHeight;
-        irect_t LineRect = {0, y, Fb->Width, LineHeight};
-        draw_rect(Fb, LineRect, 0xff1f4068);
-        draw_cursor(Fb, Font, Buf, Cursor);
-    }
-    
-    for(s64 CursorIndex = 1; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-        draw_cursor(Fb, Font, Buf, &Buf->Cursors[CursorIndex]);
-    }
-    
-    for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-        u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
-        u8 *End = Start + Buf->Lines[i].Size;
-        s32 LineY = (s32)i * LineHeight;
-        s32 Center = LineY + (LineHeight >> 1);
-        s32 Baseline = Center + (Font->MHeight >> 1);
-        
-        draw_text_line(Fb, Font, 0, Baseline, 0xff90b080, Start, End);
-    }
 }
 
 s32
@@ -437,21 +407,74 @@ panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
 }
 
 void
-panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
+panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
     if(Panel->Buffer) {
-        u32 c = 0xff000000 | (u32)((u64)(Panel) * 0x9a7fdb ^ 0xe38fc3);
-        draw_rect(Fb, Rect, c);
-        if(Ctx.PanelCtx.Selected == Panel) {
-            irect_t r;
-            if(Panel->Split == SPLIT_Vertical) {
-                r = (irect_t){Rect.x + Rect.w - 4, Rect.y, 4, Rect.h};
-            } else {
-                r = (irect_t){Rect.x, Rect.y + Rect.h - 4, Rect.w, 4};
+        Rect = (irect_t) {Rect.x + 5, Rect.y + 5, Rect.w - 10, Rect.h - 10};
+        Fb->Clip = Rect;
+        
+        buffer_t *Buf = Panel->Buffer;
+        if(Buf) {
+            s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+            
+            {
+                cursor_t *Cursor = &Buf->Cursors[0];
+                s32 y = Rect.y + (s32)Cursor->Line * LineHeight;
+                irect_t LineRect = {Rect.x, y, Rect.w, LineHeight};
+                draw_rect(Fb, LineRect, 0xff1f4068);
+                draw_cursor(Fb, Rect, Font, Buf, Cursor);
             }
-            draw_rect(Fb, r, 0xffffffff);
-        }
-        if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
-            draw_rect(Fb, (irect_t){Rect.x + 8, Rect.y, 4, Rect.h}, 0xFF000000);
+            
+            for(s64 CursorIndex = 1; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
+                draw_cursor(Fb, Rect, Font, Buf, &Buf->Cursors[CursorIndex]);
+            }
+            
+            for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
+                u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
+                u8 *End = Start + Buf->Lines[i].Size;
+                s32 LineY = Rect.y + (s32)i * LineHeight;
+                s32 Center = LineY + (LineHeight >> 1);
+                s32 Baseline = Center + (Font->MHeight >> 1);
+                
+                draw_text_line(Fb, Font, Rect.x, Baseline, 0xff90b080, Start, End);
+            }
+            
+            u32 color = 0xff191919;
+            
+            u32 c0 = 0xff162447;
+            u32 c1 = 0xff1f4068;
+            u32 c2 = 0xff1b1b2f;
+            u32 c3 = 0xffe43f5a;
+            u32 Insert = c3;
+            u32 Normal = 0xffa8df65;
+            
+            irect_t StatusBar = {Rect.x, Rect.y + Rect.h - 20, Rect.w, 20};
+            
+            u32 StatusColor = c2;
+            if(Ctx.PanelCtx.Selected == Panel) {
+                StatusColor = c1;
+            } else if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
+                //StatusColor = color;
+            }
+            
+            draw_rect(Fb, StatusBar, StatusColor);
+            
+            u8 *ModeStr = (u8 *)"Invalid mode";
+            u32 ModeStrColor = 0xffffffff;
+            switch(Ctx.Mode) {
+                case MODE_Normal: {
+                    ModeStr = (u8 *)"NORMAL";
+                    ModeStrColor = Normal;
+                } break;
+                
+                case MODE_Insert: {
+                    ModeStr = (u8 *)"INSERT";
+                    ModeStrColor = Insert;
+                } break;
+            }
+            
+            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
+            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
+            
         }
     } else {
         irect_t r0, r1;
@@ -466,16 +489,16 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, irect_t Rect) {
             r0 = (irect_t){Rect.x, Rect.y, Rect.w, Hh};
             r1 = (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh};
         }
-        panel_draw(Fb, Panel->Children[0], r0);
-        panel_draw(Fb, Panel->Children[1], r1);
+        panel_draw(Fb, Panel->Children[0], Font, r0);
+        panel_draw(Fb, Panel->Children[1], Font, r1);
     }
 }
 
 void
-draw_panels(framebuffer_t *Fb) {
+draw_panels(framebuffer_t *Fb, font_t *Font) {
     if(Ctx.PanelCtx.Root) {
         irect_t Rect = {0, 0, Fb->Width, Fb->Height};
-        panel_draw(Fb, Ctx.PanelCtx.Root, Rect);
+        panel_draw(Fb, Ctx.PanelCtx.Root, Font, Rect);
     }
 }
 
@@ -726,28 +749,7 @@ k_do_editor(platform_shared_t *Shared) {
     u32 Normal = 0xffa8df65;
     
     clear_framebuffer(Shared->Framebuffer, c0);
-    
-    draw_buffer(Shared->Framebuffer, &Ctx.Font, &Ctx.Buffer);
-    
-    irect_t StatusBar = {0, Shared->Framebuffer->Height - 20, Shared->Framebuffer->Width, 20};
-    draw_rect(Shared->Framebuffer, StatusBar, c2);
-    
-    u8 *ModeStr = (u8 *)"Invalid mode";
-    u32 ModeStrColor = 0xffffffff;
-    switch(Ctx.Mode) {
-        case MODE_Normal: {
-            ModeStr = (u8 *)"NORMAL";
-            ModeStrColor = Normal;
-        } break;
-        
-        case MODE_Insert: {
-            ModeStr = (u8 *)"INSERT";
-            ModeStrColor = Insert;
-        } break;
-    }
-    
-    iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
-    draw_text_line(Shared->Framebuffer, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
+    Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
@@ -758,5 +760,5 @@ k_do_editor(platform_shared_t *Shared) {
     }
 #endif
     
-    draw_panels(Shared->Framebuffer);
+    draw_panels(Shared->Framebuffer,  &Ctx.Font);
 }
