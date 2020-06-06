@@ -102,7 +102,6 @@ make_lines(buffer_t *Buf) {
     u8 n = 0;
     for(u64 i = 0; i < Buf->Text.Used; i += n) {
         n = utf8_char_width(Buf->Text.Data + i);
-        Line.Size += n;
         
         if(Buf->Text.Data[i] == '\n') {
             sb_push(Buf->Lines, Line);
@@ -112,6 +111,7 @@ make_lines(buffer_t *Buf) {
             Line.Offset = i + n;
         } else {
             Line.Length += 1;
+            Line.Size += n;
             if((i + n) >= Buf->Text.Used) {
                 // Last character in buffer without trailing newline character
                 sb_push(Buf->Lines, Line);
@@ -460,7 +460,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
             
             u8 *ModeStr = (u8 *)"Invalid mode";
             u32 ModeStrColor = 0xffffffff;
-            switch(Ctx.Mode) {
+            switch(Panel->Mode) {
                 case MODE_Normal: {
                     ModeStr = (u8 *)"NORMAL";
                     ModeStrColor = Normal;
@@ -590,11 +590,11 @@ k_init(platform_shared_t *Shared) {
 }
 
 b32
-do_normal_keybinds(buffer_t *Buf, input_event_t *e) {
+do_normal_keybinds(panel_t *Panel, input_event_t *e) {
+    buffer_t *Buf = Panel->Buffer;
     b32 DidHandle = true;
     if(e->Modifiers & INPUT_MOD_Ctrl) {
         switch(e->Key.KeyCode) {
-            case KEY_N: { panel_create(&Ctx.PanelCtx); } break;
             case KEY_X: { 
                 if(Ctx.PanelCtx.Selected) {
                     Ctx.PanelCtx.Selected->Split ^= 1;
@@ -616,7 +616,7 @@ do_normal_keybinds(buffer_t *Buf, input_event_t *e) {
         }
     } else {
         switch(e->Key.KeyCode) {
-            case KEY_I: { Ctx.Mode = MODE_Insert; } break;
+            case KEY_I: { Panel->Mode = MODE_Insert; } break;
             default: { DidHandle = false; } break;
         }
     }
@@ -624,15 +624,16 @@ do_normal_keybinds(buffer_t *Buf, input_event_t *e) {
 }
 
 b32
-do_insert_keybinds(buffer_t *Buf, input_event_t *e) {
+do_insert_keybinds(panel_t *Panel, input_event_t *e) {
+    buffer_t *Buf = Panel->Buffer;
     b32 DidHandle = true;
     switch(e->Key.KeyCode) {
         case KEY_Escape: {
-            Ctx.Mode = MODE_Normal;
+            Panel->Mode = MODE_Normal;
         } break;
         
         case KEY_Backspace: {
-            do_backspace(&Ctx.Buffer);
+            do_backspace(Buf);
         } break;
         
         default: {
@@ -664,6 +665,12 @@ do_global_keybinds(buffer_t *Buf, input_event_t *e) {
             }
         } break;
         
+        case KEY_N: {
+            if(e->Modifiers & INPUT_MOD_Ctrl && !e->Key.IsRepeatKey) {
+                panel_create(&Ctx.PanelCtx); 
+            }
+        } break;
+        
         case KEY_End: {
             for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
                 cursor_t *c = &Buf->Cursors[i];
@@ -691,10 +698,10 @@ do_global_keybinds(buffer_t *Buf, input_event_t *e) {
             dir Dir = Map[e->Key.KeyCode];
             if(e->Modifiers & INPUT_MOD_Shift && (Dir == UP || Dir == DOWN)) {
                 sb_push(Buf->Cursors, Buf->Cursors[0]);
-                cursor_move(&Ctx.Buffer, &Buf->Cursors[0], Dir, StepSize); 
+                cursor_move(Buf, &Buf->Cursors[0], Dir, StepSize); 
             } else {
                 for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-                    cursor_move(&Ctx.Buffer, &Buf->Cursors[i], Dir, StepSize); 
+                    cursor_move(Buf, &Buf->Cursors[i], Dir, StepSize); 
                 }
             }
             
@@ -711,15 +718,18 @@ k_do_editor(platform_shared_t *Shared) {
     // TODO: Configurable keybindings
     for(s32 EventIndex = 0; EventIndex < Events->Count; ++EventIndex) {
         input_event_t *e = &Events->Events[EventIndex];
+        b32 b = false;
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
-            if(Ctx.Mode == MODE_Normal && do_normal_keybinds(&Ctx.Buffer, e)) {
-            } else if(Ctx.Mode == MODE_Insert && do_insert_keybinds(&Ctx.Buffer, e)) {
-            } else {
-                do_global_keybinds(&Ctx.Buffer, e);
+            if(Ctx.PanelCtx.Selected) {
+                if(Ctx.PanelCtx.Selected->Mode == MODE_Normal) b = do_normal_keybinds(Ctx.PanelCtx.Selected, e);
+                else if(Ctx.PanelCtx.Selected->Mode == MODE_Insert) b = do_insert_keybinds(Ctx.PanelCtx.Selected, e);
             }
-        } else if(e->Type == INPUT_EVENT_Scroll) {
             
-        }
+            if(!b || !Ctx.PanelCtx.Selected) {
+                b = do_global_keybinds(&Ctx.Buffer, e);
+            }
+        } 
+        
     } Events->Count = 0;
     
     

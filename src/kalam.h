@@ -5,8 +5,8 @@
 
 typedef struct {
     s64 Offset;
-    s64 Size; // bytes
-    s64 Length; // characters
+    s64 Size; // bytes, does not count newline character
+    s64 Length; // characters, does not count newline character
 } line_t;
 
 typedef struct {
@@ -62,6 +62,11 @@ typedef enum {
     SPLIT_Horizontal
 } split_mode;
 
+typedef enum {
+    MODE_Normal = 0,
+    MODE_Insert
+} mode;
+
 // Only the leaf nodes are actually regions where text is drawn.
 typedef struct panel_t panel_t;
 struct panel_t {
@@ -70,6 +75,7 @@ struct panel_t {
     
     // Used when leaf node
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
+    mode Mode;
     
     // Used when non-leaf node
     panel_t *Children[2]; 
@@ -90,17 +96,11 @@ typedef struct {
     panel_free_node_t *FreeList;
 } panel_ctx; 
 
-typedef enum {
-    MODE_Normal = 0,
-    MODE_Insert
-} mode;
-
 typedef struct {
     font_t Font;
     iv2_t p;
     buffer_t Buffer;
     panel_ctx PanelCtx;
-    mode Mode;
 } ctx_t;
 
 #endif //KALAM_H
