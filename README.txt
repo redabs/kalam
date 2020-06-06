@@ -17,7 +17,10 @@ i3/vim style tiling with sane navigation.
 	[ ] Arabic text shaping
 
 * UI
-    [ ] i3 style tiling
+    [x] i3 style tiling
+        i3 uses trees with arbtrary number of children per node, we went with a binary tree for simplicity.
+    [x] Vertical/ horizontal panel splits
+    [x] Direction movement! Not next panel; the right panel, or left, or up, or down!
 
 * Project 
     [ ] Project specification, e.g. project.4coder
@@ -41,10 +44,6 @@ i3/vim style tiling with sane navigation.
     [ ] Rename files
     [ ] Move files? 
 
-* Tiling
-    [ ] Vertical/ horizontal panel splits
-    [ ] Direction movement! Not next panel; the right panel, or left, or up, or down!
-
 * Editing
     [ ] Selections (pattern matching)
         [ ] Inside brackets (), [], {}, <>
@@ -60,7 +59,7 @@ i3/vim style tiling with sane navigation.
     [ ] Copy/paste
         "Registers" for multiple cursors? System clipboard?
 
-    [ ] Multiple cursors
+    [-] Multiple cursors
         Selecting the entire file buffer and narrowing it down to multiple selections of
         a variable and editing all instances of that with multiple cursors is far smoother
         than common search/replace.

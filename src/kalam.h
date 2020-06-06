@@ -4,25 +4,6 @@
 #define TAB_WIDTH 4 
 
 typedef struct {
-    s64 Offset;
-    s64 Size; // bytes, does not count newline character
-    s64 Length; // characters, does not count newline character
-} line_t;
-
-typedef struct {
-    s64 Line; // 0 based
-    s64 ColumnIs; // 0 based
-    s64 ColumnWas; // 0 based
-    s64 Offset;
-} cursor_t;
-
-typedef struct {
-    mem_buffer_t Text;
-    line_t *Lines; // stb
-    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
-} buffer_t;
-
-typedef struct {
     u8 *Data;
     s32 w;
     s32 h;
@@ -56,6 +37,25 @@ typedef struct {
     } GlyphSets[GLYPH_SET_MAX];
     
 } font_t;
+
+typedef struct {
+    s64 Offset;
+    s64 Size; // bytes, does not count newline character
+    s64 Length; // characters, does not count newline character
+} line_t;
+
+typedef struct {
+    s64 Line; // 0 based
+    s64 ColumnIs; // 0 based
+    s64 ColumnWas; // 0 based
+    s64 Offset;
+} cursor_t;
+
+typedef struct {
+    mem_buffer_t Text;
+    line_t *Lines; // stb
+    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
+} buffer_t;
 
 typedef enum {
     SPLIT_Vertical = 0,

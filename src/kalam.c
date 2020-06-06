@@ -357,11 +357,11 @@ panel_create(panel_ctx *PanelCtx) {
             return;
         }
         
+        *Left = *Right = *Parent;
         Left->Parent = Right->Parent = Parent;
         Parent->Children[0] = Left;
         Parent->Children[1] = Right;
         
-        Left->Buffer = Right->Buffer = Parent->Buffer;
         Parent->Buffer = 0;
         
         PanelCtx->Selected = Left;
@@ -474,7 +474,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
             
             iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
             draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
-            
+            draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? (u8*)"|" : (u8*)"_", 0);
         }
     } else {
         irect_t r0, r1;
@@ -749,17 +749,18 @@ k_do_editor(platform_shared_t *Shared) {
         }
     }
     
-    u32 c = 0xff191919;
     
     u32 c0 = 0xff162447;
-    u32 c1 = 0xff1f4068;
-    u32 c2 = 0xff1b1b2f;
-    u32 c3 = 0xffe43f5a;
-    u32 Insert = c3;
-    u32 Normal = 0xffa8df65;
-    
     clear_framebuffer(Shared->Framebuffer, c0);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
+    
+    if(!Ctx.PanelCtx.Root) {
+        irect_t Rect = {0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
+        iv2_t p = center_text_in_rect(&Ctx.Font, Rect, (u8 *)"Hello there.", 0);
+        draw_text_line(Shared->Framebuffer, &Ctx.Font, p.x, p.y, 0xffffffff, (u8 *)"Hello there.", 0);
+    }
+    
+    draw_panels(Shared->Framebuffer,  &Ctx.Font);
     
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
@@ -769,6 +770,4 @@ k_do_editor(platform_shared_t *Shared) {
         x += b->w + 10;
     }
 #endif
-    
-    draw_panels(Shared->Framebuffer,  &Ctx.Font);
 }
