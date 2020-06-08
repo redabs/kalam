@@ -228,18 +228,20 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 }
 
 void
-draw_cursor(framebuffer_t *Fb, irect_t PanelRect, font_t *Font, buffer_t *Buf, cursor_t *Cursor) {
+draw_cursor(framebuffer_t *Fb, irect_t PanelRect, font_t *Font, panel_t *Panel, cursor_t *Cursor) {
     s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
-    irect_t Rect = {.x = PanelRect.x, .y = PanelRect.y + LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Buf, Cursor)), .h = LineHeight};
+    irect_t Rect = {.x = PanelRect.x, .y = PanelRect.y + LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Panel->Buffer, Cursor)), .h = LineHeight};
     
-    u8 *c = Buf->Text.Data + Buf->Lines[Cursor->Line].Offset;
+    u8 *c = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Cursor->Line].Offset;
     for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
         u32 Codepoint;
         c = utf8_to_codepoint(c, &Codepoint);
         Rect.x += get_x_advance(Font, Codepoint);
     }
     
-    draw_rect(Fb, Rect, 0xffddee66);
+    u32 Color = (Panel->Mode == MODE_Normal) ? COLOR_STATUS_NORMAL : COLOR_STATUS_INSERT;
+    
+    draw_rect(Fb, Rect, Color);
 }
 
 s32
@@ -426,11 +428,11 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
                 s32 y = Rect.y + (s32)Cursor->Line * LineHeight;
                 irect_t LineRect = {Rect.x, y, Rect.w, LineHeight};
                 draw_rect(Fb, LineRect, 0xff1f4068);
-                draw_cursor(Fb, Rect, Font, Buf, Cursor);
+                draw_cursor(Fb, Rect, Font, Panel, Cursor);
             }
             
             for(s64 CursorIndex = 1; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-                draw_cursor(Fb, Rect, Font, Buf, &Buf->Cursors[CursorIndex]);
+                draw_cursor(Fb, Rect, Font, Panel, &Buf->Cursors[CursorIndex]);
             }
             
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
