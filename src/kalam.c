@@ -8,6 +8,8 @@
 #include "event.h"
 #include "platform.h"
 
+#include "custom.h"
+
 #include "kalam.h"
 
 #include "render.c"
@@ -409,8 +411,11 @@ panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
 void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
     if(Panel->Buffer) {
-        Rect = (irect_t) {Rect.x + 5, Rect.y + 5, Rect.w - 10, Rect.h - 10};
-        Fb->Clip = Rect;
+        irect_t PanelRect = Rect;
+        s32 Padding = 1;
+        Rect = (irect_t) {Rect.x + Padding, Rect.y + Padding, Rect.w - Padding * 2, Rect.h - Padding * 2};
+        
+        Fb->Clip = PanelRect;
         
         buffer_t *Buf = Panel->Buffer;
         if(Buf) {
@@ -438,37 +443,38 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
                 draw_text_line(Fb, Font, Rect.x, Baseline, 0xff90b080, Start, End);
             }
             
-            u32 color = 0xff191919;
-            
-            u32 c0 = 0xff162447;
-            u32 c1 = 0xff1f4068;
-            u32 c2 = 0xff1b1b2f;
-            u32 c3 = 0xffe43f5a;
-            u32 Insert = c3;
-            u32 Normal = 0xffa8df65;
-            
             irect_t StatusBar = {Rect.x, Rect.y + Rect.h - 20, Rect.w, 20};
             
-            u32 StatusColor = c2;
-            if(Ctx.PanelCtx.Selected == Panel) {
-                StatusColor = c1;
-            } else if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
-                //StatusColor = color;
-            }
-            
+            u32 StatusColor = COLOR_STATUS_BAR;
             draw_rect(Fb, StatusBar, StatusColor);
+            
+            irect_t r0 = {PanelRect.x, PanelRect.y, Padding, PanelRect.h};
+            irect_t r1 = {PanelRect.x + PanelRect.w - Padding, PanelRect.y, Padding, PanelRect.h};
+            irect_t r2 = {PanelRect.x, PanelRect.y, PanelRect.w, Padding};
+            irect_t r3 = {PanelRect.x, PanelRect.y + PanelRect.h - Padding, PanelRect.w, Padding};
+            u32 Border = COLOR_BG;
+            if(Ctx.PanelCtx.Selected == Panel) {
+                Border = COLOR_PANEL_SELECTED;
+            } else if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
+                Border = COLOR_PANEL_LAST_SELECTED;
+            } 
+            
+            draw_rect(Fb, r0, Border);
+            draw_rect(Fb, r1, Border);
+            draw_rect(Fb, r2, Border);
+            draw_rect(Fb, r3, Border);
             
             u8 *ModeStr = (u8 *)"Invalid mode";
             u32 ModeStrColor = 0xffffffff;
             switch(Panel->Mode) {
                 case MODE_Normal: {
                     ModeStr = (u8 *)"NORMAL";
-                    ModeStrColor = Normal;
+                    ModeStrColor = COLOR_STATUS_NORMAL;
                 } break;
                 
                 case MODE_Insert: {
                     ModeStr = (u8 *)"INSERT";
-                    ModeStrColor = Insert;
+                    ModeStrColor = COLOR_STATUS_INSERT;
                 } break;
             }
             
@@ -750,8 +756,7 @@ k_do_editor(platform_shared_t *Shared) {
     }
     
     
-    u32 c0 = 0xff162447;
-    clear_framebuffer(Shared->Framebuffer, c0);
+    clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
     if(!Ctx.PanelCtx.Root) {
