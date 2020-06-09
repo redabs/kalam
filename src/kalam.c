@@ -124,9 +124,10 @@ make_lines(buffer_t *Buf) {
 }
 
 void
-do_char(buffer_t *Buf, u8 *Char) {
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-        cursor_t *Cursor = &Buf->Cursors[CursorIndex];
+do_char(panel_t *Panel, u8 *Char) {
+    buffer_t *Buf = Panel->Buffer;
+    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
+        cursor_t *Cursor = &Panel->Cursors[CursorIndex];
         
         u8 n = utf8_char_width(Char);
         mem_buf_add(&Buf->Text, n);
@@ -140,8 +141,8 @@ do_char(buffer_t *Buf, u8 *Char) {
         }
         
         // Update all the following cursors
-        for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-            cursor_t *c = &Buf->Cursors[i];
+        for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+            cursor_t *c = &Panel->Cursors[i];
             if(c->Offset > Cursor->Offset) {
                 c->Offset += n;
             }
@@ -153,14 +154,15 @@ do_char(buffer_t *Buf, u8 *Char) {
 }
 
 void
-do_backspace_ex(buffer_t *Buf, cursor_t *Cursor) {
+do_backspace_ex(panel_t *Panel, cursor_t *Cursor) {
+    buffer_t *Buf = Panel->Buffer;
     if(Cursor->Offset != 0) {
         s32 n = 1;
         for(u8 *c = Buf->Text.Data + Cursor->Offset; (*(--c) & 0xc0) == 0x80; ++n);
         
         // Update all following cursors
-        for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-            cursor_t *c = &Buf->Cursors[i];
+        for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+            cursor_t *c = &Panel->Cursors[i];
             if(c->Offset > Cursor->Offset) {
                 c->Offset -= n;
             }
@@ -173,22 +175,24 @@ do_backspace_ex(buffer_t *Buf, cursor_t *Cursor) {
 }
 
 void
-do_backspace(buffer_t *Buf) {
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-        do_backspace_ex(Buf, &Buf->Cursors[CursorIndex]);
+do_backspace(panel_t *Panel) {
+    buffer_t *Buf = Panel->Buffer;
+    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
+        do_backspace_ex(Panel, &Panel->Cursors[CursorIndex]);
     }
 }
 
 void
-do_delete(buffer_t *Buf) {
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-        cursor_t *Cursor = &Buf->Cursors[CursorIndex];
+do_delete(panel_t *Panel) {
+    buffer_t *Buf = Panel->Buffer;
+    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
+        cursor_t *Cursor = &Panel->Cursors[CursorIndex];
         line_t *Line = &Buf->Lines[Cursor->Line];
         
         if(!(Cursor->ColumnIs == Line->Length && Cursor->Line == (sb_count(Buf->Lines) - 1))) {
             // TODO: This is kind of a hack.
             cursor_move(Buf, Cursor, RIGHT, 1);
-            do_backspace_ex(Buf, Cursor);
+            do_backspace_ex(Panel, Cursor);
         }
     }
 }
@@ -318,8 +322,6 @@ load_file(char *Path, buffer_t *Buf) {
     // TODO: Detect file encoding, we assume utf-8 for now
     make_lines(Buf);
     
-    cursor_t *Cursor = sb_add(Buf->Cursors, 1);
-    mem_zero_struct(Cursor);
 }
 
 panel_t *
@@ -351,24 +353,33 @@ panel_create(panel_ctx *PanelCtx) {
         PanelCtx->Root = panel_alloc(PanelCtx);
         PanelCtx->Root->Buffer = &Ctx.Buffer;
         PanelCtx->Selected = PanelCtx->Root;
+        
+        cursor_t *Cursor = sb_add(PanelCtx->Root->Cursors, 1);
+        mem_zero_struct(Cursor);
     } else {
         panel_t *Parent = PanelCtx->Selected;
         panel_t *Left = panel_alloc(PanelCtx);
         panel_t *Right = panel_alloc(PanelCtx);
         
-        if(!Right) { 
+        if(!Right || !Left) { 
             panel_free(PanelCtx, Left); 
+            panel_free(PanelCtx, Right); 
             return;
         }
-        
-        *Left = *Right = *Parent;
-        Left->Parent = Right->Parent = Parent;
         Parent->Children[0] = Left;
         Parent->Children[1] = Right;
         
+        *Left = *Parent;
+        Left->Parent = Right->Parent = Parent;
+        
+        Right->Split = Left->Split;
+        Right->Buffer = Left->Buffer,
+        Right->Mode = Left->Mode;
+        mem_zero_struct(sb_add(Right->Cursors, 1));
+        
         Parent->Buffer = 0;
         
-        PanelCtx->Selected = Left;
+        PanelCtx->Selected = Right;
     }
 }
 
@@ -424,15 +435,15 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
             s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
             
             {
-                cursor_t *Cursor = &Buf->Cursors[0];
+                cursor_t *Cursor = &Panel->Cursors[0];
                 s32 y = Rect.y + (s32)Cursor->Line * LineHeight;
                 irect_t LineRect = {Rect.x, y, Rect.w, LineHeight};
                 draw_rect(Fb, LineRect, 0xff1f4068);
                 draw_cursor(Fb, Rect, Font, Panel, Cursor);
             }
             
-            for(s64 CursorIndex = 1; CursorIndex < sb_count(Buf->Cursors); ++CursorIndex) {
-                draw_cursor(Fb, Rect, Font, Panel, &Buf->Cursors[CursorIndex]);
+            for(s64 CursorIndex = 1; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
+                draw_cursor(Fb, Rect, Font, Panel, &Panel->Cursors[CursorIndex]);
             }
             
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
@@ -641,7 +652,7 @@ do_insert_keybinds(panel_t *Panel, input_event_t *e) {
         } break;
         
         case KEY_Backspace: {
-            do_backspace(Buf);
+            do_backspace(Panel);
         } break;
         
         default: {
@@ -649,7 +660,7 @@ do_insert_keybinds(panel_t *Panel, input_event_t *e) {
             // The intent here is to filter out control characters; we only want actual readable characters.
             u64 ModCond = (e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl;
             if(e->Key.HasCharacterTranslation && ModCond) {
-                do_char(Buf, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
+                do_char(Panel, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
             } else {
                 DidHandle = false;
             }
@@ -660,16 +671,20 @@ do_insert_keybinds(panel_t *Panel, input_event_t *e) {
 }
 
 b32
-do_global_keybinds(buffer_t *Buf, input_event_t *e) {
+do_global_keybinds(input_event_t *e) {
     b32 DidHandle = true;
     s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
     switch(e->Key.KeyCode) {
         case KEY_Home: {
-            for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-                cursor_t *c = &Buf->Cursors[i];
-                line_t *l = &Buf->Lines[c->Line];
-                c->Offset = l->Offset;
-                c->ColumnIs = c->ColumnWas = 0;
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                    cursor_t *c = &Panel->Cursors[i];
+                    line_t *l = &Buf->Lines[c->Line];
+                    c->Offset = l->Offset;
+                    c->ColumnIs = c->ColumnWas = 0;
+                }
             }
         } break;
         
@@ -680,41 +695,53 @@ do_global_keybinds(buffer_t *Buf, input_event_t *e) {
         } break;
         
         case KEY_End: {
-            for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-                cursor_t *c = &Buf->Cursors[i];
-                line_t *l = &Buf->Lines[c->Line];
-                c->Offset = l->Offset + l->Size;
-                c->ColumnIs = c->ColumnWas = l->Length;
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                    cursor_t *c = &Panel->Cursors[i];
+                    line_t *l = &Buf->Lines[c->Line];
+                    c->Offset = l->Offset + l->Size;
+                    c->ColumnIs = c->ColumnWas = l->Length;
+                }
             }
         } break;
         
         case KEY_Delete: {
-            do_delete(Buf);
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                do_delete(Panel);
+            }
         } break;
         
         case KEY_Left:
         case KEY_Right:
         case KEY_Up:
         case KEY_Down: { 
-            dir Map[] = {
-                [KEY_Left] = LEFT, 
-                [KEY_Right] = RIGHT, 
-                [KEY_Up] = UP, 
-                [KEY_Down] = DOWN, 
-            };
-            
-            dir Dir = Map[e->Key.KeyCode];
-            if(e->Modifiers & INPUT_MOD_Shift && (Dir == UP || Dir == DOWN)) {
-                sb_push(Buf->Cursors, Buf->Cursors[0]);
-                cursor_move(Buf, &Buf->Cursors[0], Dir, StepSize); 
-            } else {
-                for(s64 i = 0; i < sb_count(Buf->Cursors); ++i) {
-                    cursor_move(Buf, &Buf->Cursors[i], Dir, StepSize); 
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                dir Map[] = {
+                    [KEY_Left] = LEFT, 
+                    [KEY_Right] = RIGHT, 
+                    [KEY_Up] = UP, 
+                    [KEY_Down] = DOWN, 
+                };
+                
+                dir Dir = Map[e->Key.KeyCode];
+                if(e->Modifiers & INPUT_MOD_Shift && (Dir == UP || Dir == DOWN)) {
+                    sb_push(Panel->Cursors, Panel->Cursors[0]);
+                    cursor_move(Buf, &Panel->Cursors[0], Dir, StepSize); 
+                } else {
+                    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                        cursor_move(Buf, &Panel->Cursors[i], Dir, StepSize); 
+                    }
                 }
+                
             }
-            
-        }
-        default: { DidHandle = false; };
+        } break;
+        
+        default: { DidHandle = false; } break;
     }
     
     return DidHandle;
@@ -729,18 +756,23 @@ k_do_editor(platform_shared_t *Shared) {
         b32 b = false;
         if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
             if(Ctx.PanelCtx.Selected) {
-                if(Ctx.PanelCtx.Selected->Mode == MODE_Normal) b = do_normal_keybinds(Ctx.PanelCtx.Selected, e);
-                else if(Ctx.PanelCtx.Selected->Mode == MODE_Insert) b = do_insert_keybinds(Ctx.PanelCtx.Selected, e);
+                if(Ctx.PanelCtx.Selected->Mode == MODE_Normal) {
+                    b = do_normal_keybinds(Ctx.PanelCtx.Selected, e);
+                    
+                } else if(Ctx.PanelCtx.Selected->Mode == MODE_Insert) {
+                    b = do_insert_keybinds(Ctx.PanelCtx.Selected, e);
+                }
             }
             
             if(!b || !Ctx.PanelCtx.Selected) {
-                b = do_global_keybinds(&Ctx.Buffer, e);
+                b = do_global_keybinds(e);
             }
         } 
         
     } Events->Count = 0;
     
     
+#if 0    
     // Remove any cursors that overlap
     for(s64 i = 0; i < sb_count(Ctx.Buffer.Cursors); ++i) {
         cursor_t *c0 = &Ctx.Buffer.Cursors[i];
@@ -756,6 +788,7 @@ k_do_editor(platform_shared_t *Shared) {
             }
         }
     }
+#endif
     
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);

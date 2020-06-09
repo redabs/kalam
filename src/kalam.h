@@ -54,7 +54,6 @@ typedef struct {
 typedef struct {
     mem_buffer_t Text;
     line_t *Lines; // stb
-    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
 } buffer_t;
 
 typedef enum {
@@ -76,6 +75,7 @@ struct panel_t {
     // Used when leaf node
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
     mode Mode;
+    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
     
     // Used when non-leaf node
     panel_t *Children[2]; 
