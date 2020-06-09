@@ -329,6 +329,7 @@ panel_alloc(panel_ctx *PanelCtx) {
     if(PanelCtx->FreeList) {
         panel_t *Result = &PanelCtx->FreeList->Panel;
         PanelCtx->FreeList = PanelCtx->FreeList->Next;
+        mem_zero_struct(Result);
         return Result;
     }
     return 0;
@@ -366,15 +367,15 @@ panel_create(panel_ctx *PanelCtx) {
             panel_free(PanelCtx, Right); 
             return;
         }
-        Parent->Children[0] = Left;
-        Parent->Children[1] = Right;
         
         *Left = *Parent;
+        Parent->Children[0] = Left;
+        Parent->Children[1] = Right;
         Left->Parent = Right->Parent = Parent;
         
         Right->Split = Left->Split;
         Right->Buffer = Left->Buffer,
-        Right->Mode = Left->Mode;
+        Right->Mode = MODE_Normal;
         mem_zero_struct(sb_add(Right->Cursors, 1));
         
         Parent->Buffer = 0;
