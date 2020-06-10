@@ -24,6 +24,25 @@ typedef enum {
 } dir;
 
 void
+fix_cursor_overlap(panel_t *Panel) {
+    // Remove any cursors that overlap
+    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+        cursor_t *c0 = &Panel->Cursors[i];
+        
+        for(s64 j = i + 1; j < sb_count(Panel->Cursors); ++j) {
+            cursor_t *c1 = &Panel->Cursors[j];
+            
+            if(c1->Offset == c0->Offset) {
+                for(s64 k = j; k < sb_count(Panel->Cursors) - 1; ++k) {
+                    Panel->Cursors[k] = Panel->Cursors[k + 1];
+                }
+                sb_set_count(Panel->Cursors, sb_count(Panel->Cursors) - 1);
+            }
+        }
+    }
+}
+
+void
 cursor_move(buffer_t *Buf, cursor_t *Cursor, dir Dir, s64 StepSize) {
     int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
     s64 Column = 0;
@@ -151,6 +170,7 @@ do_char(panel_t *Panel, u8 *Char) {
         make_lines(Buf);
         cursor_move(Buf, Cursor, RIGHT, 1);
     }
+    fix_cursor_overlap(Panel);
 }
 
 void
@@ -180,6 +200,7 @@ do_backspace(panel_t *Panel) {
     for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
         do_backspace_ex(Panel, &Panel->Cursors[CursorIndex]);
     }
+    fix_cursor_overlap(Panel);
 }
 
 void
@@ -195,6 +216,7 @@ do_delete(panel_t *Panel) {
             do_backspace_ex(Panel, Cursor);
         }
     }
+    fix_cursor_overlap(Panel);
 }
 
 u32 
@@ -738,6 +760,7 @@ do_global_keybinds(input_event_t *e) {
                         cursor_move(Buf, &Panel->Cursors[i], Dir, StepSize); 
                     }
                 }
+                fix_cursor_overlap(Panel);
                 
             }
         } break;
@@ -771,26 +794,6 @@ k_do_editor(platform_shared_t *Shared) {
         } 
         
     } Events->Count = 0;
-    
-    
-#if 0    
-    // Remove any cursors that overlap
-    for(s64 i = 0; i < sb_count(Ctx.Buffer.Cursors); ++i) {
-        cursor_t *c0 = &Ctx.Buffer.Cursors[i];
-        
-        for(s64 j = i + 1; j < sb_count(Ctx.Buffer.Cursors); ++j) {
-            cursor_t *c1 = &Ctx.Buffer.Cursors[j];
-            
-            if(c1->Offset == c0->Offset) {
-                for(s64 k = j; k < sb_count(Ctx.Buffer.Cursors) - 1; ++k) {
-                    Ctx.Buffer.Cursors[k] = Ctx.Buffer.Cursors[k + 1];
-                }
-                sb_set_count(Ctx.Buffer.Cursors, sb_count(Ctx.Buffer.Cursors) - 1);
-            }
-        }
-    }
-#endif
-    
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
