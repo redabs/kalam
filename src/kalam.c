@@ -239,6 +239,12 @@ get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
     return 0;
 }
 
+s32 
+line_height(font_t *Font) {
+    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+    return LineHeight;
+}
+
 s32
 get_x_advance(font_t *Font, u32 Codepoint) {
     s32 Result = Font->MWidth;
@@ -255,8 +261,13 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 
 void
 draw_cursor(framebuffer_t *Fb, irect_t PanelRect, font_t *Font, panel_t *Panel, cursor_t *Cursor) {
-    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
-    irect_t Rect = {.x = PanelRect.x, .y = PanelRect.y + LineHeight * (s32)Cursor->Line, .w = get_x_advance(Font, codepoint_under_cursor(Panel->Buffer, Cursor)), .h = LineHeight};
+    s32 LineHeight = line_height(Font);
+    irect_t Rect = {
+        .x = PanelRect.x, 
+        .y = PanelRect.y + LineHeight * (s32)Cursor->Line - Panel->Scroll, 
+        .w = get_x_advance(Font, codepoint_under_cursor(Panel->Buffer, Cursor)), 
+        .h = LineHeight
+    };
     
     u8 *c = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Cursor->Line].Offset;
     for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
@@ -347,7 +358,7 @@ load_file(char *Path, buffer_t *Buf) {
 }
 
 panel_t *
-panel_alloc(panel_ctx *PanelCtx) {
+panel_alloc(panel_ctx_t *PanelCtx) {
     if(PanelCtx->FreeList) {
         panel_t *Result = &PanelCtx->FreeList->Panel;
         PanelCtx->FreeList = PanelCtx->FreeList->Next;
@@ -358,7 +369,7 @@ panel_alloc(panel_ctx *PanelCtx) {
 }
 
 void
-panel_free(panel_ctx *PanelCtx, panel_t *Panel) {
+panel_free(panel_ctx_t *PanelCtx, panel_t *Panel) {
     if(!Panel) { return; }
     panel_free_node_t *n = (panel_free_node_t *)Panel;
     n->Next = PanelCtx->FreeList;
@@ -366,7 +377,7 @@ panel_free(panel_ctx *PanelCtx, panel_t *Panel) {
 }
 
 void
-panel_create(panel_ctx *PanelCtx) {
+panel_create(panel_ctx_t *PanelCtx) {
     // no hay nada mas
     if(!PanelCtx->FreeList) {
         return;
@@ -413,7 +424,7 @@ panel_child_index(panel_t *Panel) {
 }
 
 void
-panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
+panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
     if(Panel->Parent) {
         s32 Idx = panel_child_index(Panel);
         panel_t *Sibling = Panel->Parent->Children[Idx ^ 1];
@@ -445,6 +456,21 @@ panel_kill(panel_ctx *PanelCtx, panel_t *Panel) {
 }
 
 void
+split_panel_rect(panel_t *Panel, irect_t Rect, irect_t *r0, irect_t *r1) {
+    if(Panel->Split == SPLIT_Vertical) {
+        s32 Hw = Rect.w / 2;
+        s32 RoundedHw = (s32)((f32)Rect.w / 2 + 0.5);
+        *r0 = (irect_t){Rect.x, Rect.y, Hw, Rect.h};
+        *r1 = (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h};
+    } else {
+        s32 Hh = Rect.h / 2;
+        s32 RoundedHh = (s32)((f32)Rect.h / 2 + 0.5);
+        *r0 = (irect_t){Rect.x, Rect.y, Rect.w, Hh};
+        *r1 = (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh};
+    }
+}
+
+void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
     if(Panel->Buffer) {
         irect_t PanelRect = Rect;
@@ -455,12 +481,12 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
         
         buffer_t *Buf = Panel->Buffer;
         if(Buf) {
-            s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+            s32 LineHeight = line_height(Font);
             
             {
                 cursor_t *Cursor = &Panel->Cursors[0];
                 s32 y = Rect.y + (s32)Cursor->Line * LineHeight;
-                irect_t LineRect = {Rect.x, y, Rect.w, LineHeight};
+                irect_t LineRect = {Rect.x, y - Panel->Scroll, Rect.w, LineHeight};
                 draw_rect(Fb, LineRect, 0xff1f4068);
                 draw_cursor(Fb, Rect, Font, Panel, Cursor);
             }
@@ -476,7 +502,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
                 s32 Center = LineY + (LineHeight >> 1);
                 s32 Baseline = Center + (Font->MHeight >> 1);
                 
-                draw_text_line(Fb, Font, Rect.x, Baseline, 0xff90b080, Start, End);
+                draw_text_line(Fb, Font, Rect.x, Baseline - Panel->Scroll, 0xff90b080, Start, End);
             }
             
             irect_t StatusBar = {Rect.x, Rect.y + Rect.h - 20, Rect.w, 20};
@@ -520,32 +546,28 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
         }
     } else {
         irect_t r0, r1;
-        if(Panel->Split == SPLIT_Vertical) {
-            s32 Hw = Rect.w / 2;
-            s32 RoundedHw = (s32)((f32)Rect.w / 2 + 0.5);
-            r0 = (irect_t){Rect.x, Rect.y, Hw, Rect.h};
-            r1 = (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h};
-        } else {
-            s32 Hh = Rect.h / 2;
-            s32 RoundedHh = (s32)((f32)Rect.h / 2 + 0.5);
-            r0 = (irect_t){Rect.x, Rect.y, Rect.w, Hh};
-            r1 = (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh};
-        }
+        split_panel_rect(Panel, Rect, &r0, &r1);
         panel_draw(Fb, Panel->Children[0], Font, r0);
         panel_draw(Fb, Panel->Children[1], Font, r1);
     }
 }
 
+irect_t 
+workspace_rect(framebuffer_t *Fb) {
+    irect_t Rect = {0, 0, Fb->Width, Fb->Height};
+    return Rect;
+}
+
 void
 draw_panels(framebuffer_t *Fb, font_t *Font) {
     if(Ctx.PanelCtx.Root) {
-        irect_t Rect = {0, 0, Fb->Width, Fb->Height};
+        irect_t Rect = workspace_rect(Fb);
         panel_draw(Fb, Ctx.PanelCtx.Root, Font, Rect);
     }
 }
 
 void
-panel_move_selected(panel_ctx *PanelCtx, dir Dir) {
+panel_move_selected(panel_ctx_t *PanelCtx, dir Dir) {
     // Panel->Children[0] is always left or above 
     panel_t *Panel = PanelCtx->Selected;
     if(PanelCtx->Root == Panel) {
@@ -772,6 +794,28 @@ do_global_keybinds(input_event_t *e) {
 }
 
 void
+set_panel_scroll(panel_t *Panel, irect_t Rect) {
+    if(!Panel) { return; }
+    
+    if(Panel->Buffer) {
+        s32 LineHeight = line_height(&Ctx.Font);
+        cursor_t *c = &Panel->Cursors[0];
+        s32 yOff = (s32)c->Line * LineHeight;
+        s32 Bottom = (Panel->Scroll + Rect.h - LineHeight * 3);
+        if(yOff > Bottom) {
+            Panel->Scroll += yOff - Bottom;
+        } else if(yOff < Panel->Scroll) {
+            Panel->Scroll = yOff;
+        }
+    } else {
+        irect_t r0, r1;
+        split_panel_rect(Panel, Rect, &r0, &r1);
+        set_panel_scroll(Panel->Children[0], r0);
+        set_panel_scroll(Panel->Children[1], r1);
+    }
+}
+
+void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
     // TODO: Configurable keybindings
@@ -795,6 +839,8 @@ k_do_editor(platform_shared_t *Shared) {
         
     } Events->Count = 0;
     
+    set_panel_scroll(Ctx.PanelCtx.Root, workspace_rect(Shared->Framebuffer));
+    
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
@@ -804,7 +850,7 @@ k_do_editor(platform_shared_t *Shared) {
         draw_text_line(Shared->Framebuffer, &Ctx.Font, p.x, p.y, 0xffffffff, (u8 *)"Hello there.", 0);
     }
     
-    draw_panels(Shared->Framebuffer,  &Ctx.Font);
+    draw_panels(Shared->Framebuffer, &Ctx.Font);
     
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {

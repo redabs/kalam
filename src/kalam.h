@@ -76,6 +76,7 @@ struct panel_t {
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
     mode Mode;
     cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
+    s32 Scroll;
     
     // Used when non-leaf node
     panel_t *Children[2]; 
@@ -94,13 +95,13 @@ typedef struct {
     panel_t *Selected;
     panel_free_node_t Panels[PANEL_MAX];
     panel_free_node_t *FreeList;
-} panel_ctx; 
+} panel_ctx_t; 
 
 typedef struct {
     font_t Font;
     iv2_t p;
     buffer_t Buffer;
-    panel_ctx PanelCtx;
+    panel_ctx_t PanelCtx;
 } ctx_t;
 
 #endif //KALAM_H
