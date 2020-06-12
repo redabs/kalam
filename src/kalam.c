@@ -12,6 +12,7 @@
 
 #include "kalam.h"
 
+#include "layout.c"
 #include "render.c"
 
 ctx_t Ctx = {0};
@@ -474,8 +475,7 @@ void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
     if(Panel->Buffer) {
         irect_t PanelRect = Rect;
-        s32 Padding = 1;
-        Rect = (irect_t) {Rect.x + Padding, Rect.y + Padding, Rect.w - Padding * 2, Rect.h - Padding * 2};
+        Rect = text_buffer_rect(Panel, PanelRect);
         
         Fb->Clip = PanelRect;
         
@@ -505,26 +505,22 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
                 draw_text_line(Fb, Font, Rect.x, Baseline - Panel->Scroll, 0xff90b080, Start, End);
             }
             
-            irect_t StatusBar = {Rect.x, Rect.y + Rect.h - 20, Rect.w, 20};
+            irect_t StatusBar = status_bar_rect(PanelRect);
+            draw_rect(Fb, StatusBar, COLOR_STATUS_BAR);
             
-            u32 StatusColor = COLOR_STATUS_BAR;
-            draw_rect(Fb, StatusBar, StatusColor);
+            irect_t r0, r1, r2, r3;
+            panel_border_rects(PanelRect, &r0, &r1, &r2, &r3);
             
-            irect_t r0 = {PanelRect.x, PanelRect.y, Padding, PanelRect.h};
-            irect_t r1 = {PanelRect.x + PanelRect.w - Padding, PanelRect.y, Padding, PanelRect.h};
-            irect_t r2 = {PanelRect.x, PanelRect.y, PanelRect.w, Padding};
-            irect_t r3 = {PanelRect.x, PanelRect.y + PanelRect.h - Padding, PanelRect.w, Padding};
-            u32 Border = COLOR_BG;
+            u32 BorderColor = COLOR_BG;
             if(Ctx.PanelCtx.Selected == Panel) {
-                Border = COLOR_PANEL_SELECTED;
+                BorderColor = COLOR_PANEL_SELECTED;
             } else if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
-                Border = COLOR_PANEL_LAST_SELECTED;
+                BorderColor = COLOR_PANEL_LAST_SELECTED;
             } 
-            
-            draw_rect(Fb, r0, Border);
-            draw_rect(Fb, r1, Border);
-            draw_rect(Fb, r2, Border);
-            draw_rect(Fb, r3, Border);
+            draw_rect(Fb, r0, BorderColor);
+            draw_rect(Fb, r1, BorderColor);
+            draw_rect(Fb, r2, BorderColor);
+            draw_rect(Fb, r3, BorderColor);
             
             u8 *ModeStr = (u8 *)"Invalid mode";
             u32 ModeStrColor = 0xffffffff;
@@ -800,13 +796,18 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
     if(Panel->Buffer) {
         s32 LineHeight = line_height(&Ctx.Font);
         cursor_t *c = &Panel->Cursors[0];
-        s32 yOff = (s32)c->Line * LineHeight;
-        s32 Bottom = (Panel->Scroll + Rect.h - LineHeight * 3);
+        
+        irect_t TextRegion = text_buffer_rect(Panel, Rect);
+        s32 yOff = (s32)(c->Line + 1) * LineHeight;
+        s32 Bottom = Panel->Scroll + TextRegion.h - BORDER_SIZE * 2;
+        
         if(yOff > Bottom) {
             Panel->Scroll += yOff - Bottom;
+            
         } else if(yOff < Panel->Scroll) {
             Panel->Scroll = yOff;
         }
+        
     } else {
         irect_t r0, r1;
         split_panel_rect(Panel, Rect, &r0, &r1);

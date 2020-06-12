@@ -102,13 +102,38 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     s32 MinY = MAX(Rect.y, Fb->Clip.y); 
     s32 MaxY = MIN(MinY + Rect.h, Fb->Clip.y + Fb->Clip.h);
     
-    u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
-    for(s32 y = MinY; y < MaxY; ++y) {
-        u32 *Pixel = Row + MinX;
-        for(s32 x = MinX; x < MaxX; ++x, ++Pixel) {
-            *Pixel = Color;
+    if((Color >> 24) == 0xff) {
+        u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
+        for(s32 y = MinY; y < MaxY; ++y) {
+            u32 *Pixel = Row + MinX;
+            for(s32 x = MinX; x < MaxX; ++x, ++Pixel) {
+                *Pixel = Color;
+            }
+            Row += Fb->Width;
         }
-        Row += Fb->Width;
+    } else {
+        f32 a = (f32)((Color >> 24) & 0xff) / 255.f;
+        
+        f32 sr = (f32)((Color >> 16) & 0xff);
+        f32 sg = (f32)((Color >> 8) & 0xff);
+        f32 sb = (f32)((Color) & 0xff);
+        
+        u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
+        for(s32 y = MinY; y < MaxY; ++y) {
+            u32 *Pixel = Row + MinX;
+            for(s32 x = MinX; x < MaxX; ++x, ++Pixel) {
+                f32 dr = (f32)((*Pixel >> 16) & 0xff);
+                f32 dg = (f32)((*Pixel >> 8) & 0xff);
+                f32 db = (f32)((*Pixel) & 0xff);
+                
+                u8 r = (u8)((1. - a) * dr + a * sr);
+                u8 g = (u8)((1. - a) * dg + a * sg);
+                u8 b = (u8)((1. - a) * db + a * sb);
+                
+                *Pixel = 0xff000000 | r << 16 | g << 8 | b;
+            }
+            Row += Fb->Width;
+        }
     }
 }
 

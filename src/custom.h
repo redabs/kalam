@@ -10,4 +10,7 @@
 #define COLOR_PANEL_SELECTED 0xffdddddd
 #define COLOR_PANEL_LAST_SELECTED 0xff888888
 
+#define STATUS_BAR_HEIGHT 20
+#define BORDER_SIZE 1
+
 #endif //CUSTOM_H
