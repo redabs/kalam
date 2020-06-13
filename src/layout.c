@@ -1,7 +1,18 @@
 irect_t
-line_number_rect(panel_t *Panel, irect_t PanelRect) {
-    // TODO
-    return (irect_t) {.x = PanelRect.x + BORDER_SIZE, .y = PanelRect.y + BORDER_SIZE, .w = 0, .h = PanelRect.h - BORDER_SIZE * 2}; 
+line_number_rect(panel_t *Panel, font_t *Font, irect_t PanelRect) {
+    s64 LineCount = sb_count(Panel->Buffer->Lines);
+    s32 n = 0;
+    while(LineCount > 0) {
+        n += 1;
+        LineCount /= 10;
+    }
+    
+    return (irect_t){
+        .x = PanelRect.x + BORDER_SIZE, 
+        .y = PanelRect.y + BORDER_SIZE, 
+        .w = Font->MWidth * n,
+        .h = PanelRect.h - BORDER_SIZE * 2
+    };
 }
 
 irect_t
@@ -17,12 +28,12 @@ status_bar_rect(irect_t PanelRect) {
 }
 
 irect_t
-text_buffer_rect(panel_t *Panel, irect_t PanelRect) {
+text_buffer_rect(panel_t *Panel, font_t *Font, irect_t PanelRect) {
     irect_t s = status_bar_rect(PanelRect);
-    irect_t l = line_number_rect(Panel, PanelRect);
+    irect_t l = line_number_rect(Panel, Font, PanelRect);
     
     irect_t Rect = {
-        .x = PanelRect.x + l.w + BORDER_SIZE,
+        .x = PanelRect.x + BORDER_SIZE + l.w + LINE_NUMBER_PADDING_RIGHT,
         .y = PanelRect.y + BORDER_SIZE,
         .w = PanelRect.w - l.w - BORDER_SIZE * 2,
         .h = PanelRect.h - s.h - BORDER_SIZE * 2

@@ -471,10 +471,22 @@ split_panel_rect(panel_t *Panel, irect_t Rect, irect_t *r0, irect_t *r1) {
 }
 
 void
-panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
+draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u64 Num) {
+    u8 NumStr[64];
+    u64 n = 0;
+    u8 *c = NumStr + sizeof(NumStr);
+    for(u64 i = Num; i > 0; i /= 10, n++) {
+        --c;
+        *c = '0' + (i % 10);
+    }
+    s32 Width = text_width(Font, c, c + n);
+    draw_text_line(Fb, Font, Rect.x + Rect.w - Width, Rect.y, COLOR_LINE_NUMBER, c, c + n);
+}
+
+void
+panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
-        irect_t PanelRect = Rect;
-        Rect = text_buffer_rect(Panel, PanelRect);
+        irect_t TextRegion = text_buffer_rect(Panel, Font, PanelRect);
         
         Fb->Clip = PanelRect;
         
@@ -484,24 +496,26 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
             
             {
                 cursor_t *Cursor = &Panel->Cursors[0];
-                s32 y = Rect.y + (s32)Cursor->Line * LineHeight;
-                irect_t LineRect = {Rect.x, y - Panel->Scroll, Rect.w, LineHeight};
+                s32 y = TextRegion.y + (s32)Cursor->Line * LineHeight;
+                irect_t LineRect = {TextRegion.x, y - Panel->Scroll, TextRegion.w, LineHeight};
                 draw_rect(Fb, LineRect, 0xff1f4068);
-                draw_cursor(Fb, Rect, Font, Panel, Cursor);
+                draw_cursor(Fb, TextRegion, Font, Panel, Cursor);
             }
             
             for(s64 CursorIndex = 1; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
-                draw_cursor(Fb, Rect, Font, Panel, &Panel->Cursors[CursorIndex]);
+                draw_cursor(Fb, TextRegion, Font, Panel, &Panel->Cursors[CursorIndex]);
             }
             
+            irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
                 u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
                 u8 *End = Start + Buf->Lines[i].Size;
-                s32 LineY = Rect.y + (s32)i * LineHeight;
+                s32 LineY = TextRegion.y + (s32)i * LineHeight;
                 s32 Center = LineY + (LineHeight >> 1);
-                s32 Baseline = Center + (Font->MHeight >> 1);
+                s32 Baseline = Center + (Font->MHeight >> 1) - Panel->Scroll;
                 
-                draw_text_line(Fb, Font, Rect.x, Baseline - Panel->Scroll, 0xff90b080, Start, End);
+                draw_text_line(Fb, Font, TextRegion.x, Baseline, COLOR_TEXT, Start, End);
+                draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, i + 1);
             }
             
             irect_t StatusBar = status_bar_rect(PanelRect);
@@ -541,7 +555,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t Rect) {
         }
     } else {
         irect_t r0, r1;
-        split_panel_rect(Panel, Rect, &r0, &r1);
+        split_panel_rect(Panel, PanelRect, &r0, &r1);
         panel_draw(Fb, Panel->Children[0], Font, r0);
         panel_draw(Fb, Panel->Children[1], Font, r1);
     }
@@ -637,8 +651,8 @@ panel_move_selected(panel_ctx_t *PanelCtx, dir_t Dir) {
 void
 k_init(platform_shared_t *Shared) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 15);
-    load_file("test.c");
-    //load_file("../test/test.txt", &Ctx.Buffer);
+    //load_file("test.c");
+    load_file("../test/test.txt");
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
@@ -796,7 +810,7 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
         s32 LineHeight = line_height(&Ctx.Font);
         cursor_t *c = &Panel->Cursors[0];
         
-        irect_t TextRegion = text_buffer_rect(Panel, Rect);
+        irect_t TextRegion = text_buffer_rect(Panel, &Ctx.Font, Rect);
         s32 yOff = (s32)(c->Line + 1) * LineHeight;
         s32 Bottom = Panel->Scroll + TextRegion.h;
         

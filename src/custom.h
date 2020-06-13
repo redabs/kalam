@@ -2,6 +2,8 @@
 #define CUSTOM_H
 
 #define COLOR_BG 0xff162447
+#define COLOR_TEXT 0xff90b080
+#define COLOR_LINE_NUMBER 0xff505050
 
 #define COLOR_STATUS_BAR 0xff1b1b2f
 #define COLOR_STATUS_NORMAL 0xffa8df65
@@ -11,6 +13,7 @@
 #define COLOR_PANEL_LAST_SELECTED 0xff888888
 
 #define STATUS_BAR_HEIGHT 20
-#define BORDER_SIZE 1
+#define BORDER_SIZE 2
+#define LINE_NUMBER_PADDING_RIGHT 5
 
 #endif //CUSTOM_H
