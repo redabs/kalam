@@ -10,7 +10,7 @@ status_bar_rect(irect_t PanelRect) {
         .x = PanelRect.x + BORDER_SIZE, 
         .y = PanelRect.y + PanelRect.h - STATUS_BAR_HEIGHT - BORDER_SIZE,
         .w = PanelRect.w - BORDER_SIZE * 2,
-        .h = STATUS_BAR_HEIGHT - BORDER_SIZE * 2
+        .h = STATUS_BAR_HEIGHT
     };
     
     return Rect;

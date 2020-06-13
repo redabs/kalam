@@ -22,7 +22,7 @@ typedef enum {
     DOWN  = 1 << 1,
     LEFT  = 1 << 2,
     RIGHT = 1 << 3
-} dir;
+} dir_t;
 
 void
 fix_cursor_overlap(panel_t *Panel) {
@@ -44,7 +44,7 @@ fix_cursor_overlap(panel_t *Panel) {
 }
 
 void
-cursor_move(buffer_t *Buf, cursor_t *Cursor, dir Dir, s64 StepSize) {
+cursor_move(buffer_t *Buf, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
     int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
     s64 Column = 0;
     switch(Dir) {
@@ -342,9 +342,9 @@ load_ttf(char *Path, f32 Size) {
 }
 
 void
-load_file(char *Path, buffer_t *Buf) {
+load_file(char *Path) {
+    buffer_t *Buf = sb_add(Ctx.Buffers, 1);
     mem_zero_struct(Buf);
-    // TODO: Think a little harder about how files are loaded
     platform_file_data_t File;
     ASSERT(platform_read_file(Path, &File));
     
@@ -355,7 +355,6 @@ load_file(char *Path, buffer_t *Buf) {
     
     // TODO: Detect file encoding, we assume utf-8 for now
     make_lines(Buf);
-    
 }
 
 panel_t *
@@ -386,7 +385,7 @@ panel_create(panel_ctx_t *PanelCtx) {
     
     if(!PanelCtx->Root) {
         PanelCtx->Root = panel_alloc(PanelCtx);
-        PanelCtx->Root->Buffer = &Ctx.Buffer;
+        PanelCtx->Root->Buffer = &Ctx.Buffers[0];
         PanelCtx->Selected = PanelCtx->Root;
         
         cursor_t *Cursor = sb_add(PanelCtx->Root->Cursors, 1);
@@ -563,7 +562,7 @@ draw_panels(framebuffer_t *Fb, font_t *Font) {
 }
 
 void
-panel_move_selected(panel_ctx_t *PanelCtx, dir Dir) {
+panel_move_selected(panel_ctx_t *PanelCtx, dir_t Dir) {
     // Panel->Children[0] is always left or above 
     panel_t *Panel = PanelCtx->Selected;
     if(PanelCtx->Root == Panel) {
@@ -638,7 +637,7 @@ panel_move_selected(panel_ctx_t *PanelCtx, dir Dir) {
 void
 k_init(platform_shared_t *Shared) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 15);
-    load_file("test.c", &Ctx.Buffer);
+    load_file("test.c");
     //load_file("../test/test.txt", &Ctx.Buffer);
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
@@ -762,14 +761,14 @@ do_global_keybinds(input_event_t *e) {
             panel_t *Panel = Ctx.PanelCtx.Selected;
             if(Panel) {
                 buffer_t *Buf = Panel->Buffer;
-                dir Map[] = {
+                dir_t Map[] = {
                     [KEY_Left] = LEFT, 
                     [KEY_Right] = RIGHT, 
                     [KEY_Up] = UP, 
                     [KEY_Down] = DOWN, 
                 };
                 
-                dir Dir = Map[e->Key.KeyCode];
+                dir_t Dir = Map[e->Key.KeyCode];
                 if(e->Modifiers & INPUT_MOD_Shift && (Dir == UP || Dir == DOWN)) {
                     sb_push(Panel->Cursors, Panel->Cursors[0]);
                     cursor_move(Buf, &Panel->Cursors[0], Dir, StepSize); 
@@ -799,7 +798,7 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
         
         irect_t TextRegion = text_buffer_rect(Panel, Rect);
         s32 yOff = (s32)(c->Line + 1) * LineHeight;
-        s32 Bottom = Panel->Scroll + TextRegion.h - BORDER_SIZE * 2;
+        s32 Bottom = Panel->Scroll + TextRegion.h;
         
         if(yOff > Bottom) {
             Panel->Scroll += yOff - Bottom;

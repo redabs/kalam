@@ -51,7 +51,17 @@ typedef struct {
     s64 Offset;
 } cursor_t;
 
+typedef enum {
+    BUFFER_TYPE_File,
+    BUFFER_TYPE_Internal, // scratch, messages, debug log and other non file-backed buffers.
+} buffer_type_t;
+
 typedef struct {
+    buffer_type_t Type;
+    union {
+        u8 *Path;
+        u8 *Name; // When Type is BUFFER_TYPE_Internal
+    }; 
     mem_buffer_t Text;
     line_t *Lines; // stb
 } buffer_t;
@@ -59,22 +69,22 @@ typedef struct {
 typedef enum {
     SPLIT_Vertical = 0,
     SPLIT_Horizontal
-} split_mode;
+} split_mode_t;
 
 typedef enum {
     MODE_Normal = 0,
     MODE_Insert
-} mode;
+} mode_t;
 
 // Only the leaf nodes are actually regions where text is drawn.
 typedef struct panel_t panel_t;
 struct panel_t {
     panel_t *Parent;
-    split_mode Split; 
+    split_mode_t Split; 
     
     // Used when leaf node
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
-    mode Mode;
+    mode_t Mode;
     cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
     s32 Scroll;
     
@@ -100,7 +110,7 @@ typedef struct {
 typedef struct {
     font_t Font;
     iv2_t p;
-    buffer_t Buffer;
+    buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;
 } ctx_t;
 
