@@ -414,6 +414,7 @@ panel_create(panel_ctx_t *PanelCtx) {
         Parent->Buffer = 0;
         
         PanelCtx->Selected = Right;
+        Right->Parent->LastSelected = 1;
     }
 }
 
