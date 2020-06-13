@@ -471,16 +471,16 @@ split_panel_rect(panel_t *Panel, irect_t Rect, irect_t *r0, irect_t *r1) {
 }
 
 void
-draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u64 Num) {
+draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 LineNum) {
     u8 NumStr[64];
     u64 n = 0;
     u8 *c = NumStr + sizeof(NumStr);
-    for(u64 i = Num; i > 0; i /= 10, n++) {
+    for(u64 i = LineNum; i > 0; i /= 10, n++) {
         --c;
         *c = '0' + (i % 10);
     }
     s32 Width = text_width(Font, c, c + n);
-    draw_text_line(Fb, Font, Rect.x + Rect.w - Width, Rect.y, COLOR_LINE_NUMBER, c, c + n);
+    draw_text_line(Fb, Font, Rect.x + Rect.w - Width, Rect.y, Color, c, c + n);
 }
 
 void
@@ -515,7 +515,8 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 s32 Baseline = Center + (Font->MHeight >> 1) - Panel->Scroll;
                 
                 draw_text_line(Fb, Font, TextRegion.x, Baseline, COLOR_TEXT, Start, End);
-                draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, i + 1);
+                s64 n = ABS(i - Panel->Cursors[0].Line);
+                draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
             irect_t StatusBar = status_bar_rect(PanelRect);
@@ -651,8 +652,8 @@ panel_move_selected(panel_ctx_t *PanelCtx, dir_t Dir) {
 void
 k_init(platform_shared_t *Shared) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 15);
-    //load_file("test.c");
-    load_file("../test/test.txt");
+    load_file("test.c");
+    //load_file("../test/test.txt");
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
