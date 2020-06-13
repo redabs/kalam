@@ -813,14 +813,15 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
         cursor_t *c = &Panel->Cursors[0];
         
         irect_t TextRegion = text_buffer_rect(Panel, &Ctx.Font, Rect);
-        s32 yOff = (s32)(c->Line + 1) * LineHeight;
+        s32 CursorTop = (s32)c->Line * LineHeight;
+        s32 CursorBottom = CursorTop + LineHeight;
         s32 Bottom = Panel->Scroll + TextRegion.h;
         
-        if(yOff > Bottom) {
-            Panel->Scroll += yOff - Bottom;
+        if(CursorBottom > Bottom) {
+            Panel->Scroll += CursorBottom - Bottom;
             
-        } else if(yOff < Panel->Scroll) {
-            Panel->Scroll = yOff;
+        } else if(CursorTop < Panel->Scroll) {
+            Panel->Scroll = CursorTop;
         }
         
     } else {
