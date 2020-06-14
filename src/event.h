@@ -5,12 +5,12 @@ typedef enum {
     INPUT_EVENT_Press = 0,
     INPUT_EVENT_Release,
     INPUT_EVENT_Scroll,
-} input_event_type;
+} input_event_type_t;
 
 typedef enum {
     INPUT_DEVICE_Keyboard = 0,
     INPUT_DEVICE_Mouse,
-} input_device;
+} input_device_t;
 
 typedef enum {
     INPUT_MOD_Alt      = 1,
@@ -18,7 +18,7 @@ typedef enum {
     INPUT_MOD_Shift    = 1 << 2,
     INPUT_MOD_CapsLock = 1 << 3,
     INPUT_MOD_NumLock  = 1 << 4,
-} input_modifier;
+} input_modifier_t;
 
 typedef enum {
     INPUT_MOUSE_Left = 0,
@@ -28,9 +28,9 @@ typedef enum {
     INPUT_MOUSE_Backward,
     
     INPUT_MOUSE_MAX
-} input_mouse_button;
+} input_mouse_button_t;
 
-enum input_key {
+enum input_key_t {
     KEY_Backspace = 0x8,
     KEY_Tab = 0x9,
     KEY_Shift = 0x10,
@@ -95,9 +95,9 @@ enum input_key {
 };
 
 typedef struct {
-    input_event_type Type;
-    input_device Device;
-    input_modifier Modifiers;
+    input_event_type_t Type;
+    input_device_t Device;
+    input_modifier_t Modifiers;
     union {
         struct {
             u64 KeyCode;
@@ -108,7 +108,7 @@ typedef struct {
         
         struct {
             iv2_t Position;
-            input_mouse_button Button;
+            input_mouse_button_t Button;
         } Mouse;
         
         struct {
