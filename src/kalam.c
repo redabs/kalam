@@ -222,12 +222,8 @@ do_delete(panel_t *Panel) {
 
 u32 
 codepoint_under_cursor(buffer_t *Buf, cursor_t *Cursor) {
-    u8 *c = Buf->Text.Data + Buf->Lines[Cursor->Line].Offset;
-    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-        c += utf8_char_width(c);
-    }
     u32 Codepoint = 0;
-    utf8_to_codepoint(c, &Codepoint);
+    utf8_to_codepoint(Buf->Text.Data + Cursor->Offset, &Codepoint);
     return Codepoint;
 }
 
@@ -260,25 +256,28 @@ get_x_advance(font_t *Font, u32 Codepoint) {
     return Result;
 }
 
+s32 
+cursor_pixel_x_offset(buffer_t *Buffer, font_t *Font, cursor_t *Cursor) {
+    s32 x = 0;
+    u8 *c = Buffer->Text.Data + Buffer->Lines[Cursor->Line].Offset;
+    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
+        u32 Codepoint;
+        c = utf8_to_codepoint(c, &Codepoint);
+        x += get_x_advance(Font, Codepoint);
+    }
+    return x;
+}
+
 void
 draw_cursor(framebuffer_t *Fb, irect_t PanelRect, font_t *Font, panel_t *Panel, cursor_t *Cursor) {
     s32 LineHeight = line_height(Font);
     irect_t Rect = {
-        .x = PanelRect.x, 
-        .y = PanelRect.y + LineHeight * (s32)Cursor->Line - Panel->Scroll, 
+        .x = PanelRect.x + cursor_pixel_x_offset(Panel->Buffer, Font, Cursor) - Panel->ScrollX, 
+        .y = PanelRect.y + LineHeight * (s32)Cursor->Line - Panel->ScrollY, 
         .w = get_x_advance(Font, codepoint_under_cursor(Panel->Buffer, Cursor)), 
         .h = LineHeight
     };
-    
-    u8 *c = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Cursor->Line].Offset;
-    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-        u32 Codepoint;
-        c = utf8_to_codepoint(c, &Codepoint);
-        Rect.x += get_x_advance(Font, Codepoint);
-    }
-    
     u32 Color = (Panel->Mode == MODE_Normal) ? COLOR_STATUS_NORMAL : COLOR_STATUS_INSERT;
-    
     draw_rect(Fb, Rect, Color);
 }
 
@@ -498,7 +497,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             {
                 cursor_t *Cursor = &Panel->Cursors[0];
                 s32 y = TextRegion.y + (s32)Cursor->Line * LineHeight;
-                irect_t LineRect = {TextRegion.x, y - Panel->Scroll, TextRegion.w, LineHeight};
+                irect_t LineRect = {TextRegion.x, y - Panel->ScrollY, TextRegion.w, LineHeight};
                 draw_rect(Fb, LineRect, 0xff1f4068);
                 draw_cursor(Fb, TextRegion, Font, Panel, Cursor);
             }
@@ -513,9 +512,11 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 u8 *End = Start + Buf->Lines[i].Size;
                 s32 LineY = TextRegion.y + (s32)i * LineHeight;
                 s32 Center = LineY + (LineHeight >> 1);
-                s32 Baseline = Center + (Font->MHeight >> 1) - Panel->Scroll;
+                s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
                 
-                draw_text_line(Fb, Font, TextRegion.x, Baseline, COLOR_TEXT, Start, End);
+                Fb->Clip = TextRegion;
+                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, Start, End);
+                Fb->Clip = PanelRect;
                 s64 n = ABS(i - Panel->Cursors[0].Line);
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
@@ -810,18 +811,30 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
     
     if(Panel->Buffer) {
         s32 LineHeight = line_height(&Ctx.Font);
-        cursor_t *c = &Panel->Cursors[0];
+        cursor_t *Cursor = &Panel->Cursors[0];
         
         irect_t TextRegion = text_buffer_rect(Panel, &Ctx.Font, Rect);
-        s32 CursorTop = (s32)c->Line * LineHeight;
+        s32 CursorTop = (s32)Cursor->Line * LineHeight;
         s32 CursorBottom = CursorTop + LineHeight;
-        s32 Bottom = Panel->Scroll + TextRegion.h;
+        s32 Bottom = Panel->ScrollY + TextRegion.h;
         
         if(CursorBottom > Bottom) {
-            Panel->Scroll += CursorBottom - Bottom;
+            Panel->ScrollY += CursorBottom - Bottom;
             
-        } else if(CursorTop < Panel->Scroll) {
-            Panel->Scroll = CursorTop;
+        } else if(CursorTop < Panel->ScrollY) {
+            Panel->ScrollY = CursorTop;
+        }
+        
+        s32 CursorLeft = cursor_pixel_x_offset(Panel->Buffer, &Ctx.Font, Cursor);
+        s32 CursorWidth = get_x_advance(&Ctx.Font, codepoint_under_cursor(Panel->Buffer, Cursor));
+        s32 CursorRight = CursorLeft + CursorWidth;
+        s32 Right = Panel->ScrollX + TextRegion.w;
+        
+        if(CursorRight > Right) {
+            Panel->ScrollX += CursorRight - Right;
+            
+        } else if(CursorLeft < Panel->ScrollX) {
+            Panel->ScrollX = CursorLeft;
         }
         
     } else {

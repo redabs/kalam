@@ -35,7 +35,7 @@ text_buffer_rect(panel_t *Panel, font_t *Font, irect_t PanelRect) {
     irect_t Rect = {
         .x = PanelRect.x + BORDER_SIZE + l.w + LINE_NUMBER_PADDING_RIGHT,
         .y = PanelRect.y + BORDER_SIZE,
-        .w = PanelRect.w - l.w - BORDER_SIZE * 2,
+        .w = PanelRect.w - l.w - BORDER_SIZE * 2 - LINE_NUMBER_PADDING_RIGHT,
         .h = PanelRect.h - s.h - BORDER_SIZE * 2
     };
     return Rect;
