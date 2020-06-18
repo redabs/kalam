@@ -4,6 +4,7 @@
 typedef enum {
     INPUT_EVENT_Press = 0,
     INPUT_EVENT_Release,
+    INPUT_EVENT_Text,
     INPUT_EVENT_Scroll,
 } input_event_type_t;
 
@@ -16,9 +17,12 @@ typedef enum {
     INPUT_MOD_Alt      = 1,
     INPUT_MOD_Ctrl     = 1 << 1,
     INPUT_MOD_Shift    = 1 << 2,
-    INPUT_MOD_CapsLock = 1 << 3,
-    INPUT_MOD_NumLock  = 1 << 4,
 } input_modifier_t;
+
+typedef enum {
+    INPUT_TOGGLES_CapsLock = 1,
+    INPUT_TOGGLES_NumLock  = 1 << 1,
+} input_toggles_t;
 
 typedef enum {
     INPUT_MOUSE_Left = 0,
@@ -30,7 +34,7 @@ typedef enum {
     INPUT_MOUSE_MAX
 } input_mouse_button_t;
 
-enum input_key_t {
+typedef enum {
     KEY_Backspace = 0x8,
     KEY_Tab = 0x9,
     KEY_Shift = 0x10,
@@ -50,6 +54,9 @@ enum input_key_t {
     KEY_Up = 0x26,
     KEY_Right = 0x27,
     KEY_Down = 0x28,
+    
+    KEY_Insert = 0x2d,
+    
     
     KEY_0 = 0x30,
     KEY_1 = 0x31,
@@ -92,19 +99,22 @@ enum input_key_t {
     KEY_Delete = 0x7f,
     
     KEY_MAX,
-};
+} input_key_t;
 
 typedef struct {
     input_event_type_t Type;
     input_device_t Device;
     input_modifier_t Modifiers;
+    input_toggles_t Toggles;
     union {
         struct {
-            u64 KeyCode;
-            u8 Character[4]; // utf8
-            b8 HasCharacterTranslation;
+            input_key_t KeyCode;
             b8 IsRepeatKey;
         } Key;
+        
+        struct {
+            u8 Character[4]; // utf8
+        } Text;
         
         struct {
             iv2_t Position;

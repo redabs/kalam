@@ -153,36 +153,36 @@ utf16_to_utf8(u32 Utf16, u8 *Utf8) {
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier_t Modifiers; 
+    local_persist input_toggles_t Toggles; 
     input_event_t Event = {0};
     switch(Message->message) {
+        case WM_CHAR: {
+            Event.Type = INPUT_EVENT_Text;
+            utf16_to_utf8((u32)Message->wParam, Event.Text.Character);
+        } goto process_key;
+        
         case WM_KEYDOWN: 
         case WM_KEYUP: {
             b32 WasDown = (b32)(Message->lParam >> 30);
             b32 IsDown = !(Message->lParam >> 31);
+            Event.Type = IsDown ? INPUT_EVENT_Press : INPUT_EVENT_Release;
             
             Event.Device = INPUT_DEVICE_Keyboard;
-            Event.Type = IsDown ? INPUT_EVENT_Press : INPUT_EVENT_Release;
-            Event.Key.KeyCode = Message->wParam == VK_DELETE ? KEY_Delete : Message->wParam; 
             Event.Key.IsRepeatKey = WasDown && IsDown;
+            Event.Key.KeyCode = Message->wParam == VK_DELETE ? KEY_Delete : Message->wParam; 
+        } 
+        process_key: {
             
             Modifiers = GetKeyState(VK_CONTROL) & 0x8000 ? Modifiers | INPUT_MOD_Ctrl : Modifiers & ~(INPUT_MOD_Ctrl);
             Modifiers = GetKeyState(VK_MENU) & 0x8000 ? Modifiers | INPUT_MOD_Alt : Modifiers & ~(INPUT_MOD_Alt);
             Modifiers = GetKeyState(VK_SHIFT) & 0x8000 ? Modifiers | INPUT_MOD_Shift : Modifiers & ~(INPUT_MOD_Shift);
             
-            Modifiers = (GetKeyState(VK_CAPITAL) & 1) ? Modifiers | INPUT_MOD_CapsLock : Modifiers & ~(INPUT_MOD_CapsLock);
-            Modifiers = (GetKeyState(VK_NUMLOCK) & 1) ? Modifiers | INPUT_MOD_NumLock : Modifiers & ~(INPUT_MOD_NumLock);
+            Toggles = (GetKeyState(VK_CAPITAL) & 1) ? Toggles | INPUT_TOGGLES_CapsLock : Toggles & ~(INPUT_TOGGLES_CapsLock);
+            Toggles = (GetKeyState(VK_NUMLOCK) & 1) ? Toggles | INPUT_TOGGLES_NumLock : Toggles & ~(INPUT_TOGGLES_NumLock);
             
             Event.Modifiers = Modifiers;
+            Event.Toggles = Toggles;
             
-            MSG CharMessage;
-            if(TranslateMessage(Message)) {
-                if(PeekMessageW(&CharMessage, *WindowHandle, 0, 0, PM_REMOVE)) {
-                    if(CharMessage.message == WM_CHAR) {
-                        utf16_to_utf8((u32)CharMessage.wParam, Event.Key.Character);
-                        Event.Key.HasCharacterTranslation = true;
-                    } 
-                }
-            }
             push_input_event(EventBuffer, &Event);
         } break;
         
@@ -205,8 +205,8 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
         Event.Type = INPUT_EVENT_Release;
         Event.Mouse.Button = INPUT_MOUSE_Left;
         process_mouse: {
-            Event.Device = INPUT_DEVICE_Mouse;
             Event.Modifiers = Modifiers;
+            Event.Toggles = Toggles;
             Event.Mouse.Position.x = (s32)GET_X_LPARAM(Message->lParam);
             Event.Mouse.Position.y = (s32)GET_Y_LPARAM(Message->lParam);
             
@@ -215,8 +215,8 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
         
         case WM_MOUSEWHEEL: {
             Event.Type = INPUT_EVENT_Scroll;
-            Event.Device = INPUT_DEVICE_Mouse;
             Event.Modifiers = Modifiers;
+            Event.Toggles = Toggles;
             s32 Delta = GET_WHEEL_DELTA_WPARAM(Message->wParam);
             Event.Scroll.Delta = (Delta < 0) ? -1 : 1;
             
@@ -264,8 +264,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             
             MSG Message = {0};
             while(PeekMessageW(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
-                DispatchMessageW(&Message);
                 win32_handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
+                TranslateMessage(&Message);
+                DispatchMessageW(&Message);
             }
             
             

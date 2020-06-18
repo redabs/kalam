@@ -17,13 +17,6 @@
 
 ctx_t Ctx = {0};
 
-typedef enum {
-    UP    = 1,
-    DOWN  = 1 << 1,
-    LEFT  = 1 << 2,
-    RIGHT = 1 << 3
-} dir_t;
-
 void
 fix_cursor_overlap(panel_t *Panel) {
     // Remove any cursors that overlap
@@ -144,7 +137,7 @@ make_lines(buffer_t *Buf) {
 }
 
 void
-do_char(panel_t *Panel, u8 *Char) {
+insert_char(panel_t *Panel, u8 *Char) {
     buffer_t *Buf = Panel->Buffer;
     for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
         cursor_t *Cursor = &Panel->Cursors[CursorIndex];
@@ -202,6 +195,29 @@ do_backspace(panel_t *Panel) {
         do_backspace_ex(Panel, &Panel->Cursors[CursorIndex]);
     }
     fix_cursor_overlap(Panel);
+}
+
+void
+do_char(panel_t *Panel, u8 *Char) {
+    if(!Panel) { return; }
+    if(*Char < 0x20) {
+        switch(*Char) {
+            case '\n':
+            case '\r': {
+                insert_char(Panel, (u8 *)"\n");
+            } break;
+            
+            case '\t': {
+                insert_char(Panel, (u8 *)"\t");
+            } break;
+            
+            case '\b': {
+                do_backspace(Panel);
+            } break;
+        }
+    } else {
+        insert_char(Panel, Char);
+    }
 }
 
 void
@@ -579,7 +595,7 @@ draw_panels(framebuffer_t *Fb, font_t *Font) {
 }
 
 void
-panel_move_selected(panel_ctx_t *PanelCtx, dir_t Dir) {
+panel_move_selection(panel_ctx_t *PanelCtx, dir_t Dir) {
     // Panel->Children[0] is always left or above 
     panel_t *Panel = PanelCtx->Selected;
     if(PanelCtx->Root == Panel) {
@@ -663,146 +679,8 @@ k_init(platform_shared_t *Shared) {
     }
     Ctx.PanelCtx.Panels[n - 1].Next = 0;
     Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
-}
-
-b32
-do_normal_keybinds(panel_t *Panel, input_event_t *e) {
-    buffer_t *Buf = Panel->Buffer;
-    b32 DidHandle = true;
-    if(e->Modifiers & INPUT_MOD_Ctrl) {
-        switch(e->Key.KeyCode) {
-            case KEY_X: { 
-                if(Ctx.PanelCtx.Selected) {
-                    Ctx.PanelCtx.Selected->Split ^= 1;
-                }
-            } break;
-            
-            case KEY_W: {
-                if(Ctx.PanelCtx.Selected) {
-                    panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
-                }
-            } break;
-            
-            case KEY_Left: { panel_move_selected(&Ctx.PanelCtx, LEFT); } break;
-            case KEY_Right: { panel_move_selected(&Ctx.PanelCtx, RIGHT); } break;
-            case KEY_Up: { panel_move_selected(&Ctx.PanelCtx, UP); } break;
-            case KEY_Down: { panel_move_selected(&Ctx.PanelCtx, DOWN); } break;
-            
-            default: { DidHandle = false; } break;
-        }
-    } else {
-        switch(e->Key.KeyCode) {
-            case KEY_I: { Panel->Mode = MODE_Insert; } break;
-            default: { DidHandle = false; } break;
-        }
-    }
-    return DidHandle;
-}
-
-b32
-do_insert_keybinds(panel_t *Panel, input_event_t *e) {
-    buffer_t *Buf = Panel->Buffer;
-    b32 DidHandle = true;
-    switch(e->Key.KeyCode) {
-        case KEY_Escape: {
-            Panel->Mode = MODE_Normal;
-        } break;
-        
-        case KEY_Backspace: {
-            do_backspace(Panel);
-        } break;
-        
-        default: {
-            // Only handle character input if Ctrl is not the only modifier (among the non-toggled modifiers, i.e. not Caps, Num-lock) that is currently active for the event.
-            // The intent here is to filter out control characters; we only want actual readable characters.
-            u64 ModCond = (e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl;
-            if(e->Key.HasCharacterTranslation && ModCond) {
-                do_char(Panel, e->Key.Character[0] == '\r' ? (u8 *)"\n" : e->Key.Character);
-            } else {
-                DidHandle = false;
-            }
-        }
-    }
     
-    return DidHandle;
-}
-
-b32
-do_global_keybinds(input_event_t *e) {
-    b32 DidHandle = true;
-    s32 StepSize = (e->Modifiers & INPUT_MOD_Ctrl) ? 5 : 1;
-    switch(e->Key.KeyCode) {
-        case KEY_Home: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            if(Panel) {
-                buffer_t *Buf = Panel->Buffer;
-                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-                    cursor_t *c = &Panel->Cursors[i];
-                    line_t *l = &Buf->Lines[c->Line];
-                    c->Offset = l->Offset;
-                    c->ColumnIs = c->ColumnWas = 0;
-                }
-            }
-        } break;
-        
-        case KEY_N: {
-            if(e->Modifiers & INPUT_MOD_Ctrl && !e->Key.IsRepeatKey) {
-                panel_create(&Ctx.PanelCtx); 
-            }
-        } break;
-        
-        case KEY_End: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            if(Panel) {
-                buffer_t *Buf = Panel->Buffer;
-                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-                    cursor_t *c = &Panel->Cursors[i];
-                    line_t *l = &Buf->Lines[c->Line];
-                    c->Offset = l->Offset + l->Size;
-                    c->ColumnIs = c->ColumnWas = l->Length;
-                }
-            }
-        } break;
-        
-        case KEY_Delete: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            if(Panel) {
-                do_delete(Panel);
-            }
-        } break;
-        
-        case KEY_Left:
-        case KEY_Right:
-        case KEY_Up:
-        case KEY_Down: { 
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            if(Panel) {
-                buffer_t *Buf = Panel->Buffer;
-                dir_t Map[] = {
-                    [KEY_Left] = LEFT, 
-                    [KEY_Right] = RIGHT, 
-                    [KEY_Up] = UP, 
-                    [KEY_Down] = DOWN, 
-                };
-                
-                dir_t Dir = Map[e->Key.KeyCode];
-                if(e->Modifiers & INPUT_MOD_Shift && (Dir == UP || Dir == DOWN)) {
-                    sb_push(Panel->Cursors, Panel->Cursors[0]);
-                    cursor_move(Buf, &Panel->Cursors[0], Dir, StepSize); 
-                } else {
-                    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-                        cursor_move(Buf, &Panel->Cursors[i], Dir, StepSize); 
-                    }
-                }
-                fix_cursor_overlap(Panel);
-                
-            }
-        } break;
-        
-        default: { DidHandle = false; } break;
-    }
-    
-    return DidHandle;
+    panel_create(&Ctx.PanelCtx);
 }
 
 void
@@ -845,27 +723,161 @@ set_panel_scroll(panel_t *Panel, irect_t Rect) {
     }
 }
 
+
+b32
+do_operation(operation_t Op) {
+    b32 WasHandled = true;
+    switch(Op.Type) {
+        case OP_EscapeToNormal: {
+            if(Ctx.PanelCtx.Selected) {
+                Ctx.PanelCtx.Selected->Mode = MODE_Normal;
+            }
+        } break;
+        
+        case OP_Delete: {
+            if(Ctx.PanelCtx.Selected) {
+                do_delete(Ctx.PanelCtx.Selected);
+            }
+        } break;
+        
+        case OP_EnterInsertMode: {
+            if(Ctx.PanelCtx.Selected) {
+                Ctx.PanelCtx.Selected->Mode = MODE_Insert;
+            }
+        } break;
+        
+        case OP_Home: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                    cursor_t *c = &Panel->Cursors[i];
+                    line_t *l = &Buf->Lines[c->Line];
+                    c->Offset = l->Offset;
+                    c->ColumnIs = c->ColumnWas = 0;
+                }
+            }
+        } break;
+        
+        case OP_End: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                    cursor_t *c = &Panel->Cursors[i];
+                    line_t *l = &Buf->Lines[c->Line];
+                    c->Offset = l->Offset + l->Size;
+                    c->ColumnIs = c->ColumnWas = l->Length;
+                }
+            }
+        } break;
+        
+        case OP_MoveCursor: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            if(Panel) {
+                buffer_t *Buf = Panel->Buffer;
+                for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                    cursor_move(Buf, &Panel->Cursors[i], Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
+                }
+                fix_cursor_overlap(Panel);
+                
+            }
+        } break;
+        
+        case OP_ToggleSplitMode: {
+            if(Ctx.PanelCtx.Selected) {
+                Ctx.PanelCtx.Selected->Split ^= 1;
+            }
+        } break;
+        
+        case OP_NewPanel: {
+            panel_create(&Ctx.PanelCtx);
+        } break;
+        
+        case OP_KillPanel: {
+            panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+        } break;
+        
+        case OP_MovePanelSelection: {
+            panel_move_selection(&Ctx.PanelCtx, Op.MovePanelSelection.Dir); 
+        } break;
+        
+        default: {
+            WasHandled = false;
+        } break;
+    }
+    
+    return WasHandled;
+}
+
+b32
+event_mapping_match(key_mapping_t *Map, input_event_t *Event) {
+    if(Map->IsKey && Event->Type == INPUT_EVENT_Press) {
+        if(Map->Key == Event->Key.KeyCode) {
+            if(Map->Modifiers == Event->Modifiers) {
+                return true;
+            }
+        }
+        
+    } else if(!Map->IsKey && Event->Type == INPUT_EVENT_Text) {
+        return (*((u32 *)Map->Character) == *((u32 *)Event->Text.Character));
+    }
+    
+    return false;
+}
+
+key_mapping_t *
+find_mapping_match(key_mapping_t *Mappings, s64 MappingCount, input_event_t *e) {
+    for(s64 i = 0; i < MappingCount; ++i) {
+        key_mapping_t *m = &Mappings[i];
+        if(event_mapping_match(m, e)) {
+            return m;
+        }
+    }
+    
+    return 0;
+}
+
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
     // TODO: Configurable keybindings
     for(s32 EventIndex = 0; EventIndex < Events->Count; ++EventIndex) {
         input_event_t *e = &Events->Events[EventIndex];
-        b32 b = false;
-        if(e->Type == INPUT_EVENT_Press && e->Device == INPUT_DEVICE_Keyboard) {
-            if(Ctx.PanelCtx.Selected) {
-                if(Ctx.PanelCtx.Selected->Mode == MODE_Normal) {
-                    b = do_normal_keybinds(Ctx.PanelCtx.Selected, e);
-                    
-                } else if(Ctx.PanelCtx.Selected->Mode == MODE_Insert) {
-                    b = do_insert_keybinds(Ctx.PanelCtx.Selected, e);
+        if(e->Device == INPUT_DEVICE_Keyboard) {
+            if(e->Type == INPUT_EVENT_Press || e->Type == INPUT_EVENT_Text) {
+                b32 EventHandled = false;
+                panel_t *Panel = Ctx.PanelCtx.Selected;
+                if(Panel) {
+                    if(Panel->Mode == MODE_Normal) {
+                        key_mapping_t *m = find_mapping_match(NormalMappings, ARRAY_COUNT(NormalMappings), e);
+                        if(m) {
+                            EventHandled = do_operation(m->Operation);
+                        }
+                    } else if(Panel->Mode == MODE_Insert) {
+                        key_mapping_t *m = find_mapping_match(InsertMappings, ARRAY_COUNT(InsertMappings), e);
+                        if(m) {
+                            EventHandled = do_operation(m->Operation);
+                        } else if(e->Type == INPUT_EVENT_Text) {
+                            if(Panel) {
+                                // Ignore characters that were sent with the only modifier down being Ctrl (except for Caps Lock and Num Lock).
+                                if((e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
+                                    do_char(Panel, e->Text.Character);
+                                }
+                                EventHandled = true;
+                            }
+                        }
+                    }
                 }
+                if(!EventHandled) {
+                    key_mapping_t *m = find_mapping_match(GlobalMappings, ARRAY_COUNT(GlobalMappings), e);
+                    if(m) {
+                        do_operation(m->Operation);
+                    }
+                }
+                
             }
-            
-            if(!b || !Ctx.PanelCtx.Selected) {
-                b = do_global_keybinds(e);
-            }
-        } 
+        }
         
     } Events->Count = 0;
     
