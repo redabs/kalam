@@ -518,7 +518,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, cursor_t *Cursor, font_t *Font
             
             s64 Start = MAX(Cursor->Offset + Cursor->SelectionOffset, Line->Offset);
             s64 End = MIN(Cursor->Offset, Line->Offset + Line->Size);
-            s32 Width = text_width(Font, Buf->Text.Data + Start, Buf->Text.Data + End);
+            s32 Width = text_width(Font, Buf->Text.Data + Start, Buf->Text.Data + End + utf8_char_width(Buf->Text.Data + End));
             s32 SelectionPixelOffset = (Start == Line->Offset)  ? 0 : text_width(Font, Buf->Text.Data + Line->Offset, Buf->Text.Data + Start);
             irect_t LineRect = {TextRegion.x + SelectionPixelOffset, y - Panel->ScrollY, Width, LineHeight};
             draw_rect(Fb, LineRect, COLOR_SELECTION);
