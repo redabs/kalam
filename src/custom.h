@@ -2,7 +2,10 @@
 #define CUSTOM_H
 
 #define COLOR_BG 0xff162447
+#define COLOR_SELECTION 0xff5555aa
+#define COLOR_LINE_HIGHLIGHT 0xff1f4068
 #define COLOR_TEXT 0xff90b080
+
 #define COLOR_LINE_NUMBER 0xff505050
 #define COLOR_LINE_NUMBER_CURRENT 0xfff0f050
 
@@ -22,6 +25,7 @@
 typedef enum {
     // Normal
     OP_EscapeToNormal,
+    OP_MoveCursorWithSelection,
     
     // Insert
     OP_Delete,
@@ -45,9 +49,14 @@ typedef struct {
             dir_t Dir;
             s32 StepSize;
         } MoveCursor;
+        
         struct {
             dir_t Dir;
         } MovePanelSelection;
+        
+        struct {
+            dir_t Dir;
+        } MoveCursorWithSelection;
     };
 } operation_t;
 
@@ -64,6 +73,11 @@ typedef struct {
 
 key_mapping_t NormalMappings[] = {
     { .IsKey = false, .Character[0] = 0xc3, .Character[1] = 0xa4, .Operation.Type = OP_EnterInsertMode, },
+    
+    { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = LEFT},
+    { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = RIGHT},
+    { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = UP},
+    { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = DOWN},
     
 };
 

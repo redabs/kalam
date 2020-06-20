@@ -49,11 +49,14 @@ typedef struct {
     s64 ColumnIs; // 0 based
     s64 ColumnWas; // 0 based
     s64 Offset;
+    // The currently selected range is [Offset, Offset + SelectionOffset], note that this is an inclusive range.
+    // SelectionOffset can be negative in which case the selection is backwards.
+    s64 SelectionOffset;
 } cursor_t;
 
 typedef enum {
-    BUFFER_TYPE_File,
     BUFFER_TYPE_Internal, // scratch, messages, debug log and other non file-backed buffers.
+    BUFFER_TYPE_File,
 } buffer_type_t;
 
 typedef struct {

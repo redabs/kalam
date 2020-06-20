@@ -37,7 +37,9 @@ fix_cursor_overlap(panel_t *Panel) {
 }
 
 void
-cursor_move(buffer_t *Buf, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
+cursor_move(panel_t *Panel, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
+    if(!Panel) { return; }
+    buffer_t *Buf = Panel->Buffer;
     int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
     s64 Column = 0;
     switch(Dir) {
@@ -112,25 +114,24 @@ cursor_move(buffer_t *Buf, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
 
 void
 make_lines(buffer_t *Buf) {
-    sb_set_count(Buf->Lines, 0);
-    line_t Line = {0};
-    u8 n = 0;
-    for(u64 i = 0; i < Buf->Text.Used; i += n) {
-        n = utf8_char_width(Buf->Text.Data + i);
-        
-        if(Buf->Text.Data[i] == '\n') {
-            sb_push(Buf->Lines, Line);
+    if(Buf->Text.Used == 0) {
+        sb_push(Buf->Lines, (line_t){0});
+    } else {
+        sb_set_count(Buf->Lines, 0);
+        line_t *Line = sb_add(Buf->Lines, 1);
+        mem_zero_struct(Line);
+        u8 n = 0;
+        for(u64 i = 0; i < Buf->Text.Used; i += n) {
+            n = utf8_char_width(Buf->Text.Data + i);
             
-            // Reset for next line
-            mem_zero_struct(&Line);
-            Line.Offset = i + n;
-        } else {
-            Line.Length += 1;
-            Line.Size += n;
-            if((i + n) >= Buf->Text.Used) {
-                // Last character in buffer without trailing newline character
-                sb_push(Buf->Lines, Line);
-                break;
+            if(Buf->Text.Data[i] == '\n') {
+                // Push next line and init it
+                Line = sb_add(Buf->Lines, 1);
+                mem_zero_struct(Line);
+                Line->Offset = i + n;
+            } else {
+                Line->Length += 1;
+                Line->Size += n;
             }
         }
     }
@@ -162,7 +163,7 @@ insert_char(panel_t *Panel, u8 *Char) {
         }
         
         make_lines(Buf);
-        cursor_move(Buf, Cursor, RIGHT, 1);
+        cursor_move(Panel, Cursor, RIGHT, 1);
     }
     fix_cursor_overlap(Panel);
 }
@@ -182,7 +183,7 @@ do_backspace_ex(panel_t *Panel, cursor_t *Cursor) {
             }
         }
         
-        cursor_move(Buf, Cursor, LEFT, 1);
+        cursor_move(Panel, Cursor, LEFT, 1);
         mem_buf_delete_range(&Buf->Text, Cursor->Offset, n);
         make_lines(Buf);
     }
@@ -229,7 +230,7 @@ do_delete(panel_t *Panel) {
         
         if(!(Cursor->ColumnIs == Line->Length && Cursor->Line == (sb_count(Buf->Lines) - 1))) {
             // TODO: This is kind of a hack.
-            cursor_move(Buf, Cursor, RIGHT, 1);
+            cursor_move(Panel, Cursor, RIGHT, 1);
             do_backspace_ex(Panel, Cursor);
         }
     }
@@ -363,8 +364,12 @@ load_file(char *Path) {
     platform_file_data_t File;
     ASSERT(platform_read_file(Path, &File));
     
-    mem_buf_add(&Buf->Text, File.Size);
-    mem_copy(Buf->Text.Data, File.Data, File.Size);
+    if(File.Size > 0) {
+        mem_buf_add(&Buf->Text, File.Size);
+        mem_copy(Buf->Text.Data, File.Data, File.Size);
+    } else {
+        mem_buf_grow(&Buf->Text, 128);
+    }
     
     platform_free_file(&File);
     
@@ -500,6 +505,47 @@ draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 L
 }
 
 void
+draw_selection(framebuffer_t *Fb, panel_t *Panel, cursor_t *Cursor, font_t *Font, irect_t TextRegion) {
+    if(Cursor->SelectionOffset <= 0) {
+        buffer_t *Buf = Panel->Buffer;
+        s64 LineIndexStart = Cursor->Line;
+        for(s64 SelectionStart = Cursor->Offset + Cursor->SelectionOffset; Buf->Lines[LineIndexStart].Offset > SelectionStart; --LineIndexStart);
+        
+        s32 LineHeight = line_height(Font);
+        for(s64 i = LineIndexStart; i <= Cursor->Line; ++i) {
+            s32 y = TextRegion.y + (s32)i * LineHeight;
+            line_t *Line = &Buf->Lines[i];
+            
+            s64 Start = MAX(Cursor->Offset + Cursor->SelectionOffset, Line->Offset);
+            s64 End = MIN(Cursor->Offset, Line->Offset + Line->Size);
+            s32 Width = text_width(Font, Buf->Text.Data + Start, Buf->Text.Data + End);
+            s32 SelectionPixelOffset = (Start == Line->Offset)  ? 0 : text_width(Font, Buf->Text.Data + Line->Offset, Buf->Text.Data + Start);
+            irect_t LineRect = {TextRegion.x + SelectionPixelOffset, y - Panel->ScrollY, Width, LineHeight};
+            draw_rect(Fb, LineRect, COLOR_SELECTION);
+        }
+    } else {
+        buffer_t *Buf = Panel->Buffer;
+        s64 LineIndexEnd = Cursor->Line;
+        for(s64 SelectionStart = Cursor->Offset + Cursor->SelectionOffset; 
+            (Buf->Lines[LineIndexEnd].Offset + Buf->Lines[LineIndexEnd].Size) < Cursor->Offset + Cursor->SelectionOffset;
+            ++LineIndexEnd);
+        
+        s32 LineHeight = line_height(Font);
+        for(s64 i = Cursor->Line; i <= LineIndexEnd; ++i) {
+            s32 y = TextRegion.y + (s32)i * LineHeight;
+            line_t *Line = &Buf->Lines[i];
+            
+            s64 Start = MAX(Cursor->Offset, Line->Offset);
+            s64 End = MIN(Cursor->Offset + Cursor->SelectionOffset, Line->Offset + Line->Size);
+            s32 Width = text_width(Font, Buf->Text.Data + Start, Buf->Text.Data + End + utf8_char_width(Buf->Text.Data + End));
+            s32 SelectionPixelOffset = (Start == Line->Offset)  ? 0 : text_width(Font, Buf->Text.Data + Line->Offset, Buf->Text.Data + Start);
+            irect_t LineRect = {TextRegion.x + SelectionPixelOffset, y - Panel->ScrollY, Width, LineHeight};
+            draw_rect(Fb, LineRect, COLOR_SELECTION);
+        }
+    }
+}
+
+void
 panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
         irect_t TextRegion = text_buffer_rect(Panel, Font, PanelRect);
@@ -510,18 +556,22 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
         if(Buf) {
             s32 LineHeight = line_height(Font);
             
+            // Draw main cursor and line highlight
             {
                 cursor_t *Cursor = &Panel->Cursors[0];
                 s32 y = TextRegion.y + (s32)Cursor->Line * LineHeight;
                 irect_t LineRect = {TextRegion.x, y - Panel->ScrollY, TextRegion.w, LineHeight};
-                draw_rect(Fb, LineRect, 0xff1f4068);
+                draw_rect(Fb, LineRect, COLOR_LINE_HIGHLIGHT);
+                draw_selection(Fb, Panel, Cursor, Font, TextRegion);
                 draw_cursor(Fb, TextRegion, Font, Panel, Cursor);
             }
             
+            // Draw the rest of the cursors
             for(s64 CursorIndex = 1; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
                 draw_cursor(Fb, TextRegion, Font, Panel, &Panel->Cursors[CursorIndex]);
             }
             
+            // Draw lines
             irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
                 u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
@@ -734,6 +784,34 @@ do_operation(operation_t Op) {
             }
         } break;
         
+        case OP_MoveCursorWithSelection: {
+            if(!Ctx.PanelCtx.Selected) { break; }
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            switch(Op.MoveCursorWithSelection.Dir) {
+                case LEFT: {
+                    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                        cursor_t Cursor = Panel->Cursors[i];
+                        cursor_move(Panel, &Panel->Cursors[i], LEFT, 1);
+                        Panel->Cursors[i].SelectionOffset = Cursor.SelectionOffset + ABS(Cursor.Offset - Panel->Cursors[i].Offset);
+                    }
+                } break;
+                
+                case RIGHT: {
+                    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
+                        cursor_t Cursor = Panel->Cursors[i];
+                        cursor_move(Panel, &Panel->Cursors[i], RIGHT, 1);
+                        Panel->Cursors[i].SelectionOffset = Cursor.SelectionOffset - ABS(Cursor.Offset - Panel->Cursors[i].Offset);
+                    }
+                } break;
+                
+                case UP: {
+                } break;
+                
+                case DOWN: {
+                } break;
+            }
+        } break;
+        
         case OP_Delete: {
             if(Ctx.PanelCtx.Selected) {
                 do_delete(Ctx.PanelCtx.Selected);
@@ -775,12 +853,12 @@ do_operation(operation_t Op) {
         case OP_MoveCursor: {
             panel_t *Panel = Ctx.PanelCtx.Selected;
             if(Panel) {
-                buffer_t *Buf = Panel->Buffer;
                 for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-                    cursor_move(Buf, &Panel->Cursors[i], Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
+                    cursor_t *Cursor = &Panel->Cursors[i];
+                    cursor_move(Panel, Cursor, Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
+                    Cursor->SelectionOffset = 0;
                 }
                 fix_cursor_overlap(Panel);
-                
             }
         } break;
         
