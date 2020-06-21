@@ -26,6 +26,7 @@ typedef enum {
     // Normal
     OP_EscapeToNormal,
     OP_MoveCursorWithSelection,
+    OP_DeleteSelection, 
     
     // Insert
     OP_Delete,
@@ -73,6 +74,8 @@ typedef struct {
 
 key_mapping_t NormalMappings[] = {
     { .IsKey = false, .Character[0] = 0xc3, .Character[1] = 0xa4, .Operation.Type = OP_EnterInsertMode, },
+    
+    { .IsKey = false, .Character[0] = 'd', .Operation.Type = OP_DeleteSelection, },
     
     { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = LEFT},
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = RIGHT},
