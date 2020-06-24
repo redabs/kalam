@@ -48,3 +48,69 @@ panel_border_rects(irect_t PanelRect, irect_t *r0, irect_t *r1, irect_t *r2, ire
     *r2 = (irect_t){PanelRect.x, PanelRect.y, PanelRect.w, BORDER_SIZE};
     *r3 = (irect_t){PanelRect.x, PanelRect.y + PanelRect.h - BORDER_SIZE, PanelRect.w, BORDER_SIZE};
 }
+
+#if 0
+s32 
+line_height(font_t *Font) {
+    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
+    return LineHeight;
+}
+
+stbtt_bakedchar *
+get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
+    glyph_set_t *Set;
+    if(get_glyph_set(Font, Codepoint, &Set)) {
+        return &Set->Glyphs[Codepoint % 256];
+    }
+    return 0;
+}
+
+s32 
+cursor_pixel_x_offset(buffer_t *Buffer, font_t *Font, cursor_t *Cursor) {
+    s32 x = 0;
+    u8 *c = Buffer->Text.Data + Buffer->Lines[Cursor->Line].Offset;
+    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
+        u32 Codepoint;
+        c = utf8_to_codepoint(c, &Codepoint);
+        x += get_x_advance(Font, Codepoint);
+    }
+    return x;
+}
+
+s32
+text_width(font_t *Font, u8 *Start, u8 *End) {
+    if(!End) {
+        End = Start;
+        while(*End) { ++End; }
+    }
+    
+    s32 Result = 0;
+    u8 *c = Start;
+    u32 Codepoint;
+    while(c < End) {
+        c = utf8_to_codepoint(c, &Codepoint);
+        if(*c == '\n') {
+            Result += Font->MWidth;
+        } else {
+            Result += get_x_advance(Font, Codepoint);
+        }
+    }
+    
+    return Result;
+}
+
+// Returns {x, baseline}
+iv2_t 
+center_text_in_rect(font_t *Font, irect_t Rect, u8 *Start, u8 *End) {
+    if(!End) {
+        End = Start;
+        while(*End) { ++End; }
+    }
+    
+    s32 TextWidth = text_width(Font, Start, End);
+    iv2_t Result;
+    Result.x = Rect.x + (Rect.w - TextWidth) / 2;
+    Result.y = Rect.y + (Rect.h + Font->MHeight) / 2;
+    return Result;
+}
+#endif

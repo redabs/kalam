@@ -24,13 +24,14 @@
 
 typedef enum {
     // Normal
-    OP_EscapeToNormal,
+    OP_EnterInsertMode,
     OP_MoveCursorWithSelection,
     OP_DeleteSelection, 
     
     // Insert
+    OP_EscapeToNormal,
     OP_Delete,
-    OP_EnterInsertMode,
+    OP_DoChar,
     
     // Global
     OP_Home,
@@ -44,7 +45,6 @@ typedef enum {
 
 typedef struct {
     operation_type_t Type;
-    
     union {
         struct {
             dir_t Dir;
@@ -58,6 +58,10 @@ typedef struct {
         struct {
             dir_t Dir;
         } MoveCursorWithSelection;
+        
+        struct {
+            u8 Character[4];
+        } DoChar;
     };
 } operation_t;
 

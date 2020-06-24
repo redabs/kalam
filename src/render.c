@@ -38,53 +38,6 @@ get_glyph_set(font_t *Font, u32 Codepoint, glyph_set_t **GlyphSet) {
     return (*GlyphSet) != 0;
 }
 
-// Takes a pointer to a string of utf-8 encoded characters
-// Returns a pointer to the next character in the string
-inline u8 *
-utf8_to_codepoint(u8 *Utf8, u32 *Codepoint) {
-    u32 Cp;
-    int n;
-    switch(*Utf8 & 0xf0) {
-        case 0xf0: { // 11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
-            Cp = *Utf8 & 0x7;
-            n = 3;
-        } break;
-        
-        case 0xe0: { // 1110xxxx 10xxxxxx 10xxxxxx 
-            Cp = *Utf8 & 0xf;
-            n = 2;
-        } break;
-        
-        case 0xd0:
-        case 0xc0: { // 110xxxxx 10xxxxxx 
-            Cp = *Utf8 & 0x1f;
-            n = 1;
-        } break;
-        
-        default: {
-            Cp = *Utf8;
-            n = 0;
-        } break;
-    }
-    
-    while(n--) {
-        Cp = Cp << 6 | (*(++Utf8) & 0x3f);
-    }
-    *Codepoint = Cp;
-    return Utf8 + 1;
-}
-
-u8
-utf8_char_width(u8 *Char) {
-    switch(*Char & 0xf0) {
-        case 0xf0: { return 4; } break;
-        case 0xe0: { return 3; } break;
-        case 0xd0:
-        case 0xc0: { return 2; } break;
-        default:   { return 1; } break;
-    }
-}
-
 void
 clear_framebuffer(framebuffer_t *Fb, u32 Color) {
     u64 Size = Fb->Width * Fb->Height;
