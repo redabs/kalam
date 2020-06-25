@@ -359,117 +359,109 @@ b32
 do_operation(operation_t Op) {
     b32 WasHandled = true;
     
-    if(Ctx.PanelCtx.Selected) {
-        switch(Op.Type) {
-            // Normal
-            case OP_EnterInsertMode: {
-                Ctx.PanelCtx.Selected->Mode = MODE_Insert;
-            } break;
-            
-            case OP_MoveCursorWithSelection: {
-                switch(Op.MoveCursorWithSelection.Dir) {
-                    case LEFT: {
-                        for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                            cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
-                            cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], LEFT, 1);
-                            Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset + ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
-                        }
-                    } break;
-                    
-                    case RIGHT: {
-                        for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                            cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
-                            cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], RIGHT, 1);
-                            Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset - ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
-                        }
-                    } break;
-                    
-                    case UP: {
-                    } break;
-                    
-                    case DOWN: {
-                    } break;
-                }
-            } break;
-            
-            case OP_DeleteSelection: {
-                delete_selection(Ctx.PanelCtx.Selected);
-            } break;
-            
-            // Insert
-            case OP_EscapeToNormal: {
-                Ctx.PanelCtx.Selected->Mode = MODE_Normal;
-            } break;
-            
-            case OP_Delete: {
-                do_delete(Ctx.PanelCtx.Selected);
-            } break;
-            
-            case OP_DoChar: {
-                do_char(Ctx.PanelCtx.Selected, Op.DoChar.Character);
-            } break;
-            
-            // Global
-            case OP_Home: {
-                if(Ctx.PanelCtx.Selected) {
-                    buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
+    switch(Op.Type) {
+        // Normal
+        case OP_EnterInsertMode: {
+            Ctx.PanelCtx.Selected->Mode = MODE_Insert;
+        } break;
+        
+        case OP_MoveCursorWithSelection: {
+            switch(Op.MoveCursorWithSelection.Dir) {
+                case LEFT: {
                     for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                        cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
-                        line_t *l = &Buf->Lines[c->Line];
-                        c->Offset = l->Offset;
-                        c->ColumnIs = c->ColumnWas = 0;
-                        c->SelectionOffset = 0;
+                        cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
+                        cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], LEFT, 1);
+                        Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset + ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
                     }
-                }
-            } break;
-            
-            case OP_End: {
-                if(Ctx.PanelCtx.Selected) {
-                    buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
+                } break;
+                
+                case RIGHT: {
                     for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                        cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
-                        line_t *l = &Buf->Lines[c->Line];
-                        c->Offset = l->Offset + l->Size - l->NewlineSize;
-                        c->ColumnIs = c->ColumnWas = l->Length;
-                        c->SelectionOffset = 0;
+                        cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
+                        cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], RIGHT, 1);
+                        Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset - ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
                     }
-                }
-            } break;
-            
-            case OP_MoveCursor: {
-                for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                    cursor_t *Cursor = &Ctx.PanelCtx.Selected->Cursors[i];
-                    cursor_move(Ctx.PanelCtx.Selected, Cursor, Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
-                    Cursor->SelectionOffset = 0;
-                }
-            } break;
-            
-            case OP_ToggleSplitMode: {
-                Ctx.PanelCtx.Selected->Split ^= 1;
-            } break;
-            
-            case OP_NewPanel: {
-                panel_create(&Ctx.PanelCtx);
-            } break;
-            
-            case OP_KillPanel: {
-                panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
-            } break;
-            
-            case OP_MovePanelSelection: {
-                panel_move_selection(&Ctx.PanelCtx, Op.MovePanelSelection.Dir); 
-            } break;
-            
-            default: {
-                WasHandled = false;
-            } break;
-        }
+                } break;
+                
+                case UP: {
+                } break;
+                
+                case DOWN: {
+                } break;
+            }
+        } break;
+        
+        case OP_DeleteSelection: {
+            delete_selection(Ctx.PanelCtx.Selected);
+        } break;
+        
+        // Insert
+        case OP_EscapeToNormal: {
+            Ctx.PanelCtx.Selected->Mode = MODE_Normal;
+        } break;
+        
+        case OP_Delete: {
+            do_delete(Ctx.PanelCtx.Selected);
+        } break;
+        
+        case OP_DoChar: {
+            do_char(Ctx.PanelCtx.Selected, Op.DoChar.Character);
+        } break;
+        
+        // Global
+        case OP_Home: {
+            buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
+            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
+                cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
+                line_t *l = &Buf->Lines[c->Line];
+                c->Offset = l->Offset;
+                c->ColumnIs = c->ColumnWas = 0;
+                c->SelectionOffset = 0;
+            }
+        } break;
+        
+        case OP_End: {
+            buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
+            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
+                cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
+                line_t *l = &Buf->Lines[c->Line];
+                c->Offset = l->Offset + l->Size - l->NewlineSize;
+                c->ColumnIs = c->ColumnWas = l->Length;
+                c->SelectionOffset = 0;
+            }
+        } break;
+        
+        case OP_MoveCursor: {
+            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
+                cursor_t *Cursor = &Ctx.PanelCtx.Selected->Cursors[i];
+                cursor_move(Ctx.PanelCtx.Selected, Cursor, Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
+                Cursor->SelectionOffset = 0;
+            }
+        } break;
+        
+        case OP_ToggleSplitMode: {
+            Ctx.PanelCtx.Selected->Split ^= 1;
+        } break;
+        
+        case OP_NewPanel: {
+            panel_create(&Ctx.PanelCtx);
+        } break;
+        
+        case OP_KillPanel: {
+            panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+        } break;
+        
+        case OP_MovePanelSelection: {
+            panel_move_selection(&Ctx.PanelCtx, Op.MovePanelSelection.Dir); 
+        } break;
+        
+        default: {
+            WasHandled = false;
+        } break;
     }
     
-    if(Ctx.PanelCtx.Selected) {
-        fix_all_cursors_after_operation(Ctx.PanelCtx.Selected, Op);
-        make_lines(Ctx.PanelCtx.Selected->Buffer);
-    }
+    fix_all_cursors_after_operation(Ctx.PanelCtx.Selected, Op);
+    make_lines(Ctx.PanelCtx.Selected->Buffer);
     return WasHandled;
 }
 
