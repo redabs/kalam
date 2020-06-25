@@ -68,6 +68,8 @@ panel_child_index(panel_t *Panel) {
 
 void
 panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
+    if(!PanelCtx->Root->Children[0] && !PanelCtx->Root->Children[1]) { return; }
+    
     if(Panel->Parent) {
         s32 Idx = panel_child_index(Panel);
         panel_t *Sibling = Panel->Parent->Children[Idx ^ 1];
