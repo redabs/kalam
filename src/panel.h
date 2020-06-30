@@ -35,7 +35,7 @@ struct panel_t {
     // Used when leaf node
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
     mode_t Mode;
-    cursor_t *Cursors; // stb, Cursors[0] is always the main cursor.
+    selection_t *Selections; // stb
     s32 ScrollX, ScrollY;
     
     // Used when non-leaf node

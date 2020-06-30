@@ -7,8 +7,7 @@
 #include "types.h"
 #include "event.h"
 #include "platform.h"
-#include "cursor.h"
-//#include "selection.h"
+#include "selection.h"
 #include "panel.h"
 
 #include "custom.h"
@@ -19,8 +18,7 @@ ctx_t Ctx = {0};
 
 #include "panel.c"
 #include "layout.c"
-#include "cursor.c"
-//#include "selection.c"
+#include "selection.c"
 #include "render.c"
 #include "draw.c"
 
@@ -113,113 +111,6 @@ k_init(platform_shared_t *Shared) {
     panel_create(&Ctx.PanelCtx);
 }
 
-u32
-partition_cursors(cursor_t *Cursors, s32 Low, s32 High) {
-#define SWAP(a, b) cursor_t _t_ = a; a = b; b = _t_;
-    cursor_t Pivot = Cursors[High];
-    s64 pStart = cursor_selection_start(&Pivot);
-    
-    s32 i = Low;
-    for(s32 j = Low; j < High; j++) {
-        s64 cStart = cursor_selection_start(&Cursors[j]);
-        if(cStart < pStart) {
-            SWAP(Cursors[j], Cursors[i]);
-            ++i;
-        }
-    }
-    SWAP(Cursors[i], Cursors[High]);
-#undef SWAP
-    return i;
-}
-
-void
-sort_cursors(cursor_t *Cursors, s32 Low, s32 High) {
-    if(Low < High) {
-        s32 P = partition_cursors(Cursors, Low, High);
-        sort_cursors(Cursors, Low, P - 1);
-        sort_cursors(Cursors, P + 1, High);
-    }
-}
-
-void
-fix_all_cursors_after_operation(panel_t *Panel, operation_t Op) {
-    // We assume that atleast the offset of each cursor is correct
-    buffer_t *Buf = Panel->Buffer;
-    make_lines(Buf);
-    
-    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-        cursor_t *Cursor = &Panel->Cursors[i];
-        
-        for(s64 li = 0; li < sb_count(Buf->Lines); ++li) {
-            line_t *l = &Buf->Lines[li];
-            if(Cursor->Offset >= l->Offset && Cursor->Offset <= (l->Offset + l->Size - l->NewlineSize)) {
-                Cursor->Line = li;
-                break;
-            }
-        }
-        
-        // TODO: CursorWas?
-        Cursor->ColumnIs = 0;
-        s64 Offset = Buf->Lines[Cursor->Line].Offset;
-        while(Offset < Cursor->Offset) {
-            Offset += utf8_char_width(Buf->Text.Data + Offset);
-            ++Cursor->ColumnIs;
-        }
-    }
-    
-    // Resolve overlapping cursors
-    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-        cursor_t *c0 = &Panel->Cursors[i];
-        
-        for(s64 j = i + 1; j < sb_count(Panel->Cursors); ++j) {
-            cursor_t *c1 = &Panel->Cursors[j];
-            
-            if(c1->Offset == c0->Offset) {
-                // Rearrange following cursors
-                for(s64 k = j; k < sb_count(Panel->Cursors) - 1; ++k) {
-                    Panel->Cursors[k] = Panel->Cursors[k + 1];
-                }
-                sb_set_count(Panel->Cursors, sb_count(Panel->Cursors) - 1);
-            }
-        }
-    }
-    
-    // Resolve cursors with overlapping selection regions
-    s64 CursorCount = sb_count(Panel->Cursors);
-    
-    cursor_t *SortBuf = 0;
-    sb_add(SortBuf, CursorCount);
-    mem_copy(SortBuf, Panel->Cursors, CursorCount * sizeof(cursor_t));
-    sort_cursors(SortBuf, 0, (u32)CursorCount - 1);
-    
-    s64 n = 0;
-    cursor_t *c = &SortBuf[0];
-    for(s64 i = 0; i < CursorCount - 1; ++i) {
-        if(cursor_selection_end(c) >= cursor_selection_start(c + 1)) {
-            ++n;
-        } else {
-            Panel->Cursors[n] = SortBuf[i + 1];
-            c = SortBuf + i;
-#if 0
-            if(n > 0) {
-                s64 Start = cursor_selection_start(n);
-                s64 End = cursor_selection_end(i - 1);
-                Panel->Cursor[i]
-            }
-#endif
-        }
-    }
-    
-    if(n >= CursorCount) {
-        Panel->Cursors[0] = *c;
-    } else {
-        sb_set_count(Panel->Cursors, CursorCount - n);
-    }
-    
-    sb_free(SortBuf);
-    
-}
-
 b32
 do_operation(operation_t Op) {
     b32 WasHandled = true;
@@ -230,44 +121,7 @@ do_operation(operation_t Op) {
             Ctx.PanelCtx.Selected->Mode = MODE_Insert;
         } break;
         
-        case OP_MoveCursorWithSelection: {
-            switch(Op.MoveCursorWithSelection.Dir) {
-                case LEFT: {
-                    for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                        cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
-                        cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], LEFT, 1);
-                        Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset + ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
-                    }
-                } break;
-                
-                case RIGHT: {
-                    for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                        cursor_t Cursor = Ctx.PanelCtx.Selected->Cursors[i];
-                        cursor_move(Ctx.PanelCtx.Selected, &Ctx.PanelCtx.Selected->Cursors[i], RIGHT, 1);
-                        Ctx.PanelCtx.Selected->Cursors[i].SelectionOffset = Cursor.SelectionOffset - ABS(Cursor.Offset - Ctx.PanelCtx.Selected->Cursors[i].Offset);
-                    }
-                } break;
-                
-                case UP: {
-                } break;
-                
-                case DOWN: {
-                } break;
-            }
-        } break;
-        
         case OP_DeleteSelection: {
-            delete_selection(Ctx.PanelCtx.Selected);
-        } break;
-        
-        case OP_MoveAndDropCursor: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            s64 Count = sb_count(Ctx.PanelCtx.Selected->Cursors);
-            for(s64 i = 0; i < Count; ++i) {
-                cursor_t Cursor = Panel->Cursors[i];
-                cursor_move(Panel, &Panel->Cursors[i], Op.MoveAndDropCursor.Dir, 1);
-                sb_push(Panel->Cursors, Cursor);
-            }
         } break;
         
         // Insert
@@ -276,42 +130,16 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_Delete: {
-            do_delete(Ctx.PanelCtx.Selected);
         } break;
         
         case OP_DoChar: {
-            do_char(Ctx.PanelCtx.Selected, Op.DoChar.Character);
         } break;
         
         // Global
         case OP_Home: {
-            buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
-            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
-                line_t *l = &Buf->Lines[c->Line];
-                c->Offset = l->Offset;
-                c->ColumnIs = c->ColumnWas = 0;
-                c->SelectionOffset = 0;
-            }
         } break;
         
         case OP_End: {
-            buffer_t *Buf = Ctx.PanelCtx.Selected->Buffer;
-            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                cursor_t *c = &Ctx.PanelCtx.Selected->Cursors[i];
-                line_t *l = &Buf->Lines[c->Line];
-                c->Offset = l->Offset + l->Size - l->NewlineSize;
-                c->ColumnIs = c->ColumnWas = l->Length;
-                c->SelectionOffset = 0;
-            }
-        } break;
-        
-        case OP_MoveCursor: {
-            for(s64 i = 0; i < sb_count(Ctx.PanelCtx.Selected->Cursors); ++i) {
-                cursor_t *Cursor = &Ctx.PanelCtx.Selected->Cursors[i];
-                cursor_move(Ctx.PanelCtx.Selected, Cursor, Op.MoveCursor.Dir, Op.MoveCursor.StepSize); 
-                Cursor->SelectionOffset = 0;
-            }
         } break;
         
         case OP_ToggleSplitMode: {
@@ -330,12 +158,15 @@ do_operation(operation_t Op) {
             panel_move_selection(&Ctx.PanelCtx, Op.MovePanelSelection.Dir); 
         } break;
         
+        case OP_MoveSelection: {
+            selection_move(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
+        } break;
+        
         default: {
             WasHandled = false;
         } break;
     }
     
-    fix_all_cursors_after_operation(Ctx.PanelCtx.Selected, Op);
     make_lines(Ctx.PanelCtx.Selected->Buffer);
     return WasHandled;
 }
@@ -416,8 +247,6 @@ k_do_editor(platform_shared_t *Shared) {
         }
         
     } Events->Count = 0;
-    
-    set_panel_scroll(Ctx.PanelCtx.Root, workspace_rect(Shared->Framebuffer));
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};

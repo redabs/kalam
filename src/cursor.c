@@ -87,7 +87,7 @@ cursor_move(panel_t *Panel, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
 void
 insert_char(panel_t *Panel, u8 *Char) {
     
-    // TODO: Cursor update
+    // TO DO: Cursor update
     
     buffer_t *Buf = Panel->Buffer;
     for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
@@ -156,6 +156,7 @@ scan_cursor_back_bytes(buffer_t *Buf, cursor_t *Cursor, u64 n) {
 
 void
 delete_selection(panel_t *Panel) {
+    
     for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
         cursor_t *Cursor = &Panel->Cursors[i];
         s64 Start, End;
