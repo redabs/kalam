@@ -180,6 +180,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             
             // Draw the rest of the cursors
             for(s64 CursorIndex = 1; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
+                draw_selection(Fb, Panel, &Panel->Cursors[CursorIndex], Font, TextRegion);
                 draw_cursor(Fb, TextRegion, Font, Panel, &Panel->Cursors[CursorIndex]);
             }
             

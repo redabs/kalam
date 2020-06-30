@@ -1,8 +1,6 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
-#define GLYPH_SET_MAX 32
-
 typedef struct {
     // Pixel format is 0xAARRGGBB, in little-endian, i.e. the blue channel is at the lowest address.
     u8 *Data;

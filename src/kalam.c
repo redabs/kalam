@@ -7,6 +7,8 @@
 #include "types.h"
 #include "event.h"
 #include "platform.h"
+#include "cursor.h"
+//#include "selection.h"
 #include "panel.h"
 
 #include "custom.h"
@@ -17,84 +19,10 @@ ctx_t Ctx = {0};
 
 #include "panel.c"
 #include "layout.c"
+#include "cursor.c"
+//#include "selection.c"
 #include "render.c"
 #include "draw.c"
-
-void
-cursor_move(panel_t *Panel, cursor_t *Cursor, dir_t Dir, s64 StepSize) {
-    if(!Panel) { return; }
-    buffer_t *Buf = Panel->Buffer;
-    int LineEndChars = 0; // TODO: CRLF, LF, LFCR, .....
-    s64 Column = 0;
-    switch(Dir) {
-        case DOWN: 
-        case UP: {
-            if((Dir == UP && Cursor->Line > 0) ||
-               (Dir == DOWN && Cursor->Line < (sb_count(Buf->Lines) - 1))) {
-                s64 LineNum = CLAMP(0, sb_count(Buf->Lines) - 1, Cursor->Line + ((Dir == DOWN) ? StepSize : -StepSize));
-                Column = MIN(Cursor->ColumnWas, Buf->Lines[LineNum].Length);
-                
-                Cursor->Line = LineNum;
-                Cursor->ColumnIs = Column;
-                Cursor->Offset = Buf->Lines[LineNum].Offset;
-                for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-                    Cursor->Offset += utf8_char_width(Buf->Text.Data + Cursor->Offset);
-                }
-            }
-        } break;
-        
-        case RIGHT: {
-            s64 LineNum = Cursor->Line;
-            Column = Cursor->ColumnIs;
-            s64 LineCount = sb_count(Buf->Lines);
-            for(s64 i = 0; i < StepSize; ++i) {
-                if(Column + 1 > Buf->Lines[LineNum].Length) {
-                    if(LineNum + 1 >= LineCount) {
-                        Column = Buf->Lines[LineNum].Length;
-                        break;
-                    }
-                    LineNum++;
-                    Column = 0;
-                } else {
-                    Column++;
-                }
-            }
-            
-            Cursor->Line = LineNum;
-            Cursor->ColumnIs = Column;
-            Cursor->ColumnWas = Cursor->ColumnIs;
-            Cursor->Offset = Buf->Lines[LineNum].Offset;
-            for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-                Cursor->Offset += utf8_char_width(Buf->Text.Data + Cursor->Offset);
-            }
-        } break;
-        
-        case LEFT: {
-            s64 LineNum = Cursor->Line;
-            Column = Cursor->ColumnIs;
-            for(s64 i = 0; i < StepSize; ++i) {
-                if(Column - 1 < 0) {
-                    if(LineNum - 1 < 0) {
-                        Column = 0;
-                        break;
-                    }
-                    LineNum--;
-                    Column = Buf->Lines[LineNum].Length;
-                } else {
-                    Column--;
-                }
-            }
-            
-            Cursor->Line = LineNum;
-            Cursor->ColumnIs = Column;
-            Cursor->ColumnWas = Cursor->ColumnIs;
-            Cursor->Offset = Buf->Lines[LineNum].Offset;
-            for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-                Cursor->Offset += utf8_char_width(Buf->Text.Data + Cursor->Offset);
-            }
-        } break;
-    }
-}
 
 void
 make_lines(buffer_t *Buf) {
@@ -119,131 +47,6 @@ make_lines(buffer_t *Buf) {
                 Line->Length += 1;
             }
         }
-    }
-}
-
-void
-insert_char(panel_t *Panel, u8 *Char) {
-    
-    // TODO: Cursor update
-    
-    buffer_t *Buf = Panel->Buffer;
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
-        cursor_t *Cursor = &Panel->Cursors[CursorIndex];
-        
-        u8 n = utf8_char_width(Char);
-        mem_buf_add(&Buf->Text, n);
-        
-        for(s64 i = Buf->Text.Used - 1; i >= Cursor->Offset; --i) {
-            Buf->Text.Data[i + n] = Buf->Text.Data[i];
-        }
-        
-        for(s64 i = 0; i < n; ++i) {
-            Buf->Text.Data[Cursor->Offset + i] = Char[i];
-        }
-        
-        // Update the following cursors
-        for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-            cursor_t *c = &Panel->Cursors[i];
-            c->Offset += n;
-        }
-    }
-}
-
-void
-do_backspace_ex(panel_t *Panel, cursor_t *Cursor) {
-    buffer_t *Buf = Panel->Buffer;
-    if(Cursor->Offset != 0) {
-        s32 n = 1;
-        for(u8 *c = Buf->Text.Data + Cursor->Offset; (*(--c) & 0xc0) == 0x80; ++n);
-        
-        Cursor->Offset -= n;
-        mem_buf_delete_range(&Buf->Text, Cursor->Offset, Cursor->Offset + n);
-    }
-}
-
-void
-do_backspace(panel_t *Panel) {
-    buffer_t *Buf = Panel->Buffer;
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
-        do_backspace_ex(Panel, &Panel->Cursors[CursorIndex]);
-    }
-}
-
-void
-scan_cursor_back_bytes(buffer_t *Buf, cursor_t *Cursor, u64 n) {
-    if(n == 0) { return; }
-    
-    s64 DestOffset = Cursor->Offset - n;
-    s64 Line = Cursor->Line;
-    while(Buf->Lines[Line].Offset > DestOffset) {
-        --Line;
-    }
-    s64 Column = 0;
-    s64 Offset = Buf->Lines[Line].Offset;
-    while(Offset < DestOffset) {
-        Offset += utf8_char_width(Buf->Text.Data + Offset);
-        ++Column;
-    }
-    Cursor->ColumnIs = Cursor->ColumnWas = Column;
-    Cursor->Offset = DestOffset;
-    Cursor->Line = Line;
-}
-
-void
-delete_selection(panel_t *Panel) {
-    
-    // TODO: Cursor update
-    
-    for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
-        cursor_t *Cursor = &Panel->Cursors[i];
-        s64 Start, End;
-        Start = MIN(Cursor->Offset, Cursor->Offset + Cursor->SelectionOffset);
-        End = MAX(Cursor->Offset, Cursor->Offset + Cursor->SelectionOffset) + 1;
-        s64 SelectionSize = End - Start;
-        
-        if(Cursor->SelectionOffset < 0) {
-            scan_cursor_back_bytes(Panel->Buffer, Cursor, -Cursor->SelectionOffset);
-        }
-        
-        mem_buf_delete_range(&Panel->Buffer->Text, Start, End);
-        Cursor->SelectionOffset = 0;
-    }
-}
-
-void
-do_char(panel_t *Panel, u8 *Char) {
-    if(!Panel) { return; }
-    if(*Char < 0x20) {
-        switch(*Char) {
-            case '\n':
-            case '\r': {
-                insert_char(Panel, (u8 *)"\n");
-            } break;
-            
-            case '\t': {
-                insert_char(Panel, (u8 *)"\t");
-            } break;
-            
-            case '\b': {
-                do_backspace(Panel);
-            } break;
-        }
-    } else {
-        insert_char(Panel, Char);
-    }
-}
-
-void
-do_delete(panel_t *Panel) {
-    
-    // TODO: Cursor update
-    
-    buffer_t *Buf = Panel->Buffer;
-    for(s64 CursorIndex = 0; CursorIndex < sb_count(Panel->Cursors); ++CursorIndex) {
-        cursor_t *Cursor = &Panel->Cursors[CursorIndex];
-        
-        mem_buf_delete_range(&Buf->Text, Cursor->Offset, Cursor->Offset + utf8_char_width(Buf->Text.Data + Cursor->Offset));
     }
 }
 
@@ -310,6 +113,33 @@ k_init(platform_shared_t *Shared) {
     panel_create(&Ctx.PanelCtx);
 }
 
+u32
+partition_cursors(cursor_t *Cursors, s32 Low, s32 High) {
+#define SWAP(a, b) cursor_t _t_ = a; a = b; b = _t_;
+    cursor_t Pivot = Cursors[High];
+    s64 pStart = cursor_selection_start(&Pivot);
+    
+    s32 i = Low;
+    for(s32 j = Low; j < High; j++) {
+        s64 cStart = cursor_selection_start(&Cursors[j]);
+        if(cStart < pStart) {
+            SWAP(Cursors[j], Cursors[i]);
+            ++i;
+        }
+    }
+    SWAP(Cursors[i], Cursors[High]);
+#undef SWAP
+    return i;
+}
+
+void
+sort_cursors(cursor_t *Cursors, s32 Low, s32 High) {
+    if(Low < High) {
+        s32 P = partition_cursors(Cursors, Low, High);
+        sort_cursors(Cursors, Low, P - 1);
+        sort_cursors(Cursors, P + 1, High);
+    }
+}
 
 void
 fix_all_cursors_after_operation(panel_t *Panel, operation_t Op) {
@@ -337,7 +167,7 @@ fix_all_cursors_after_operation(panel_t *Panel, operation_t Op) {
         }
     }
     
-    // Remove any cursors that overlap
+    // Resolve overlapping cursors
     for(s64 i = 0; i < sb_count(Panel->Cursors); ++i) {
         cursor_t *c0 = &Panel->Cursors[i];
         
@@ -353,6 +183,41 @@ fix_all_cursors_after_operation(panel_t *Panel, operation_t Op) {
             }
         }
     }
+    
+    // Resolve cursors with overlapping selection regions
+    s64 CursorCount = sb_count(Panel->Cursors);
+    
+    cursor_t *SortBuf = 0;
+    sb_add(SortBuf, CursorCount);
+    mem_copy(SortBuf, Panel->Cursors, CursorCount * sizeof(cursor_t));
+    sort_cursors(SortBuf, 0, (u32)CursorCount - 1);
+    
+    s64 n = 0;
+    cursor_t *c = &SortBuf[0];
+    for(s64 i = 0; i < CursorCount - 1; ++i) {
+        if(cursor_selection_end(c) >= cursor_selection_start(c + 1)) {
+            ++n;
+        } else {
+            Panel->Cursors[n] = SortBuf[i + 1];
+            c = SortBuf + i;
+#if 0
+            if(n > 0) {
+                s64 Start = cursor_selection_start(n);
+                s64 End = cursor_selection_end(i - 1);
+                Panel->Cursor[i]
+            }
+#endif
+        }
+    }
+    
+    if(n >= CursorCount) {
+        Panel->Cursors[0] = *c;
+    } else {
+        sb_set_count(Panel->Cursors, CursorCount - n);
+    }
+    
+    sb_free(SortBuf);
+    
 }
 
 b32
@@ -393,6 +258,16 @@ do_operation(operation_t Op) {
         
         case OP_DeleteSelection: {
             delete_selection(Ctx.PanelCtx.Selected);
+        } break;
+        
+        case OP_MoveAndDropCursor: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            s64 Count = sb_count(Ctx.PanelCtx.Selected->Cursors);
+            for(s64 i = 0; i < Count; ++i) {
+                cursor_t Cursor = Panel->Cursors[i];
+                cursor_move(Panel, &Panel->Cursors[i], Op.MoveAndDropCursor.Dir, 1);
+                sb_push(Panel->Cursors, Cursor);
+            }
         } break;
         
         // Insert

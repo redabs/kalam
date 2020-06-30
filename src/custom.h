@@ -27,6 +27,7 @@ typedef enum {
     OP_EnterInsertMode,
     OP_MoveCursorWithSelection,
     OP_DeleteSelection, 
+    OP_MoveAndDropCursor, 
     
     // Insert
     OP_EscapeToNormal,
@@ -62,6 +63,10 @@ typedef struct {
         struct {
             u8 Character[4];
         } DoChar;
+        
+        struct {
+            dir_t Dir;
+        } MoveAndDropCursor;
     };
 } operation_t;
 
@@ -85,6 +90,11 @@ key_mapping_t NormalMappings[] = {
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = RIGHT},
     { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = UP},
     { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_MoveCursorWithSelection, .Operation.MoveCursorWithSelection.Dir = DOWN},
+    
+    { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_MoveAndDropCursor, .Operation.MoveAndDropCursor.Dir = LEFT},
+    { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_MoveAndDropCursor, .Operation.MoveAndDropCursor.Dir = RIGHT},
+    { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_MoveAndDropCursor, .Operation.MoveAndDropCursor.Dir = UP},
+    { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_MoveAndDropCursor, .Operation.MoveAndDropCursor.Dir = DOWN},
     
 };
 

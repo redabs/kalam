@@ -65,18 +65,6 @@ get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
     return 0;
 }
 
-s32 
-cursor_pixel_x_offset(buffer_t *Buffer, font_t *Font, cursor_t *Cursor) {
-    s32 x = 0;
-    u8 *c = Buffer->Text.Data + Buffer->Lines[Cursor->Line].Offset;
-    for(s64 i = 0; i < Cursor->ColumnIs; ++i) {
-        u32 Codepoint;
-        c = utf8_to_codepoint(c, &Codepoint);
-        x += get_x_advance(Font, Codepoint);
-    }
-    return x;
-}
-
 s32
 text_width(font_t *Font, u8 *Start, u8 *End) {
     if(!End) {
