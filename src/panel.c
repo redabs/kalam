@@ -50,7 +50,7 @@ panel_create(panel_ctx_t *PanelCtx) {
         Right->Split = Left->Split;
         Right->Buffer = Left->Buffer,
         Right->Mode = MODE_Normal;
-        mem_zero_struct(sb_add(PanelCtx->Root->Selections, 1));
+        mem_zero_struct(sb_add(Right->Selections, 1));
         
         Parent->Buffer = 0;
         
@@ -92,6 +92,7 @@ panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
         
         panel_free(PanelCtx, Sibling);
         panel_free(PanelCtx, Panel);
+        sb_free(Panel->Selections);
     } else {
         PanelCtx->Selected = Panel->Parent;
         panel_free(PanelCtx, Panel);
