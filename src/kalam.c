@@ -124,6 +124,10 @@ do_operation(operation_t Op) {
         case OP_DeleteSelection: {
         } break;
         
+        case OP_ExtendSelection: {
+            extend_selection(Ctx.PanelCtx.Selected, Op.ExtendSelection.Dir);
+        } break;
+        
         // Insert
         case OP_EscapeToNormal: {
             Ctx.PanelCtx.Selected->Mode = MODE_Normal;
@@ -159,7 +163,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_MoveSelection: {
-            selection_move(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
+            move_all_selections_in_panel(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
         } break;
         
         default: {

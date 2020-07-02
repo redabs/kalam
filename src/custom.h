@@ -26,6 +26,7 @@ typedef enum {
     // Normal
     OP_EnterInsertMode,
     OP_DeleteSelection, 
+    OP_ExtendSelection, 
     
     // Insert
     OP_EscapeToNormal,
@@ -45,6 +46,10 @@ typedef enum {
 typedef struct {
     operation_type_t Type;
     union {
+        
+        struct {
+            dir_t Dir;
+        } ExtendSelection;
         
         struct {
             dir_t Dir;
@@ -77,6 +82,10 @@ key_mapping_t NormalMappings[] = {
     
     { .IsKey = false, .Character[0] = 'd', .Operation.Type = OP_DeleteSelection, },
     
+    { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = LEFT},
+    { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = RIGHT},
+    { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = UP},
+    { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = DOWN},
 };
 
 key_mapping_t InsertMappings[] = {

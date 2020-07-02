@@ -57,36 +57,60 @@ column_in_line_to_offset(buffer_t *Buf, line_t *Line, s64 Column) {
 }
 
 void
-selection_move(panel_t *Panel, dir_t Dir) {
-    buffer_t *Buf = Panel->Buffer;
+move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 WithAnchor) {
+    switch(Dir) {
+        case LEFT: {
+            if(Selection->Cursor <= 0) { break; }
+            u8 *c = utf8_move_back_one(Buf->Text.Data + Selection->Cursor);
+            Selection->Cursor = (s64)(c - Buf->Text.Data);
+            Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
+        } break;
+        
+        case RIGHT: {
+            Selection->Cursor += utf8_char_width(Buf->Text.Data + Selection->Cursor);
+            Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
+        } break;
+        
+        case UP: {
+            s64 Li = offset_to_line_index(Buf, Selection->Cursor) - 1;
+            if(Li < 0) { break; }
+            Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], Selection->Column);
+        } break;
+        
+        case DOWN: {
+            s64 Li = offset_to_line_index(Buf, Selection->Cursor) + 1;
+            if(Li >= sb_count(Buf->Lines)) { break; }
+            Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], Selection->Column);
+        } break;
+        
+    }
+    
+    if(WithAnchor) {
+        Selection->Anchor = Selection->Cursor; 
+    }
+}
+
+void
+move_all_selections_in_panel(panel_t *Panel, dir_t Dir) {
     for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
-        selection_t *s = &Panel->Selections[i];
-        switch(Dir) {
-            case LEFT: {
-                if(s->Cursor <= 0) { break; }
-                u8 *c = utf8_move_back_one(Buf->Text.Data + s->Cursor);
-                s->Cursor = (s64)(c - Buf->Text.Data);
-                s->Column = global_offset_to_column(Buf, s->Cursor);
-            } break;
-            
-            case RIGHT: {
-                s->Cursor += utf8_char_width(Buf->Text.Data + s->Cursor);
-                s->Column = global_offset_to_column(Buf, s->Cursor);
-            } break;
-            
-            case UP: {
-                s64 Li = offset_to_line_index(Buf, s->Cursor) - 1;
-                if(Li < 0) { break; }
-                s->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], s->Column);
-            } break;
-            
-            case DOWN: {
-                s64 Li = offset_to_line_index(Buf, s->Cursor) + 1;
-                if(Li >= sb_count(Buf->Lines)) { break; }
-                s->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], s->Column);
-            } break;
-            
-        }
-        s->Anchor = s->Cursor; 
+        move_selection(Panel->Buffer, &Panel->Selections[i], Dir, true);
+    }
+}
+
+b32
+selections_overlap(selection_t *a, selection_t *b) {
+    s64 aEnd = selection_end(a);
+    s64 bStart = selection_start(b);
+    return (aEnd >= bStart);
+}
+
+void
+merge_overlapping_selections(panel_t *Panel) {
+}
+
+void
+extend_selection(panel_t *Panel, dir_t Dir) {
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        move_selection(Panel->Buffer, &Panel->Selections[i], Dir, false);
     }
 }
