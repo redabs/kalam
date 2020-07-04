@@ -30,7 +30,7 @@ panel_create(panel_ctx_t *PanelCtx) {
         PanelCtx->Root->Buffer = &Ctx.Buffers[0];
         PanelCtx->Selected = PanelCtx->Root;
         
-        mem_zero_struct(sb_add(PanelCtx->Root->Selections, 1));
+        add_selection(PanelCtx->Root);
     } else {
         panel_t *Parent = PanelCtx->Selected;
         panel_t *Left = panel_alloc(PanelCtx);
@@ -50,7 +50,7 @@ panel_create(panel_ctx_t *PanelCtx) {
         Right->Split = Left->Split;
         Right->Buffer = Left->Buffer,
         Right->Mode = MODE_Normal;
-        mem_zero_struct(sb_add(Right->Selections, 1));
+        add_selection(Right);
         
         Parent->Buffer = 0;
         

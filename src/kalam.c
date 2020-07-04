@@ -16,9 +16,9 @@
 
 ctx_t Ctx = {0};
 
+#include "selection.c"
 #include "panel.c"
 #include "layout.c"
-#include "selection.c"
 #include "render.c"
 #include "draw.c"
 
@@ -126,6 +126,16 @@ do_operation(operation_t Op) {
         
         case OP_ExtendSelection: {
             extend_selection(Ctx.PanelCtx.Selected, Op.ExtendSelection.Dir);
+        } break;
+        
+        case OP_DropSelectionAndMove: {
+            // TODO: This is mine field because pushing selections and cause a reallocation and will invalidate all previous pointers!!!
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_t MaxIdxSel = *get_selection_max_idx(Panel);
+            MaxIdxSel.Idx = Panel->SelectionIdxTop++;
+            push_selection(Panel, MaxIdxSel);
+            move_selection(Panel->Buffer, get_selection_max_idx(Panel), Op.DropSelectionAndMove.Dir, true);
+            merge_overlapping_selections(Panel);
         } break;
         
         // Insert

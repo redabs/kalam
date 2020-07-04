@@ -12,6 +12,7 @@ typedef struct {
     s64 Anchor;
     s64 Cursor;
     s64 Column;
+    u64 Idx; // Unique over selections. The selection with the greatest Idx is the one that was created last.
 } selection_t;
 
 #endif //SELECTION_H

@@ -150,6 +150,8 @@ utf16_to_utf8(u32 Utf16, u8 *Utf8) {
     }
 }
 
+#include <stdio.h> // TODO: Remove me
+
 void
 win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier_t Modifiers; 
@@ -161,6 +163,8 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             utf16_to_utf8((u32)Message->wParam, Event.Text.Character);
         } goto process_key;
         
+        case WM_SYSKEYDOWN:
+        case WM_SYSKEYUP:
         case WM_KEYDOWN: 
         case WM_KEYUP: {
             b32 WasDown = (b32)(Message->lParam >> 30);
@@ -172,7 +176,6 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
             Event.Key.KeyCode = Message->wParam == VK_DELETE ? KEY_Delete : Message->wParam; 
         } 
         process_key: {
-            
             Modifiers = GetKeyState(VK_CONTROL) & 0x8000 ? Modifiers | INPUT_MOD_Ctrl : Modifiers & ~(INPUT_MOD_Ctrl);
             Modifiers = GetKeyState(VK_MENU) & 0x8000 ? Modifiers | INPUT_MOD_Alt : Modifiers & ~(INPUT_MOD_Alt);
             Modifiers = GetKeyState(VK_SHIFT) & 0x8000 ? Modifiers | INPUT_MOD_Shift : Modifiers & ~(INPUT_MOD_Shift);
@@ -205,6 +208,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
         Event.Type = INPUT_EVENT_Release;
         Event.Mouse.Button = INPUT_MOUSE_Left;
         process_mouse: {
+            Event.Device = INPUT_DEVICE_Mouse;
             Event.Modifiers = Modifiers;
             Event.Toggles = Toggles;
             Event.Mouse.Position.x = (s32)GET_X_LPARAM(Message->lParam);
@@ -214,6 +218,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer
         } break;
         
         case WM_MOUSEWHEEL: {
+            Event.Device = INPUT_DEVICE_Mouse;
             Event.Type = INPUT_EVENT_Scroll;
             Event.Modifiers = Modifiers;
             Event.Toggles = Toggles;
