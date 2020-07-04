@@ -15,6 +15,8 @@ typedef struct {
     stbtt_bakedchar Glyphs[256];
 } glyph_set_t;
 
+#define GLYPH_SET_MAX 32
+
 typedef struct {
     stbtt_fontinfo StbInfo;
     platform_file_data_t File;
