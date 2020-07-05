@@ -71,7 +71,7 @@ push_selection(panel_t *Panel, selection_t Selection) {
     *s = Selection;
 }
 
-selection_t *
+selection_t
 get_selection_max_idx(panel_t *Panel) {
     u64 Max = Panel->Selections[0].Idx;
     selection_t *Result = &Panel->Selections[0];
@@ -83,7 +83,7 @@ get_selection_max_idx(panel_t *Panel) {
         }
     }
     
-    return Result;
+    return *Result;
 }
 
 void
@@ -131,11 +131,11 @@ s64
 partition_selections(selection_t *Selections, s64 Low, s64 High) {
     selection_t Pivot = Selections[High];
     s64 pStart = selection_start(&Pivot);
-    s64 Mid = 0;
+    s64 Mid = Low;
 #define SWAP(a, b) selection_t _temp_ = a; a = b; b = _temp_;
     
     for(s64 i = Low; i < High; ++i) {
-        if(selection_start(&Selections[i]) < pStart) {
+        if(selection_start(&Selections[i]) <= pStart) {
             SWAP(Selections[i], Selections[Mid]);
             ++Mid;
         }
