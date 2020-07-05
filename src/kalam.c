@@ -152,9 +152,29 @@ do_operation(operation_t Op) {
         
         // Global
         case OP_Home: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                selection_t *Selection = &Panel->Selections[i];
+                s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                line_t *Line = &Panel->Buffer->Lines[Li];
+                Selection->Anchor = Line->Offset;
+                Selection->Cursor = Line->Offset;
+                Selection->Column = 0;
+            }
+            merge_overlapping_selections(Panel);
         } break;
         
         case OP_End: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                selection_t *Selection = &Panel->Selections[i];
+                s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                line_t *Line = &Panel->Buffer->Lines[Li];
+                Selection->Anchor = Line->Offset + Line->Size - Line->NewlineSize;
+                Selection->Cursor = Selection->Anchor;
+                Selection->Column = Line->Length;
+            }
+            merge_overlapping_selections(Panel);
         } break;
         
         case OP_ToggleSplitMode: {
