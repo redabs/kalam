@@ -90,8 +90,6 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
     }
 }
 
-#include <math.h>
-
 void
 draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect, bitmap_t *Bitmap) {
     s32 BoxMinX = MAX(xPos, Fb->Clip.x);

@@ -129,12 +129,13 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_DropSelectionAndMove: {
-            // TODO: This is mine field because pushing selections and cause a reallocation and will invalidate all previous pointers!!!
             panel_t *Panel = Ctx.PanelCtx.Selected;
-            selection_t MaxIdxSel = *get_selection_max_idx(Panel);
-            MaxIdxSel.Idx = Panel->SelectionIdxTop++;
-            push_selection(Panel, MaxIdxSel);
-            move_selection(Panel->Buffer, get_selection_max_idx(Panel), Op.DropSelectionAndMove.Dir, true);
+            
+            selection_t Sel = get_selection_max_idx(Panel);
+            Sel.Idx = Panel->SelectionIdxTop++;
+            move_selection(Panel->Buffer, &Sel, Op.DropSelectionAndMove.Dir, true);
+            push_selection(Panel, Sel);
+            
             merge_overlapping_selections(Panel);
         } break;
         
