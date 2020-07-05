@@ -103,6 +103,12 @@ win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LPara
             win32_resize_framebuffer(&FramebufferInfo, Width, Height);
         } break;
         
+        case WM_SYSCOMMAND:
+        // Disable stupid alt-menu
+        if(WParameter == SC_KEYMENU) {
+            break;
+        }
+        // Fall through
         default: {
             Result = DefWindowProcW(Window, Message, WParameter, LParameter);
         } break;
