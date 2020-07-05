@@ -139,6 +139,10 @@ do_operation(operation_t Op) {
             merge_overlapping_selections(Panel);
         } break;
         
+        case OP_ClearSelections: {
+            clear_selections(Ctx.PanelCtx.Selected);
+        } break;
+        
         // Insert
         case OP_EscapeToNormal: {
             Ctx.PanelCtx.Selected->Mode = MODE_Normal;

@@ -87,6 +87,13 @@ get_selection_max_idx(panel_t *Panel) {
 }
 
 void
+clear_selections(panel_t *Panel) {
+    selection_t Sel = get_selection_max_idx(Panel);
+    sb_set_count(Panel->Selections, 0);
+    sb_push(Panel->Selections, Sel);
+}
+
+void
 move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor) {
     switch(Dir) {
         case LEFT: {

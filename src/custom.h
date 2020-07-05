@@ -26,6 +26,7 @@ typedef enum {
     OP_DeleteSelection, 
     OP_ExtendSelection, 
     OP_DropSelectionAndMove,
+    OP_ClearSelections,
     
     // Insert
     OP_EscapeToNormal,
@@ -85,11 +86,13 @@ key_mapping_t NormalMappings[] = {
     
     { .IsKey = false, .Character[0] = 'd', .Operation.Type = OP_DeleteSelection, },
     
+    { .IsKey = true, .Key = KEY_Space, .Operation.Type = OP_ClearSelections, },
+    
     { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = LEFT},
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = RIGHT},
     { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = UP},
     { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = DOWN},
-   
+    
     { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = LEFT},
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = RIGHT},
     { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = UP},
