@@ -94,8 +94,8 @@ utf8_char_width(u8 *Char) {
 inline u8 *
 utf8_move_back_one(u8 *Text) {
     u8 *c = Text - 1;
-    while((*Text & 0xc0) == 0x80) {
-        --Text;
+    while((*c & 0xc0) == 0x80) {
+        --c;
     }
     return c;
 }
