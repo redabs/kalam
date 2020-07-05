@@ -174,9 +174,10 @@ merge_overlapping_selections(panel_t *Panel) {
                 New.Anchor = MIN(a->Anchor, b->Anchor);
             }
             New.Column = global_offset_to_column(Panel->Buffer, New.Cursor);
+            New.Idx = Panel->SelectionIdxTop++;
             
             for(s64 j = i; j < sb_count(Panel->Selections) - 1; ++j) {
-                Panel->Selections[i] = Panel->Selections[i + 1];
+                Panel->Selections[j] = Panel->Selections[j + 1];
             }
             Panel->Selections[i] = New;
             
