@@ -1,3 +1,29 @@
+void
+make_lines(buffer_t *Buf) {
+    if(Buf->Text.Used == 0) {
+        sb_push(Buf->Lines, (line_t){0});
+    } else {
+        sb_set_count(Buf->Lines, 0);
+        line_t *Line = sb_add(Buf->Lines, 1);
+        mem_zero_struct(Line);
+        u8 n = 0;
+        for(s64 i = 0; i < Buf->Text.Used; i += n) {
+            n = utf8_char_width(Buf->Text.Data + i);
+            
+            Line->Size += n;
+            if(Buf->Text.Data[i] == '\n') {
+                Line->NewlineSize = n;
+                // Push next line and init it
+                Line = sb_add(Buf->Lines, 1);
+                mem_zero_struct(Line);
+                Line->Offset = i + n;
+            } else {
+                Line->Length += 1;
+            }
+        }
+    }
+}
+
 s64
 selection_start(selection_t *Selection) {
     s64 Start = MIN(Selection->Anchor, Selection->Cursor);
@@ -209,4 +235,70 @@ extend_selection(panel_t *Panel, dir_t Dir) {
         move_selection(Panel->Buffer, &Panel->Selections[i], Dir, false);
     }
     merge_overlapping_selections(Panel);
+}
+
+void
+insert_char(panel_t *Panel, u8 *Char) {
+    u8 n = utf8_char_width(Char);
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Cursor += i * n; // Advances for the previous cursors
+        mem_buf_insert(&Panel->Buffer->Text, Sel->Cursor, n, Char);
+        
+        Sel->Cursor += n;
+        Sel->Anchor = Sel->Cursor;
+    }
+    
+    if(*Char == '\n') {
+        make_lines(Panel->Buffer);
+    }
+    
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Column = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    
+}
+
+void
+do_backspace(panel_t *Panel) {
+    s64 BytesDeleted = 0;
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        if(Sel->Cursor > 0) {
+            Sel->Cursor -= BytesDeleted;
+            
+            s32 n = 1;
+            for(u8 *c = Panel->Buffer->Text.Data + Sel->Cursor; (*(--c) & 0xc0) == 0x80; ++n);
+            
+            Sel->Cursor -= n;
+            Sel->Anchor = Sel->Cursor;
+            mem_buf_delete_range(&Panel->Buffer->Text, Sel->Cursor, Sel->Cursor + n);
+            
+            BytesDeleted += n;
+        }
+    }
+    merge_overlapping_selections(Panel);
+}
+
+void
+do_char(panel_t *Panel, u8 *Char) {
+    if(*Char < 0x20) {
+        switch(*Char) {
+            case '\n':
+            case '\r': {
+                insert_char(Panel, (u8 *)"\n");
+            } break;
+            
+            case '\t': {
+                insert_char(Panel, (u8 *)"\t");
+            } break;
+            
+            case '\b': {
+                do_backspace(Panel);
+            } break;
+        }
+    } else {
+        insert_char(Panel, Char);
+    }
 }

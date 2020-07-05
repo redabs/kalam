@@ -22,33 +22,6 @@ ctx_t Ctx = {0};
 #include "render.c"
 #include "draw.c"
 
-void
-make_lines(buffer_t *Buf) {
-    if(Buf->Text.Used == 0) {
-        sb_push(Buf->Lines, (line_t){0});
-    } else {
-        sb_set_count(Buf->Lines, 0);
-        line_t *Line = sb_add(Buf->Lines, 1);
-        mem_zero_struct(Line);
-        u8 n = 0;
-        for(s64 i = 0; i < Buf->Text.Used; i += n) {
-            n = utf8_char_width(Buf->Text.Data + i);
-            
-            Line->Size += n;
-            if(Buf->Text.Data[i] == '\n') {
-                Line->NewlineSize = n;
-                // Push next line and init it
-                Line = sb_add(Buf->Lines, 1);
-                mem_zero_struct(Line);
-                Line->Offset = i + n;
-            } else {
-                Line->Length += 1;
-            }
-        }
-    }
-}
-
-
 font_t
 load_ttf(char *Path, f32 Size) {
     font_t Font = {0};
@@ -152,6 +125,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_DoChar: {
+            do_char(Ctx.PanelCtx.Selected, Op.DoChar.Character);
         } break;
         
         // Global
