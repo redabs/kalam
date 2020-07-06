@@ -95,6 +95,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_DeleteSelection: {
+            delete_selection(Ctx.PanelCtx.Selected);
         } break;
         
         case OP_ExtendSelection: {

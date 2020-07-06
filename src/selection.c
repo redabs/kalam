@@ -51,7 +51,7 @@ offset_to_line_index(buffer_t *Buf, s64 Offset) {
         if(l->Offset > Offset) {
             High = i;
         } else {
-            Low = i;
+            Low = i + 1;
         }
     }
     ASSERT(i >= 0 && i < sb_count(Buf->Lines)) ;
@@ -123,15 +123,16 @@ void
 move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor) {
     switch(Dir) {
         case LEFT: {
-            if(Selection->Cursor <= 0) { break; }
-            u8 *c = utf8_move_back_one(Buf->Text.Data + Selection->Cursor);
-            Selection->Cursor = (s64)(c - Buf->Text.Data);
-            Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
+            if(Selection->Cursor > 0) {
+                u8 *c = utf8_move_back_one(Buf->Text.Data + Selection->Cursor);
+                Selection->Cursor = (s64)(c - Buf->Text.Data);
+            }
         } break;
         
         case RIGHT: {
-            Selection->Cursor += utf8_char_width(Buf->Text.Data + Selection->Cursor);
-            Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
+            if(Selection->Cursor < Buf->Text.Used) {
+                Selection->Cursor += utf8_char_width(Buf->Text.Data + Selection->Cursor);
+            }
         } break;
         
         case UP: {
@@ -147,6 +148,8 @@ move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor
         } break;
         
     }
+    
+    Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
     
     if(CarryAnchor) {
         Selection->Anchor = Selection->Cursor; 
@@ -238,6 +241,33 @@ extend_selection(panel_t *Panel, dir_t Dir) {
 }
 
 void
+delete_selection(panel_t *Panel) {
+    buffer_t *Buf = Panel->Buffer;
+    s64 BytesDeleted = 0;
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Cursor -= BytesDeleted;
+        Sel->Anchor -= BytesDeleted;
+        
+        s64 Start = selection_start(Sel);
+        s64 End = selection_end(Sel);
+        End += utf8_char_width(Buf->Text.Data + End);
+        
+        mem_buf_delete_range(&Buf->Text, Start, End);
+        
+        Sel->Cursor = Sel->Anchor = Start;
+        BytesDeleted += (End - Start);
+    }
+    
+    make_lines(Buf);
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Column = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    merge_overlapping_selections(Panel);
+}
+
+void
 do_delete(panel_t *Panel) {
     buffer_t *Buf = Panel->Buffer;
     s64 BytesDeleted = 0;
@@ -253,7 +283,6 @@ do_delete(panel_t *Panel) {
     }
     
     make_lines(Panel->Buffer);
-    
     for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
         selection_t *Sel = &Panel->Selections[i];
         Sel->Anchor = Sel->Cursor;
@@ -274,15 +303,13 @@ insert_char(panel_t *Panel, u8 *Char) {
         Sel->Anchor = Sel->Cursor;
     }
     
-    if(*Char == '\n') {
-        make_lines(Panel->Buffer);
-    }
+    make_lines(Panel->Buffer);
     
     for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
         selection_t *Sel = &Panel->Selections[i];
         Sel->Column = global_offset_to_column(Panel->Buffer, Sel->Cursor);
     }
-    
+    merge_overlapping_selections(Panel);
 }
 
 void
@@ -303,6 +330,8 @@ do_backspace(panel_t *Panel) {
             BytesDeleted += n;
         }
     }
+    
+    make_lines(Panel->Buffer);
     merge_overlapping_selections(Panel);
 }
 

@@ -94,6 +94,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
     
     s64 Start = selection_start(Selection);
     s64 End = selection_end(Selection);
+    End += utf8_char_width(Buf->Text.Data + End);
     s64 LineIndexStart = offset_to_line_index(Panel->Buffer, Start);
     s64 LineIndexEnd = offset_to_line_index(Panel->Buffer, End);
     
@@ -103,9 +104,17 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
         line_t *Line = &Buf->Lines[i];
         
         u8 *SelectionStartOnCurrentLine = Buf->Text.Data + MAX(Line->Offset, Start);
-        u8 *SelectionEndOnCurrentLine = Buf->Text.Data + MIN(Line->Offset + Line->Size, End + utf8_char_width(Buf->Text.Data + End));
+        u8 *SelectionEndOnCurrentLine = Buf->Text.Data + MIN(Line->Offset + Line->Size, End);
         
         s32 Width = text_width(Font, SelectionStartOnCurrentLine, SelectionEndOnCurrentLine);
+        
+        // There is one exception where the selection is allowed to go outside the line and it is on the last "imaginary" character on the 
+        // last line in the file. The reason the cursor can go one byte outside like this is so that one can append to the end of the file.
+        // Because this one-past-the-end byte could be anything we don't want to include it in the string we pass to text_width, so to handle
+        // this we check if the cursor is past the end of the line and we're on the last line and then increase the size my the width of 'M'.
+        if(i == (sb_count(Buf->Lines) - 1) && End > Line->Offset + Line->Size) {
+            Width += Font->MWidth;
+        }
         
         irect_t LineRect = {TextRegion.x + text_width(Font, Buf->Text.Data + Line->Offset, SelectionStartOnCurrentLine), y - Panel->ScrollY, Width, LineHeight};
         draw_rect(Fb, LineRect, COLOR_SELECTION);
@@ -154,11 +163,10 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     s32 LineY = y + (s32)i * LineHeight;
                     s32 Center = LineY + (LineHeight >> 1);
                     s32 Baseline = Center + (Font->MHeight >> 1);
-                    
-                    selection_t *s = &Panel->Selections[i];
                     char Debug[1024];
                     char *c = Debug;
-                    c += sprintf(c, "[%lld]: \t Anchor %lld \t, Cursor %lld \t, Column %lld", s->Idx, s->Anchor, s->Cursor, s->Column);
+                    selection_t *s = &Panel->Selections[i];
+                    c += sprintf(c, "[%lld]: Anchor %lld, Cursor %lld, Column %lld", s->Idx, s->Anchor, s->Cursor, s->Column);
                     draw_rect(Fb, (irect_t){x, LineY, text_width(&Ctx.Font, (u8*)Debug, 0), LineHeight}, 0xff000000);
                     draw_text_line(Fb, &Ctx.Font, x, Baseline, 0xffffffff, (u8*)Debug, 0);
                 }
