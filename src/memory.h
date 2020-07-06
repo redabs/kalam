@@ -99,6 +99,7 @@ mem_buf_insert(mem_buffer_t *Buffer, s64 Offset, s64 Size, u8 *Data) {
     for(s64 i = 0; i < Size; ++i) {
         Buffer->Data[Offset + i] = Data[i];
     }
+    Buffer->Used += Size;
 }
 
 inline void
