@@ -238,6 +238,31 @@ extend_selection(panel_t *Panel, dir_t Dir) {
 }
 
 void
+do_delete(panel_t *Panel) {
+    buffer_t *Buf = Panel->Buffer;
+    s64 BytesDeleted = 0;
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Cursor -= BytesDeleted;
+        if(Sel->Cursor < Buf->Text.Used) {
+            u8 n = utf8_char_width(Buf->Text.Data + Sel->Cursor);
+            mem_buf_delete_range(&Buf->Text, Sel->Cursor, Sel->Cursor + n);
+            
+            BytesDeleted += n;
+        }
+    }
+    
+    make_lines(Panel->Buffer);
+    
+    for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+        selection_t *Sel = &Panel->Selections[i];
+        Sel->Anchor = Sel->Cursor;
+        Sel->Column = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    merge_overlapping_selections(Panel);
+}
+
+void
 insert_char(panel_t *Panel, u8 *Char) {
     u8 n = utf8_char_width(Char);
     for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
