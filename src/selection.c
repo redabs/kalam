@@ -1,9 +1,9 @@
 void
 make_lines(buffer_t *Buf) {
+    sb_set_count(Buf->Lines, 0);
     if(Buf->Text.Used == 0) {
         sb_push(Buf->Lines, (line_t){0});
     } else {
-        sb_set_count(Buf->Lines, 0);
         line_t *Line = sb_add(Buf->Lines, 1);
         mem_zero_struct(Line);
         u8 n = 0;
