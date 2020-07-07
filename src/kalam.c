@@ -137,7 +137,7 @@ do_operation(operation_t Op) {
                 selection_t *Selection = &Panel->Selections[i];
                 s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
                 line_t *Line = &Panel->Buffer->Lines[Li];
-                Selection->Anchor = Line->Offset;
+                Selection->Anchor = Selection->Cursor;
                 Selection->Cursor = Line->Offset;
                 Selection->Column = 0;
             }
@@ -150,8 +150,8 @@ do_operation(operation_t Op) {
                 selection_t *Selection = &Panel->Selections[i];
                 s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
                 line_t *Line = &Panel->Buffer->Lines[Li];
-                Selection->Anchor = Line->Offset + Line->Size - Line->NewlineSize;
-                Selection->Cursor = Selection->Anchor;
+                Selection->Anchor = Selection->Cursor;
+                Selection->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
                 Selection->Column = Line->Length;
             }
             merge_overlapping_selections(Panel);
