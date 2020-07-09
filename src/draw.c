@@ -156,6 +156,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
+#if 0            
             {
                 s32 x = 400; 
                 s32 y = 100;
@@ -171,6 +172,7 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     draw_text_line(Fb, &Ctx.Font, x, Baseline, 0xffffffff, (u8*)Debug, 0);
                 }
             }
+#endif
             
             irect_t StatusBar = status_bar_rect(PanelRect);
             draw_rect(Fb, StatusBar, COLOR_STATUS_BAR);

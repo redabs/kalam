@@ -6,6 +6,8 @@ typedef enum {
     BUFFER_TYPE_File,
 } buffer_type_t;
 
+typedef struct panel_t panel_t;
+
 typedef struct {
     buffer_type_t Type;
     union {
@@ -27,7 +29,6 @@ typedef enum {
 } mode_t;
 
 // Only the leaf nodes are actually regions where text is drawn.
-typedef struct panel_t panel_t;
 struct panel_t {
     panel_t *Parent;
     split_mode_t Split; 

@@ -70,7 +70,7 @@ load_file(char *Path) {
 
 void
 k_init(platform_shared_t *Shared) {
-    Ctx.Font = load_ttf("fonts/consola.ttf", 15);
+    Ctx.Font = load_ttf("fonts/consola.ttf", 14);
     load_file("test.c");
     //load_file("../test/test.txt");
     
@@ -182,7 +182,6 @@ do_operation(operation_t Op) {
         } break;
     }
     
-    make_lines(Ctx.PanelCtx.Selected->Buffer);
     return WasHandled;
 }
 
@@ -217,7 +216,6 @@ find_mapping_match(key_mapping_t *Mappings, s64 MappingCount, input_event_t *e) 
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
-    // TODO: Configurable keybindings
     for(s32 EventIndex = 0; EventIndex < Events->Count; ++EventIndex) {
         input_event_t *e = &Events->Events[EventIndex];
         if(e->Device == INPUT_DEVICE_Keyboard) {
@@ -265,12 +263,6 @@ k_do_editor(platform_shared_t *Shared) {
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
-    
-    if(!Ctx.PanelCtx.Root) {
-        irect_t Rect = {0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
-        iv2_t p = center_text_in_rect(&Ctx.Font, Rect, (u8 *)"Hello there.", 0);
-        draw_text_line(Shared->Framebuffer, &Ctx.Font, p.x, p.y, 0xffffffff, (u8 *)"Hello there.", 0);
-    }
     
     draw_panels(Shared->Framebuffer, &Ctx.Font);
     

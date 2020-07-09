@@ -146,7 +146,6 @@ move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor
             if(Li >= sb_count(Buf->Lines)) { break; }
             Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], Selection->Column);
         } break;
-        
     }
     
     Selection->Column = global_offset_to_column(Buf, Selection->Cursor);
@@ -229,6 +228,7 @@ move_all_selections_in_panel(panel_t *Panel, dir_t Dir) {
     for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
         move_selection(Panel->Buffer, &Panel->Selections[i], Dir, true);
     }
+    
     merge_overlapping_selections(Panel);
 }
 
