@@ -108,67 +108,34 @@ panel_move_selection(panel_ctx_t *PanelCtx, dir_t Dir) {
         return;
     }
     
-    if(Dir == LEFT || Dir == RIGHT) {
-        s32 Idx = 0;
-        panel_t *p = Panel;
-        b32 Found = false;
-        while(p != PanelCtx->Root) {
-            u8 n = (Dir == LEFT) ? 1 : 0;
-            Idx = panel_child_index(p);
-            if(Idx == n && p->Parent->Split == SPLIT_Vertical) {
-                p = p->Parent->Children[n ^ 1];
-                p->Parent->LastSelected = n ^ 1;
-                Found = true;
-                break;
-            }
-            p = p->Parent;
+    s32 Idx = 0;
+    panel_t *p = Panel;
+    b32 Found = false;
+    split_mode_t SplitMode = (Dir == LEFT || Dir == RIGHT) ? SPLIT_Vertical : SPLIT_Horizontal;
+    while(p != PanelCtx->Root) {
+        u8 n = (Dir == LEFT || Dir == UP) ? 1 : 0;
+        Idx = panel_child_index(p);
+        if(Idx == n && p->Parent->Split == SplitMode) {
+            p = p->Parent->Children[n ^ 1];
+            p->Parent->LastSelected = n ^ 1;
+            Found = true;
+            break;
+        }
+        p = p->Parent;
+    }
+    
+    if(Found) {
+        while(!p->Buffer) {
+            p = p->Children[p->LastSelected];
         }
         
-        if(Found) {
-            while(!p->Buffer) {
-                p = p->Children[p->LastSelected];
-            }
-            
-            panel_t *Par = p->Parent;
-            // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
-            if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
-                PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
-            } else {
-                PanelCtx->Selected = p;
-                p->Parent->LastSelected = (u8)panel_child_index(p);
-            }
+        panel_t *Par = p->Parent;
+        // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
+        if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
+            PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
+        } else {
+            PanelCtx->Selected = p;
+            p->Parent->LastSelected = (u8)panel_child_index(p);
         }
-        
-    } else if(Dir == UP || Dir == DOWN) {
-        s32 Idx = 0;
-        panel_t *p = Panel;
-        b32 Found = false;
-        while(p != PanelCtx->Root) {
-            u8 n = (Dir == UP) ? 1 : 0;
-            Idx = panel_child_index(p);
-            if(Idx == n && p->Parent->Split == SPLIT_Horizontal) {
-                p = p->Parent->Children[n ^ 1];
-                p->Parent->LastSelected = n ^ 1;
-                Found = true;
-                break;
-            }
-            p = p->Parent;
-        }
-        
-        if(Found) {
-            while(!p->Buffer) {
-                p = p->Children[p->LastSelected];
-            }
-            
-            panel_t *Par = p->Parent;
-            // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
-            if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
-                PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
-            } else {
-                PanelCtx->Selected = p;
-                p->Parent->LastSelected = (u8)panel_child_index(p);
-            }
-        }
-        
     }
 }
