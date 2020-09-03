@@ -6,13 +6,15 @@ call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" x64 
 
 REM  ------------- WARNINGS -------------
 REM Enable
+REM /we4013 treat undefined symbol as error instead of assume extern returning int
 
 REM Disable
 REM /wd4100 unreferenced formal parameter
 REM /wd4189 local variable is initalized but not referenced
 REM /wd4201 nonstandard extension used: nameless struct/union
 REM /wd4204 nonstandard extension used: non-constant aggregate initializer
-set Warnings=/wd4100 /wd4189 /wd4201 /wd4204
+
+set Warnings=/we4013 /wd4100 /wd4189 /wd4201 /wd4204 
 REM  ------------------------------------
 
 REM -Zi Generate complete debug information

@@ -89,6 +89,25 @@ draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 L
 }
 
 void
+draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion, u32 Color) {
+    s64 LineIndex = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+    s32 LineHeight = line_height(Font);
+    
+    s32 Width = Font->MWidth;
+    if(Selection->Cursor < Panel->Buffer->Text.Used) {
+        u8 *InBuf = Panel->Buffer->Text.Data + Selection->Cursor;
+        Width = text_width(Font, InBuf, InBuf + utf8_char_width(InBuf));
+    }
+    line_t *Line = Panel->Buffer->Lines + LineIndex;
+    u8 *LineInBuffOff = Panel->Buffer->Text.Data + Line->Offset;
+    s32 x = text_width(Font, LineInBuffOff, Panel->Buffer->Text.Data + Selection->Cursor);
+    
+    irect_t Cursor = {.x = TextRegion.x + x, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
+    
+    draw_rect(Fb, Cursor, Color);
+}
+
+void
 draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion) {
     buffer_t *Buf = Panel->Buffer;
     
@@ -114,7 +133,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
         // this we check if the cursor is past the end of the line and we're on the last line and then increase the size my the width of 'M'.
         if(i == (sb_count(Buf->Lines) - 1) && End > Line->Offset + Line->Size) {
             Width += Font->MWidth;
-        }
+        } 
         
         irect_t LineRect = {TextRegion.x + text_width(Font, Buf->Text.Data + Line->Offset, SelectionStartOnCurrentLine), y - Panel->ScrollY, Width, LineHeight};
         draw_rect(Fb, LineRect, COLOR_SELECTION);
@@ -124,7 +143,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
 #include <stdio.h> // TODO: Remove
 
 void
-panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
+draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
         irect_t TextRegion = text_buffer_rect(Panel, Font, PanelRect);
         
@@ -134,10 +153,19 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
         if(Buf) {
             s32 LineHeight = line_height(Font);
             
-            // TODO: Draw selections
             for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
                 selection_t *s = &Panel->Selections[i];
                 draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
+                draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == Panel->SelectionIdxTop - 1) ? COLOR_MAIN_CURSOR : COLOR_CURSOR);
+            }
+            
+            {
+                selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+                for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                    selection_t *s = &SelGrp->Selections[i];
+                    draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
+                    draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
+                }
             }
             
             // Draw lines
@@ -158,16 +186,19 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             
 #if 0            
             {
+                selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
                 s32 x = 400; 
                 s32 y = 100;
-                for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                char Debug[1024];
+                sprintf(Debug, "SelectionTopIdx: %llu", SelGrp->SelectionIdxTop);
+                draw_text_line(Fb, &Ctx.Font, x, y - 10, 0xffffffff, (u8*)Debug, 0);
+                for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                     s32 LineY = y + (s32)i * LineHeight;
                     s32 Center = LineY + (LineHeight >> 1);
                     s32 Baseline = Center + (Font->MHeight >> 1);
-                    char Debug[1024];
                     char *c = Debug;
-                    selection_t *s = &Panel->Selections[i];
-                    c += sprintf(c, "[%lld]: Anchor %lld, Cursor %lld, Column %lld", s->Idx, s->Anchor, s->Cursor, s->Column);
+                    selection_t *s = &SelGrp->Selections[i];
+                    c += sprintf(c, "Idx: %lld, Anchor %lld, Cursor %lld, ColumnIs %lld, ColumnWas %lld", s->Idx, s->Anchor, s->Cursor, s->ColumnIs, s->ColumnWas);
                     draw_rect(Fb, (irect_t){x, LineY, text_width(&Ctx.Font, (u8*)Debug, 0), LineHeight}, 0xff000000);
                     draw_text_line(Fb, &Ctx.Font, x, Baseline, 0xffffffff, (u8*)Debug, 0);
                 }
@@ -212,8 +243,8 @@ panel_draw(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     } else {
         irect_t r0, r1;
         split_panel_rect(Panel, PanelRect, &r0, &r1);
-        panel_draw(Fb, Panel->Children[0], Font, r0);
-        panel_draw(Fb, Panel->Children[1], Font, r1);
+        draw_panel(Fb, Panel->Children[0], Font, r0);
+        draw_panel(Fb, Panel->Children[1], Font, r1);
     }
 }
 
@@ -227,6 +258,6 @@ void
 draw_panels(framebuffer_t *Fb, font_t *Font) {
     if(Ctx.PanelCtx.Root) {
         irect_t Rect = workspace_rect(Fb);
-        panel_draw(Fb, Ctx.PanelCtx.Root, Font, Rect);
+        draw_panel(Fb, Ctx.PanelCtx.Root, Font, Rect);
     }
 }

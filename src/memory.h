@@ -103,14 +103,12 @@ mem_buf_insert(mem_buffer_t *Buffer, s64 Offset, s64 Size, u8 *Data) {
 }
 
 inline void
-mem_buf_delete_range(mem_buffer_t *Buffer, s64 Start, s64 End) {
-    if(End <= Start) { return; }
-    End = MIN(Buffer->Used, End);
-    s64 Size = End - Start;
-    for(s64 i = 0; i < (Buffer->Used - End); ++i) {
-        Buffer->Data[Start + i] = Buffer->Data[End + i];
+mem_buf_delete(mem_buffer_t *Buffer, u64 Start, u64 Size) {
+    Size = MIN(Buffer->Used - Start, Size);
+    u64 End = Start + Size;
+    for(u64 i = 0; i < (Buffer->Used - End); ++i) {
+        Buffer->Data[Start + i] = Buffer->Data[Start + Size + i];
     }
-    
     Buffer->Used -= Size;
 }
 

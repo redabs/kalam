@@ -2,7 +2,7 @@
 panel_t *
 panel_alloc(panel_ctx_t *PanelCtx) {
     if(PanelCtx->FreeList) {
-        panel_t *Result = &PanelCtx->FreeList->Panel;
+        panel_t *Result = PanelCtx->FreeList;
         PanelCtx->FreeList = PanelCtx->FreeList->Next;
         mem_zero_struct(Result);
         return Result;
@@ -13,9 +13,48 @@ panel_alloc(panel_ctx_t *PanelCtx) {
 void
 panel_free(panel_ctx_t *PanelCtx, panel_t *Panel) {
     if(!Panel) { return; }
-    panel_free_node_t *n = (panel_free_node_t *)Panel;
-    n->Next = PanelCtx->FreeList;
-    PanelCtx->FreeList = n;
+    Panel->Next = PanelCtx->FreeList;
+    PanelCtx->FreeList = Panel;
+}
+
+void
+panel_unlink_leaf_node(panel_ctx_t *PanelCtx, panel_t *Panel) {
+    if(PanelCtx->LeafNodeRoot == Panel) { 
+        PanelCtx->LeafNodeRoot = Panel->Next;
+    }
+    
+    if(Panel->Prev) {
+        Panel->Prev->Next = Panel->Next;
+    }
+    if(Panel->Next) {
+        Panel->Next->Prev = Panel->Prev;
+    }
+    Panel->Next = Panel->Prev = 0;
+}
+
+void
+panel_insert_leaf_node(panel_ctx_t *PanelCtx, panel_t *Panel) {
+    Panel->Prev = 0;
+    Panel->Next = PanelCtx->LeafNodeRoot;
+    PanelCtx->LeafNodeRoot = Panel;
+    if(Panel->Next) {
+        Panel->Next->Prev = Panel;
+    }
+}
+
+selection_group_t *
+add_selection_group(buffer_t *Buf, panel_t *Owner) {
+    selection_group_t *SelGrp = sb_add(Buf->SelectionGroups, 1);
+    mem_zero_struct(SelGrp);
+    SelGrp->Owner = Owner;
+    
+    return SelGrp;
+}
+
+u8
+panel_child_index(panel_t *Panel) {
+    u8 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
+    return i;
 }
 
 void
@@ -26,78 +65,105 @@ panel_create(panel_ctx_t *PanelCtx) {
     }
     
     if(!PanelCtx->Root) {
-        PanelCtx->Root = panel_alloc(PanelCtx);
-        PanelCtx->Root->Buffer = &Ctx.Buffers[0];
-        PanelCtx->Selected = PanelCtx->Root;
+        panel_t *p = panel_alloc(PanelCtx);;
+        p->Buffer = &Ctx.Buffers[0];
+        add_selection(p);
         
-        add_selection(PanelCtx->Root);
+        selection_group_t *SelGrp = add_selection_group(p->Buffer, p);
+        sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
+        
+        PanelCtx->Root = p;
+        PanelCtx->Selected = p;
+        
+        panel_insert_leaf_node(PanelCtx, p);
+        
     } else {
-        panel_t *Parent = PanelCtx->Selected;
-        panel_t *Left = panel_alloc(PanelCtx);
-        panel_t *Right = panel_alloc(PanelCtx);
+        // We allocate a new sibling and a parent. The selected node, the one which is split, becomes the second sibling of the new parent.
+        panel_t *Parent = panel_alloc(PanelCtx);
+        panel_t *Sibling = panel_alloc(PanelCtx);
+        panel_t *Selected = PanelCtx->Selected;
         
-        if(!Right || !Left) { 
-            panel_free(PanelCtx, Left); 
-            panel_free(PanelCtx, Right); 
+        if(!Sibling || !Parent) { 
+            panel_free(PanelCtx, Parent); 
+            panel_free(PanelCtx, Sibling); 
             return;
         }
         
-        *Left = *Parent;
-        Parent->Children[0] = Left;
-        Parent->Children[1] = Right;
-        Left->Parent = Right->Parent = Parent;
+        if(PanelCtx->Root == Selected) {
+            PanelCtx->Root = Parent;
+        }
         
-        Right->Split = Left->Split;
-        Right->Buffer = Left->Buffer,
-        Right->Mode = MODE_Normal;
-        add_selection(Right);
+        Parent->Split = Selected->Split;
+        Parent->Children[0] = Selected;
+        Parent->Children[1] = Sibling;
         
-        Parent->Buffer = 0;
+        if(Selected->Parent) {
+            Selected->Parent->Children[panel_child_index(Selected)] = Parent;
+            Parent->Parent = Selected->Parent;
+        }
         
-        PanelCtx->Selected = Right;
-        Right->Parent->LastSelected = 1;
+        Selected->Parent = Sibling->Parent = Parent;
+        
+        Sibling->Split = Selected->Split;
+        Sibling->Buffer = Selected->Buffer,
+        Sibling->Mode = MODE_Normal;
+        Sibling->ScrollX = Selected->ScrollX;
+        Sibling->ScrollY = Selected->ScrollY;
+        add_selection(Sibling);
+        
+        {
+            selection_group_t *SelGrp = add_selection_group(Sibling->Buffer, Sibling);
+            sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
+        }
+        
+        panel_insert_leaf_node(PanelCtx, Sibling);
+        
+        PanelCtx->Selected = Sibling;
+        Sibling->Parent->LastSelected = panel_child_index(Sibling);
     }
-}
-
-s32
-panel_child_index(panel_t *Panel) {
-    s32 i = (Panel->Parent->Children[0] == Panel) ? 0 : 1; 
-    return i;
 }
 
 void
 panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
-    if(!PanelCtx->Root->Children[0] && !PanelCtx->Root->Children[1]) { return; }
+    // Don't kill the root panel or any non-leaf node panel.
+    if(Panel == PanelCtx->Root || Panel->Children[0] != 0 || Panel->Children[1] != 0) {
+        return;
+    }
     
-    if(Panel->Parent) {
-        s32 Idx = panel_child_index(Panel);
-        panel_t *Sibling = Panel->Parent->Children[Idx ^ 1];
-        
-        // Copy sibling to parent as panels are leaf nodes so parent can't have only one valid child.
-        Sibling->Parent = Panel->Parent->Parent;
-        if(Sibling->Children[0]) {
-            Sibling->Children[0]->Parent = Panel->Parent;
-        }
-        if(Sibling->Children[1]) {
-            Sibling->Children[1]->Parent = Panel->Parent;
-        }
-        
-        *Panel->Parent = *Sibling;
-        
-        panel_t *p = Panel->Parent;
+    panel_t *Parent = Panel->Parent;
+    panel_t *Sibling = Parent->Children[panel_child_index(Panel) ^ 1];
+    
+    // Replace Panel->Parent with Panel's sibling.
+    if(Parent->Parent) {
+        Parent->Parent->Children[panel_child_index(Parent)] = Sibling;
+    } 
+    
+    if(Panel->Parent == PanelCtx->Root) {
+        PanelCtx->Root = Sibling;
+        Sibling->Parent = 0;
+    } else {
+        Sibling->Parent = Parent->Parent;
+    }
+    
+    // The panel selection is now transferred over to either the sibling, if it is a leaf node (Sibling->Buffer != 0), or one of its descendants.
+    // We decide which one of the decendants to transfer selection to by traversing the tree downwards following the node which was last selected.
+    if(Sibling->Buffer) {
+        PanelCtx->Selected = Sibling;
+    } else {
+        panel_t *p = Sibling;
         while(!p->Buffer) {
             p = p->Children[p->LastSelected];
         }
         PanelCtx->Selected = p;
-        
-        panel_free(PanelCtx, Sibling);
-        panel_free(PanelCtx, Panel);
-        sb_free(Panel->Selections);
-    } else {
-        PanelCtx->Selected = Panel->Parent;
-        panel_free(PanelCtx, Panel);
-        PanelCtx->Root = 0;
     }
+    
+    panel_unlink_leaf_node(PanelCtx, Panel);
+    
+    // TODO: Delete all selection groups owned by Panel.
+    
+    panel_free(PanelCtx, Panel);
+    panel_free(PanelCtx, Parent);
+    
 }
 
 void
@@ -112,8 +178,8 @@ panel_move_selection(panel_ctx_t *PanelCtx, dir_t Dir) {
     panel_t *p = Panel;
     b32 Found = false;
     split_mode_t SplitMode = (Dir == LEFT || Dir == RIGHT) ? SPLIT_Vertical : SPLIT_Horizontal;
+    u8 n = (Dir == LEFT || Dir == UP) ? 1 : 0;
     while(p != PanelCtx->Root) {
-        u8 n = (Dir == LEFT || Dir == UP) ? 1 : 0;
         Idx = panel_child_index(p);
         if(Idx == n && p->Parent->Split == SplitMode) {
             p = p->Parent->Children[n ^ 1];

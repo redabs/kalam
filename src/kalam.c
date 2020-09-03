@@ -7,8 +7,6 @@
 #include "types.h"
 #include "event.h"
 #include "platform.h"
-#include "selection.h"
-#include "panel.h"
 
 #include "custom.h"
 
@@ -50,6 +48,7 @@ load_ttf(char *Path, f32 Size) {
 
 void
 load_file(char *Path) {
+    // TODO: Detect file encoding, we assume utf-8 for now
     buffer_t *Buf = sb_add(Ctx.Buffers, 1);
     mem_zero_struct(Buf);
     platform_file_data_t File;
@@ -64,7 +63,6 @@ load_file(char *Path) {
     
     platform_free_file(&File);
     
-    // TODO: Detect file encoding, we assume utf-8 for now
     make_lines(Buf);
 }
 
@@ -90,40 +88,143 @@ do_operation(operation_t Op) {
     
     switch(Op.Type) {
         // Normal
+        case OP_Normal_Home: {
+            {
+                panel_t *Panel = Ctx.PanelCtx.Selected;
+                for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                    selection_t *Selection = &Panel->Selections[i];
+                    s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                    line_t *Line = &Panel->Buffer->Lines[Li];
+                    Selection->Anchor = Selection->Cursor;
+                    Selection->Cursor = Line->Offset;
+                    Selection->ColumnIs = Selection->ColumnWas = 0;
+                }
+                merge_overlapping_selections(Panel);
+            }
+            
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                selection_t *s = &SelGrp->Selections[i];
+                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
+                s->Anchor = s->Cursor;
+                s->Cursor = Line->Offset;
+                s->ColumnIs = s->ColumnWas = 0;
+            }
+            merge_overlapping_selections_(Panel);
+        } break;
+        
+        case OP_Normal_End: {
+            {
+                panel_t *Panel = Ctx.PanelCtx.Selected;
+                for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                    selection_t *Selection = &Panel->Selections[i];
+                    s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                    line_t *Line = &Panel->Buffer->Lines[Li];
+                    Selection->Anchor = Selection->Cursor;
+                    Selection->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
+                    Selection->ColumnWas = Selection->ColumnIs = Line->Length;
+                }
+                merge_overlapping_selections(Panel);
+            }
+            
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                selection_t *s = &SelGrp->Selections[i];
+                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
+                s->Anchor = s->Cursor;
+                s->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
+                s->ColumnWas = s->ColumnIs = Line->Length;
+            }
+            merge_overlapping_selections_(Panel);
+        } break;
+        
         case OP_EnterInsertMode: {
             Ctx.PanelCtx.Selected->Mode = MODE_Insert;
         } break;
         
         case OP_DeleteSelection: {
-            delete_selection(Ctx.PanelCtx.Selected);
+            delete_selection_(Ctx.PanelCtx.Selected);
         } break;
         
         case OP_ExtendSelection: {
-            extend_selection(Ctx.PanelCtx.Selected, Op.ExtendSelection.Dir);
+            extend_selection_(Ctx.PanelCtx.Selected, Op.ExtendSelection.Dir);
         } break;
         
         case OP_DropSelectionAndMove: {
             panel_t *Panel = Ctx.PanelCtx.Selected;
             
-            selection_t Sel = get_selection_max_idx(Panel);
-            Sel.Idx = Panel->SelectionIdxTop++;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            selection_t Sel = get_selection_max_idx_(Panel);
+            Sel.Idx = SelGrp->SelectionIdxTop++;
             move_selection(Panel->Buffer, &Sel, Op.DropSelectionAndMove.Dir, true);
-            push_selection(Panel, Sel);
+            sb_push(SelGrp->Selections, Sel);
             
-            merge_overlapping_selections(Panel);
+            merge_overlapping_selections_(Panel);
         } break;
         
         case OP_ClearSelections: {
-            clear_selections(Ctx.PanelCtx.Selected);
+            clear_selections_(Ctx.PanelCtx.Selected);
         } break;
         
         // Insert
+        case OP_Insert_Home: {
+            {
+                panel_t *Panel = Ctx.PanelCtx.Selected;
+                for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                    selection_t *Selection = &Panel->Selections[i];
+                    s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                    line_t *Line = &Panel->Buffer->Lines[Li];
+                    Selection->Cursor = Line->Offset;
+                    Selection->Anchor = Selection->Cursor;
+                    Selection->ColumnIs = Selection->ColumnWas = 0;
+                }
+                merge_overlapping_selections(Panel);
+            }
+            
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                selection_t *s = &SelGrp->Selections[i];
+                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
+                s->Cursor = s->Anchor = Line->Offset;
+                s->ColumnWas = s->ColumnIs = 0;
+            }
+            merge_overlapping_selections_(Panel);
+        } break;
+        
+        case OP_Insert_End: {
+            {
+                panel_t *Panel = Ctx.PanelCtx.Selected;
+                for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
+                    selection_t *Selection = &Panel->Selections[i];
+                    s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
+                    line_t *Line = &Panel->Buffer->Lines[Li];
+                    Selection->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
+                    Selection->Anchor = Selection->Cursor;
+                    Selection->ColumnWas = Selection->ColumnIs = Line->Length;
+                }
+                merge_overlapping_selections(Panel);
+            }
+            
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                selection_t *s = &SelGrp->Selections[i];
+                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
+                s->Cursor = s->Anchor = Line->Offset + Line->Size - Line->NewlineSize;
+                s->ColumnWas = s->ColumnIs = Line->Length;
+            }
+            merge_overlapping_selections_(Panel);
+        } break;
+        
         case OP_EscapeToNormal: {
             Ctx.PanelCtx.Selected->Mode = MODE_Normal;
         } break;
         
         case OP_Delete: {
-            do_delete(Ctx.PanelCtx.Selected);
+            do_delete_(Ctx.PanelCtx.Selected);
         } break;
         
         case OP_DoChar: {
@@ -131,32 +232,6 @@ do_operation(operation_t Op) {
         } break;
         
         // Global
-        case OP_Home: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
-                selection_t *Selection = &Panel->Selections[i];
-                s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
-                line_t *Line = &Panel->Buffer->Lines[Li];
-                Selection->Anchor = Selection->Cursor;
-                Selection->Cursor = Line->Offset;
-                Selection->Column = 0;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_End: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
-            for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
-                selection_t *Selection = &Panel->Selections[i];
-                s64 Li = offset_to_line_index(Panel->Buffer, Selection->Cursor);
-                line_t *Line = &Panel->Buffer->Lines[Li];
-                Selection->Anchor = Selection->Cursor;
-                Selection->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
-                Selection->Column = Line->Length;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
         case OP_ToggleSplitMode: {
             Ctx.PanelCtx.Selected->Split ^= 1;
         } break;
@@ -174,7 +249,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_MoveSelection: {
-            move_all_selections_in_panel(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
+            move_all_selections_in_panel_(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
         } break;
         
         default: {
@@ -255,10 +330,8 @@ k_do_editor(platform_shared_t *Shared) {
                         do_operation(m->Operation);
                     }
                 }
-                
             }
         }
-        
     } Events->Count = 0;
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);

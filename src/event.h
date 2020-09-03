@@ -123,7 +123,7 @@ typedef struct {
         
         struct {
             iv2_t Position;
-            s32 Delta; // TODO(Redab): Canonicalize scroll values across platforms.
+            s32 Delta;
         } Scroll;
     };
 } input_event_t;

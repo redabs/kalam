@@ -3,6 +3,79 @@
 
 #define TAB_WIDTH 4 
 
+typedef struct panel_t panel_t;
+
+typedef struct {
+    s64 Offset;
+    s64 Size; // size in bytes of entire line counting newline character
+    s64 Length; // characters, does not count newline character
+    u8 NewlineSize; // The size of the terminator, e.g. 1 for \n, 2 for \r\n and 0 when line is not newline terminated (it's the last line)
+} line_t;
+
+typedef struct {
+    s64 Anchor;
+    s64 Cursor;
+    s64 ColumnWas; // 0 based
+    s64 ColumnIs; // 0 based
+    u64 Idx; // Unique over selections. The selection with the greatest Idx is the one that was created last.
+} selection_t;
+
+typedef enum {
+    BUFFER_TYPE_Internal, // scratch, messages, debug log and other non file-backed buffers.
+    BUFFER_TYPE_File,
+} buffer_type_t;
+
+typedef struct selection_group_t selection_group_t;
+struct selection_group_t {
+    panel_t *Owner;
+    selection_t *Selections; // stb
+    u64 SelectionIdxTop;
+};
+
+typedef struct {
+    buffer_type_t Type;
+    mem_buffer_t Text;
+    line_t *Lines; // stb
+    selection_group_t *SelectionGroups; // stb
+} buffer_t;
+
+typedef enum {
+    SPLIT_Vertical = 0,
+    SPLIT_Horizontal
+} split_mode_t;
+
+typedef enum {
+    MODE_Normal = 0,
+    MODE_Insert
+} mode_t;
+
+// Only the leaf nodes are actually regions where text is drawn.
+struct panel_t {
+    panel_t *Parent;
+    split_mode_t Split; 
+    buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
+    
+    // Used when leaf node
+    panel_t *Prev, *Next; // leaf node doubly linked list
+    mode_t Mode;
+    selection_t *Selections; // stb
+    u64 SelectionIdxTop;
+    s32 ScrollX, ScrollY;
+    
+    // Used when non-leaf node
+    panel_t *Children[2]; 
+    u8 LastSelected;
+};
+
+#define PANEL_MAX 16
+typedef struct {
+    panel_t *Root; // In the binary tree of panels
+    panel_t *Selected; // The currently selected leaf node that the user has selected
+    panel_t Panels[PANEL_MAX]; // Storage of all panels
+    panel_t *LeafNodeRoot; // Doubly linked list of the leaf nodes
+    panel_t *FreeList;
+} panel_ctx_t; 
+
 typedef struct {
     u8 *Data;
     s32 w;
