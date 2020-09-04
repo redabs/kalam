@@ -153,19 +153,11 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
         if(Buf) {
             s32 LineHeight = line_height(Font);
             
-            for(s64 i = 0; i < sb_count(Panel->Selections); ++i) {
-                selection_t *s = &Panel->Selections[i];
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+                selection_t *s = &SelGrp->Selections[i];
                 draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
-                draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == Panel->SelectionIdxTop - 1) ? COLOR_MAIN_CURSOR : COLOR_CURSOR);
-            }
-            
-            {
-                selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-                for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                    selection_t *s = &SelGrp->Selections[i];
-                    draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
-                    draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
-                }
+                draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
             }
             
             // Draw lines

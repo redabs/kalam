@@ -1,4 +1,3 @@
-
 panel_t *
 panel_alloc(panel_ctx_t *PanelCtx) {
     if(PanelCtx->FreeList) {
@@ -15,31 +14,6 @@ panel_free(panel_ctx_t *PanelCtx, panel_t *Panel) {
     if(!Panel) { return; }
     Panel->Next = PanelCtx->FreeList;
     PanelCtx->FreeList = Panel;
-}
-
-void
-panel_unlink_leaf_node(panel_ctx_t *PanelCtx, panel_t *Panel) {
-    if(PanelCtx->LeafNodeRoot == Panel) { 
-        PanelCtx->LeafNodeRoot = Panel->Next;
-    }
-    
-    if(Panel->Prev) {
-        Panel->Prev->Next = Panel->Next;
-    }
-    if(Panel->Next) {
-        Panel->Next->Prev = Panel->Prev;
-    }
-    Panel->Next = Panel->Prev = 0;
-}
-
-void
-panel_insert_leaf_node(panel_ctx_t *PanelCtx, panel_t *Panel) {
-    Panel->Prev = 0;
-    Panel->Next = PanelCtx->LeafNodeRoot;
-    PanelCtx->LeafNodeRoot = Panel;
-    if(Panel->Next) {
-        Panel->Next->Prev = Panel;
-    }
 }
 
 selection_group_t *
@@ -67,15 +41,12 @@ panel_create(panel_ctx_t *PanelCtx) {
     if(!PanelCtx->Root) {
         panel_t *p = panel_alloc(PanelCtx);;
         p->Buffer = &Ctx.Buffers[0];
-        add_selection(p);
         
         selection_group_t *SelGrp = add_selection_group(p->Buffer, p);
         sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
         
         PanelCtx->Root = p;
         PanelCtx->Selected = p;
-        
-        panel_insert_leaf_node(PanelCtx, p);
         
     } else {
         // We allocate a new sibling and a parent. The selected node, the one which is split, becomes the second sibling of the new parent.
@@ -109,14 +80,9 @@ panel_create(panel_ctx_t *PanelCtx) {
         Sibling->Mode = MODE_Normal;
         Sibling->ScrollX = Selected->ScrollX;
         Sibling->ScrollY = Selected->ScrollY;
-        add_selection(Sibling);
         
-        {
-            selection_group_t *SelGrp = add_selection_group(Sibling->Buffer, Sibling);
-            sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
-        }
-        
-        panel_insert_leaf_node(PanelCtx, Sibling);
+        selection_group_t *SelGrp = add_selection_group(Sibling->Buffer, Sibling);
+        sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
         
         PanelCtx->Selected = Sibling;
         Sibling->Parent->LastSelected = panel_child_index(Sibling);
@@ -157,7 +123,7 @@ panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
         PanelCtx->Selected = p;
     }
     
-    panel_unlink_leaf_node(PanelCtx, Panel);
+    //panel_unlink_leaf_node(PanelCtx, Panel);
     
     // TODO: Delete all selection groups owned by Panel.
     

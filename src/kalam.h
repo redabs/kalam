@@ -51,15 +51,14 @@ typedef enum {
 
 // Only the leaf nodes are actually regions where text is drawn.
 struct panel_t {
+    panel_t *Next; // Next free panel, if the panel is free
+    
     panel_t *Parent;
     split_mode_t Split; 
     buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
     
     // Used when leaf node
-    panel_t *Prev, *Next; // leaf node doubly linked list
     mode_t Mode;
-    selection_t *Selections; // stb
-    u64 SelectionIdxTop;
     s32 ScrollX, ScrollY;
     
     // Used when non-leaf node

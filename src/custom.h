@@ -1,7 +1,7 @@
 #ifndef CUSTOM_H
 #define CUSTOM_H
 
-#define COLOR_BG 0xff262626
+#define COLOR_BG 0xff161616
 #define COLOR_SELECTION 0xff5555aa
 #define COLOR_LINE_HIGHLIGHT 0xff101010
 #define COLOR_TEXT 0xffd1c87e
