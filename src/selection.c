@@ -243,50 +243,18 @@ extend_selection(panel_t *Panel, dir_t Dir) {
     merge_overlapping_selections(Panel);
 }
 
+typedef struct { 
+    s64 Offset;
+    s64 Size;
+} deletion_t;
+
 void
-delete_selection(panel_t *Panel) {
-    typedef struct { 
-        s64 Offset;
-        s64 Size;
-    } deletion_t;
-    
-    deletion_t *Deletions = 0;
-    {
-        buffer_t *Buf = Panel->Buffer;
-        s64 BytesDeleted = 0;
-        selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            Sel->Cursor -= BytesDeleted;
-            Sel->Anchor -= BytesDeleted;
-            
-            
-            s64 Start = selection_start(Sel);
-            s64 End = selection_end(Sel);
-            
-            // This is block cursor specific behavior. We're including the character under cursor in the deletion
-            End += utf8_char_width(Buf->Text.Data + End);
-            mem_buf_delete(&Buf->Text, Start, End - Start);
-            
-            deletion_t d = {.Offset = Start, End - Start};
-            sb_push(Deletions, d);
-            
-            Sel->Cursor = Sel->Anchor = Start;
-            BytesDeleted += (End - Start);
-        }
-        
-        make_lines(Buf);
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-        }
-        merge_overlapping_selections(Panel);
-    }
-    
+update_all_selections_after_deletions(panel_t *Panel, deletion_t *Deletions, u64 DeletionCount) {
     for(s64 SelGrpIndex = 0; SelGrpIndex < sb_count(Panel->Buffer->SelectionGroups); ++SelGrpIndex) {
         selection_group_t *SelGrp = &Panel->Buffer->SelectionGroups[SelGrpIndex];
         if(SelGrp->Owner == Panel) {
-            // We've handled this already
+            // There's nothing to do for the selection group owned by Panel as it is assumed to be the 
+            // panel that owns the selections with which the deletions was done.
             continue;
         } 
         
@@ -294,209 +262,10 @@ delete_selection(panel_t *Panel) {
             selection_t *Sel = &SelGrp->Selections[SelIndex]; 
             for(s64 i = 0; i < sb_count(Deletions); ++i) {
                 if(Sel->Cursor > Deletions[i].Offset) {
-                    Sel->Cursor -= Deletions[i].Size;
-                    Sel->Anchor = Sel->Cursor;
-                    Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-                } else {
-                    break;
-                }
-            } 
-        }
-        merge_overlapping_selections(SelGrp->Owner);
-    }
-    
-    
-    sb_free(Deletions);
-}
-
-void
-do_delete(panel_t *Panel) {
-    typedef struct { 
-        s64 Offset;
-        s64 Size;
-    } deletion_t;
-    
-    deletion_t *Deletions = 0;
-    {
-        s64 BytesDeleted = 0;
-        selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            if(Sel->Cursor < Panel->Buffer->Text.Used) {
-                // Deletions at previous cursor shifts the buffer back so this cursor has to be moved by the number of bytes deleted.
-                Sel->Cursor -= BytesDeleted;
-                
-                // Compute size of character before the cursor.
-                s32 CharacterSize = utf8_char_width(Panel->Buffer->Text.Data + Sel->Cursor);
-                mem_buf_delete(&Panel->Buffer->Text, Sel->Cursor, CharacterSize);
-                
-                deletion_t d = {.Offset = Sel->Cursor, .Size = CharacterSize};
-                sb_push(Deletions, d);
-                
-                BytesDeleted += CharacterSize;
-            }
-        }
-        
-        make_lines(Panel->Buffer);
-        
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-        }
-        
-        merge_overlapping_selections(Panel);
-    }
-    
-    // Update the other selection sets
-    
-    for(s64 SelGrpIndex = 0; SelGrpIndex < sb_count(Panel->Buffer->SelectionGroups); ++SelGrpIndex) {
-        selection_group_t *SelGrp = &Panel->Buffer->SelectionGroups[SelGrpIndex];
-        if(SelGrp->Owner == Panel) {
-            // We've handled this already
-            continue;
-        } 
-        
-        for(s64 SelIndex = 0; SelIndex < sb_count(SelGrp->Selections); ++SelIndex) {
-            selection_t *Sel = &SelGrp->Selections[SelIndex]; 
-            for(s64 i = 0; i < sb_count(Deletions); ++i) {
-                if(Sel->Cursor > Deletions[i].Offset) {
-                    Sel->Cursor -= Deletions[i].Size;
-                    Sel->Anchor = Sel->Cursor;
-                    Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-                } else {
-                    break;
-                }
-            } 
-        }
-        merge_overlapping_selections(SelGrp->Owner);
-    }
-    
-    sb_free(Deletions);
-}
-
-
-void
-insert_char(panel_t *Panel, u8 *Char) {
-    // method 1, separate temp buffer, linear pass fast, gather scatter slow
-    // Gather all selections into same buffer and tag on an owner panel pointer
-    // Sort all owned selections
-    // Write char at each selection owned by Panel and advance following selections accordingly
-    // Scatter selections back into their respective selection groups
-    // Merge overlapping cursors in each selection group indivudually
-    
-    
-    {
-        // method 2, in-place, for every insertion for each selection in every selection group
-        // Write char at each selection in selection set owned by Panel and advance selections accordingly, but also store the step size and at which offset the char was written
-        // For each selection in each selection group, go through each insertion and check if the offset is less than the offset at which the insertion was made then move the selection by the step size, repeat for each insertion for each selection in each selection group
-        
-        s64 *Offsets = 0;
-        u8 n = utf8_char_width(Char);
-        {
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            
-            // The selections are assumed to be in sorted order by cursor
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *Sel = &SelGrp->Selections[i];
-                Sel->Cursor += i * n; // Advances for inserts at previous selections
-                mem_buf_insert(&Panel->Buffer->Text, Sel->Cursor, n, Char);
-                sb_push(Offsets, Sel->Cursor);
-                
-                Sel->Cursor += n; // Advance the cursor past the written character
-                Sel->Anchor = Sel->Cursor;
-            }
-            
-            make_lines(Panel->Buffer);
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *Sel = &SelGrp->Selections[i];
-                Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-            }
-        }
-        {
-            // Now we need to advance every selection in every other selection group using the Offsets buffer
-            for(s64 SelGrpIndex = 0; SelGrpIndex < sb_count(Panel->Buffer->SelectionGroups); ++SelGrpIndex) {
-                selection_group_t *SelGrp = &Panel->Buffer->SelectionGroups[SelGrpIndex];
-                if(SelGrp->Owner == Panel) {
-                    // We've handled this already
-                    continue;
-                } 
-                
-                for(s64 SelIndex = 0; SelIndex < sb_count(SelGrp->Selections); ++SelIndex) {
-                    selection_t *Sel = &SelGrp->Selections[SelIndex]; 
-                    for(s64 OffsetIndex = 0; OffsetIndex < sb_count(Offsets); ++OffsetIndex) {
-                        if(Sel->Cursor > Offsets[OffsetIndex]) {
-                            Sel->Cursor += n;
-                            Sel->Anchor += n;
-                            Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-                        } else {
-                            break;
-                        }
-                    } 
-                }
-            }
-        }
-        sb_free(Offsets);
-    }
-}
-
-void
-do_backspace(panel_t *Panel) {
-    // The process is the same as inserting characters. For each cursor in the selection group owned by panel, delete a character backwards and save the offset in a temp buffer.
-    // Adjusting all the other selection groups accordingly and remember to merge overlapping cursor and make_lines before setting the columns
-    
-    
-    typedef struct { 
-        s64 Offset;
-        s64 Size;
-    } deletion_t;
-    
-    deletion_t *Deletions = 0;
-    {
-        s64 BytesDeleted = 0;
-        selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            if(Sel->Cursor > 0) {
-                // Deletions at previous cursor shifts the buffer back so this cursor has to be moved by the number of bytes deleted.
-                Sel->Cursor -= BytesDeleted;
-                
-                // Compute size of character before the cursor.
-                s32 CharacterSize = 1;
-                for(u8 *c = Panel->Buffer->Text.Data + Sel->Cursor; (*(--c) & 0xc0) == 0x80; ++CharacterSize);
-                
-                Sel->Cursor -= CharacterSize;
-                Sel->Anchor = Sel->Cursor;
-                mem_buf_delete(&Panel->Buffer->Text, Sel->Cursor, CharacterSize);
-                
-                deletion_t d = {.Offset = Sel->Cursor, .Size = CharacterSize};
-                sb_push(Deletions, d);
-                
-                BytesDeleted += CharacterSize;
-            }
-        }
-        
-        make_lines(Panel->Buffer);
-        
-        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-            selection_t *Sel = &SelGrp->Selections[i];
-            Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-        }
-    }
-    
-    // Update the other selection sets
-    
-    for(s64 SelGrpIndex = 0; SelGrpIndex < sb_count(Panel->Buffer->SelectionGroups); ++SelGrpIndex) {
-        selection_group_t *SelGrp = &Panel->Buffer->SelectionGroups[SelGrpIndex];
-        if(SelGrp->Owner == Panel) {
-            // We've handled this already
-            continue;
-        } 
-        
-        for(s64 SelIndex = 0; SelIndex < sb_count(SelGrp->Selections); ++SelIndex) {
-            selection_t *Sel = &SelGrp->Selections[SelIndex]; 
-            for(s64 i = 0; i < sb_count(Deletions); ++i) {
-                if(Sel->Cursor > Deletions[i].Offset) {
-                    Sel->Cursor -= Deletions[i].Size;
+                    // A deletion might start before a cursor but end after it. So decrease the cursor at most by
+                    // the distance from the start of the deletion to the cursor.
+                    s64 d = Sel->Cursor - Deletions[i].Offset;
+                    Sel->Cursor -= MIN(d, Deletions[i].Size);
                     Sel->Anchor = Sel->Cursor;
                     Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
                 } else {
@@ -504,8 +273,184 @@ do_backspace(panel_t *Panel) {
                 }
             } 
         }
+        merge_overlapping_selections(SelGrp->Owner);
+    }
+}
+
+typedef struct {
+    s64 Offset; 
+    s64 Size;
+} insertion_t;
+
+void
+update_all_selections_after_insertions(panel_t *Panel, insertion_t *Insertions, u64 InsertionCount) {
+    for(s64 SelGrpIndex = 0; SelGrpIndex < sb_count(Panel->Buffer->SelectionGroups); ++SelGrpIndex) {
+        selection_group_t *SelGrp = &Panel->Buffer->SelectionGroups[SelGrpIndex];
+        if(SelGrp->Owner == Panel) {
+            // There's nothing to do for the selection group owned by Panel as it is assumed to be the 
+            // panel that owns the selections with which the insertions was done.
+            continue;
+        } 
+        
+        for(s64 SelIndex = 0; SelIndex < sb_count(SelGrp->Selections); ++SelIndex) {
+            selection_t *Sel = &SelGrp->Selections[SelIndex]; 
+            for(s64 i = 0; i < sb_count(Insertions); ++i) {
+                if(Sel->Cursor > Insertions[i].Offset) {
+                    Sel->Cursor += Insertions[i].Size;
+                    Sel->Anchor += Insertions[i].Size;
+                    Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+                } else {
+                    break;
+                }
+            } 
+        }
+        merge_overlapping_selections(SelGrp->Owner);
+    }
+}
+
+void
+delete_selection(panel_t *Panel) {
+    deletion_t *Deletions = 0;
+    
+    buffer_t *Buf = Panel->Buffer;
+    s64 BytesDeleted = 0;
+    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->Cursor -= BytesDeleted;
+        Sel->Anchor -= BytesDeleted;
+        
+        
+        s64 Start = selection_start(Sel);
+        s64 End = selection_end(Sel);
+        
+        // This is block cursor specific behavior. We're including the character under cursor in the deletion
+        End += utf8_char_width(Buf->Text.Data + End);
+        mem_buf_delete(&Buf->Text, Start, End - Start);
+        
+        deletion_t d = {.Offset = Start, End - Start};
+        sb_push(Deletions, d);
+        
+        Sel->Cursor = Sel->Anchor = Start;
+        BytesDeleted += (End - Start);
     }
     
+    make_lines(Buf);
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    merge_overlapping_selections(Panel);
+    
+    update_all_selections_after_deletions(Panel, Deletions, sb_count(Deletions));
+    sb_free(Deletions);
+}
+
+// If non-block cursors are ever supported then do_delete might be needed, until then delete_selection should behave the save
+// for single character selection with a block cursor.
+#if 0
+void
+do_delete(panel_t *Panel) {
+    deletion_t *Deletions = 0;
+    
+    s64 BytesDeleted = 0;
+    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        if(Sel->Cursor < Panel->Buffer->Text.Used) {
+            // Deletions at previous cursor shifts the buffer back so this cursor has to be moved by the number of bytes deleted.
+            Sel->Cursor -= BytesDeleted;
+            
+            // Compute size of character before the cursor.
+            s32 CharacterSize = utf8_char_width(Panel->Buffer->Text.Data + Sel->Cursor);
+            mem_buf_delete(&Panel->Buffer->Text, Sel->Cursor, CharacterSize);
+            
+            deletion_t d = {.Offset = Sel->Cursor, .Size = CharacterSize};
+            sb_push(Deletions, d);
+            
+            BytesDeleted += CharacterSize;
+        }
+    }
+    
+    make_lines(Panel->Buffer);
+    
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    
+    merge_overlapping_selections(Panel);
+    
+    update_all_selections_after_deletions(Panel, Deletions, sb_count(Deletions));
+    sb_free(Deletions);
+}
+#endif
+
+
+void
+insert_char(panel_t *Panel, u8 *Char) {
+    insertion_t *Insertions = 0;
+    u8 n = utf8_char_width(Char);
+    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+    
+    // The selections are assumed to be in sorted order by cursor
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->Cursor += i * n; // Advances for inserts at previous selections
+        mem_buf_insert(&Panel->Buffer->Text, Sel->Cursor, n, Char);
+        
+        insertion_t Insertion = {.Size = n, .Offset = Sel->Cursor};
+        sb_push(Insertions, Insertion);
+        
+        Sel->Cursor += n; // Advance the cursor past the written character
+        Sel->Anchor = Sel->Cursor;
+    }
+    
+    make_lines(Panel->Buffer);
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    
+    update_all_selections_after_insertions(Panel, Insertions, sb_count(Insertions));
+    sb_free(Insertions);
+}
+
+void
+do_backspace(panel_t *Panel) {
+    deletion_t *Deletions = 0;
+    
+    s64 BytesDeleted = 0;
+    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        if(Sel->Cursor > 0) {
+            // Deletions at previous cursor shifts the buffer back so this cursor has to be moved by the number of bytes deleted.
+            Sel->Cursor -= BytesDeleted;
+            
+            // Compute size of character before the cursor.
+            s32 CharacterSize = 1;
+            for(u8 *c = Panel->Buffer->Text.Data + Sel->Cursor; (*(--c) & 0xc0) == 0x80; ++CharacterSize);
+            
+            Sel->Cursor -= CharacterSize;
+            Sel->Anchor = Sel->Cursor;
+            mem_buf_delete(&Panel->Buffer->Text, Sel->Cursor, CharacterSize);
+            
+            deletion_t d = {.Offset = Sel->Cursor, .Size = CharacterSize};
+            sb_push(Deletions, d);
+            
+            BytesDeleted += CharacterSize;
+        }
+    }
+    
+    make_lines(Panel->Buffer);
+    
+    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+        selection_t *Sel = &SelGrp->Selections[i];
+        Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
+    }
+    
+    update_all_selections_after_deletions(Panel, Deletions, sb_count(Deletions));
     sb_free(Deletions);
 }
 

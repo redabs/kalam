@@ -172,7 +172,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_Delete: {
-            do_delete(Ctx.PanelCtx.Selected);
+            delete_selection(Ctx.PanelCtx.Selected);
         } break;
         
         case OP_DoChar: {

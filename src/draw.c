@@ -102,7 +102,7 @@ draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *F
     u8 *LineInBuffOff = Panel->Buffer->Text.Data + Line->Offset;
     s32 x = text_width(Font, LineInBuffOff, Panel->Buffer->Text.Data + Selection->Cursor);
     
-    irect_t Cursor = {.x = TextRegion.x + x, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
+    irect_t Cursor = {.x = TextRegion.x + x - Panel->ScrollX, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
     
     draw_rect(Fb, Cursor, Color);
 }
@@ -135,7 +135,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
             Width += Font->MWidth;
         } 
         
-        irect_t LineRect = {TextRegion.x + text_width(Font, Buf->Text.Data + Line->Offset, SelectionStartOnCurrentLine), y - Panel->ScrollY, Width, LineHeight};
+        irect_t LineRect = {TextRegion.x + text_width(Font, Buf->Text.Data + Line->Offset, SelectionStartOnCurrentLine) - Panel->ScrollX, y - Panel->ScrollY, Width, LineHeight};
         draw_rect(Fb, LineRect, COLOR_SELECTION);
     }
 }
@@ -152,6 +152,27 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
         buffer_t *Buf = Panel->Buffer;
         if(Buf) {
             s32 LineHeight = line_height(Font);
+            
+            // Compute ScrollX and ScrollY
+            {
+                selection_t Sel = get_selection_max_idx(Panel);
+                s64 Li = offset_to_line_index(Panel->Buffer, Sel.Cursor);
+                s32 OffsetY = (s32) Li * LineHeight;
+                if(OffsetY >= (Panel->ScrollY + TextRegion.h)) {
+                    Panel->ScrollY = OffsetY - TextRegion.h + LineHeight;
+                } else if(OffsetY < Panel->ScrollY) {
+                    Panel->ScrollY = OffsetY;
+                }
+                
+                u8 *Start = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Li].Offset;
+                u8 *End = Panel->Buffer->Text.Data + Sel.Cursor;
+                s32 OffsetX = text_width(&Ctx.Font, Start, End);
+                if(OffsetX >= (TextRegion.w + Panel->ScrollX)) {
+                    Panel->ScrollX = OffsetX - TextRegion.w + Ctx.Font.MWidth;
+                } else if(OffsetX < Panel->ScrollX) {
+                    Panel->ScrollX = OffsetX;
+                }
+            }
             
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
