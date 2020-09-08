@@ -114,7 +114,6 @@ typedef struct {
 
 typedef struct {
     font_t Font;
-    iv2_t p;
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;
 } ctx_t;
