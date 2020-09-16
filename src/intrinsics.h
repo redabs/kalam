@@ -100,4 +100,13 @@ utf8_move_back_one(u8 *Text) {
     return c;
 }
 
+inline u64
+c_str_len(u8 *Str) {
+    u64 l = 0;
+    while(*Str++) {
+        ++l;
+    }
+    return l;
+}
+
 #endif //INTRINSICS_H

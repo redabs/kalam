@@ -8,9 +8,9 @@
 #include "event.h"
 #include "platform.h"
 
+#include "kalam.h"
 #include "custom.h"
 
-#include "kalam.h"
 
 ctx_t Ctx = {0};
 
@@ -87,6 +87,18 @@ do_operation(operation_t Op) {
     b32 WasHandled = true;
     
     switch(Op.Type) {
+        
+        case OP_SetMode: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            switch(Op.SetMode.Mode) {
+                case MODE_Select: {
+                    Panel->ModeCtx.Select.SearchTerm.Used = 0;
+                } break;
+            }
+            
+            Panel->Mode = Op.SetMode.Mode;
+        } break;
+        
         // Normal
         case OP_Normal_Home: {
             panel_t *Panel = Ctx.PanelCtx.Selected;
@@ -225,8 +237,8 @@ event_mapping_match(key_mapping_t *Map, input_event_t *Event) {
 }
 
 key_mapping_t *
-find_mapping_match(key_mapping_t *Mappings, s64 MappingCount, input_event_t *e) {
-    for(s64 i = 0; i < MappingCount; ++i) {
+find_mapping_match(key_mapping_t *Mappings, u64 MappingCount, input_event_t *e) {
+    for(u64 i = 0; i < MappingCount; ++i) {
         key_mapping_t *m = &Mappings[i];
         if(event_mapping_match(m, e)) {
             return m;
@@ -236,6 +248,15 @@ find_mapping_match(key_mapping_t *Mappings, s64 MappingCount, input_event_t *e) 
     return 0;
 }
 
+b32 
+event_is_control_sequence(input_event_t *Event) {
+    if(Event->Device == INPUT_DEVICE_Keyboard && Event->Type == INPUT_EVENT_Text && 
+       (Event->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
+        return false;
+    }
+    return true;
+}
+
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
@@ -243,41 +264,78 @@ k_do_editor(platform_shared_t *Shared) {
         input_event_t *e = &Events->Events[EventIndex];
         if(e->Device == INPUT_DEVICE_Keyboard) {
             if(e->Type == INPUT_EVENT_Press || e->Type == INPUT_EVENT_Text) {
-                b32 EventHandled = false;
                 panel_t *Panel = Ctx.PanelCtx.Selected;
                 if(Panel) {
-                    if(Panel->Mode == MODE_Normal) {
-                        key_mapping_t *m = find_mapping_match(NormalMappings, ARRAY_COUNT(NormalMappings), e);
-                        if(m) {
-                            EventHandled = do_operation(m->Operation);
-                        }
-                    } else if(Panel->Mode == MODE_Insert) {
-                        key_mapping_t *m = find_mapping_match(InsertMappings, ARRAY_COUNT(InsertMappings), e);
-                        if(m) {
-                            EventHandled = do_operation(m->Operation);
-                        } else if(e->Type == INPUT_EVENT_Text) {
-                            // Ignore characters that were sent with the only modifier down being Ctrl (except for Caps Lock and Num Lock).
-                            if((e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
-                                operation_t o = {
-                                    .Type = OP_DoChar, 
-                                    .DoChar.Character[0] = e->Text.Character[0],
-                                    .DoChar.Character[1] = e->Text.Character[1],
-                                    .DoChar.Character[2] = e->Text.Character[2],
-                                    .DoChar.Character[3] = e->Text.Character[3],
-                                };
-                                do_operation(o);
+                    b32 EventHandled = false;
+                    switch(Panel->Mode) {
+                        case MODE_Normal: {
+                            key_mapping_t *m = find_mapping_match(NormalMappings, ARRAY_COUNT(NormalMappings), e);
+                            if(m) {
+                                EventHandled = do_operation(m->Operation);
                             }
-                            EventHandled = true;
-                        }
+                        } break;
+                        
+                        case MODE_Insert: {
+                            key_mapping_t *m = find_mapping_match(InsertMappings, ARRAY_COUNT(InsertMappings), e);
+                            if(m) {
+                                EventHandled = do_operation(m->Operation);
+                            } else if(e->Type == INPUT_EVENT_Text) {
+                                // Ignore characters that were sent with the only modifier down being Ctrl (except for Caps Lock and Num Lock). I.e. ignore control sequences.
+                                //if((e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
+                                if(!event_is_control_sequence(e)) {
+                                    operation_t o = {
+                                        .Type = OP_DoChar, 
+                                        .DoChar.Character[0] = e->Text.Character[0],
+                                        .DoChar.Character[1] = e->Text.Character[1],
+                                        .DoChar.Character[2] = e->Text.Character[2],
+                                        .DoChar.Character[3] = e->Text.Character[3],
+                                    };
+                                    do_operation(o);
+                                }
+                                EventHandled = true;
+                            }
+                        } break;
+                        
+                        case MODE_Select: {
+                            key_mapping_t *m = find_mapping_match(SelectMappings, ARRAY_COUNT(SelectMappings), e);
+                            if(m) {
+                                EventHandled = do_operation(m->Operation);
+                            } else if(e->Type == INPUT_EVENT_Text && !event_is_control_sequence(e)) {
+                                // Append text to search term 
+                                u8 *Char = e->Text.Character;
+                                mem_buffer_t *SearchTerm = &Panel->ModeCtx.Select.SearchTerm;
+                                if(*Char < 0x20) {
+                                    switch(*Char) {
+                                        case '\n':
+                                        case '\r': {
+                                            
+                                        } break;
+                                        
+                                        case '\t': {
+                                            mem_buf_append(SearchTerm, "\t", 1);
+                                        } break;
+                                        
+                                        case '\b': {
+                                            u8 *End = SearchTerm->Data + SearchTerm->Used;
+                                            u8 *Begin = utf8_move_back_one(End);
+                                            mem_buf_pop_size(SearchTerm, (u64)(End - Begin));
+                                        } break;
+                                    }
+                                } else {
+                                    mem_buf_append(SearchTerm, Char, utf8_char_width(Char));
+                                }
+                            }
+                        } break;
+                    }
+                    
+                    if(!EventHandled) {
+                        key_mapping_t *m = find_mapping_match(GlobalMappings, ARRAY_COUNT(GlobalMappings), e);
+                        if(m) {
+                            do_operation(m->Operation);
+                        } 
                     }
                 }
                 
-                if(!EventHandled) {
-                    key_mapping_t *m = find_mapping_match(GlobalMappings, ARRAY_COUNT(GlobalMappings), e);
-                    if(m) {
-                        do_operation(m->Operation);
-                    }
-                }
             }
         }
     } Events->Count = 0;

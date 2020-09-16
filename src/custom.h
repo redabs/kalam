@@ -23,6 +23,10 @@
 #define LINE_NUMBER_PADDING_RIGHT 5
 
 typedef enum {
+    
+    OP_SetMode,
+    
+    // TODO: These operations should not be mode specific. I.e. there should be no OP_Normal_Home, only OP_Normal with key mappings in the individual modes that implement the mode specific behavior.
     // Normal
     OP_Normal_Home,
     OP_Normal_End,
@@ -50,7 +54,6 @@ typedef enum {
 typedef struct {
     operation_type_t Type;
     union {
-        
         struct {
             dir_t Dir;
         } ExtendSelection;
@@ -71,6 +74,9 @@ typedef struct {
             dir_t Dir;
         } DropSelectionAndMove;
         
+        struct {
+            mode_t Mode;
+        } SetMode;
     };
 } operation_t;
 
@@ -89,12 +95,8 @@ typedef struct {
 key_mapping_t NormalMappings[] = {
     { .IsKey = true, .Key = KEY_Home, .Operation.Type = OP_Normal_Home, },
     { .IsKey = true, .Key = KEY_End,  .Operation.Type = OP_Normal_End, },
-    
     { .IsKey = false, .Character[0] = 'i', .Operation.Type = OP_EnterInsertMode, },
-    
     { .IsKey = false, .Character[0] = 'd', .Operation.Type = OP_DeleteSelection, },
-    
-    { .IsKey = true, .Key = KEY_Space, .Operation.Type = OP_ClearSelections, },
     
     { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = LEFT},
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = RIGHT},
@@ -105,19 +107,26 @@ key_mapping_t NormalMappings[] = {
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = RIGHT},
     { .IsKey = true, .Key = KEY_Up,    .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = UP},
     { .IsKey = true, .Key = KEY_Down,  .Modifiers = INPUT_MOD_Alt, .Operation.Type = OP_DropSelectionAndMove, .Operation.DropSelectionAndMove.Dir = DOWN},
+    
+    { .IsKey = true, .Key = KEY_Space, .Operation.Type = OP_ClearSelections, },
+    { .IsKey = false, .Character[0] = 's', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Select },
 };
 
 key_mapping_t InsertMappings[] = {
     { .IsKey = true, .Key = KEY_Home, .Operation.Type = OP_Insert_Home, },
-    { .IsKey = true, .Key = KEY_End,  .Operation.Type = OP_Insert_End, },
-    
+    { .IsKey = true, .Key = KEY_End, .Operation.Type = OP_Insert_End, },
     { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_EscapeToNormal},
-    { .IsKey = true, .Key = KEY_Delete,  .Operation.Type = OP_Delete},
+    { .IsKey = true, .Key = KEY_Delete, .Operation.Type = OP_Delete},
+    
+};
+
+key_mapping_t SelectMappings[] = {
+    { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
+    { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
     
 };
 
 key_mapping_t GlobalMappings[] = {
-    
     { .IsKey = true, .Key = KEY_X, .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_ToggleSplitMode, },
     { .IsKey = true, .Key = KEY_N, .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_NewPanel,},
     { .IsKey = true, .Key = KEY_W, .Modifiers = INPUT_MOD_Ctrl, .Operation.Type = OP_KillPanel, },

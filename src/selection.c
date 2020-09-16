@@ -7,7 +7,7 @@ make_lines(buffer_t *Buf) {
         line_t *Line = sb_add(Buf->Lines, 1);
         mem_zero_struct(Line);
         u8 n = 0;
-        for(s64 i = 0; i < Buf->Text.Used; i += n) {
+        for(u64 i = 0; i < Buf->Text.Used; i += n) {
             n = utf8_char_width(Buf->Text.Data + i);
             
             Line->Size += n;
@@ -24,23 +24,23 @@ make_lines(buffer_t *Buf) {
     }
 }
 
-s64
+u64
 selection_start(selection_t *Selection) {
-    s64 Start = MIN(Selection->Anchor, Selection->Cursor);
+    u64 Start = MIN(Selection->Anchor, Selection->Cursor);
     return Start;
 }
 
-s64
+u64
 selection_end(selection_t *Selection) {
-    s64 End = MAX(Selection->Anchor, Selection->Cursor);
+    u64 End = MAX(Selection->Anchor, Selection->Cursor);
     return End;
 }
 
-s64
-offset_to_line_index(buffer_t *Buf, s64 Offset) {
-    s64 Low = 0;
-    s64 High = sb_count(Buf->Lines);
-    s64 i = 0;
+u64
+offset_to_line_index(buffer_t *Buf, u64 Offset) {
+    u64 Low = 0;
+    u64 High = sb_count(Buf->Lines);
+    u64 i = 0;
     while(Low < High) {
         i = (Low + High) / 2;
         line_t *l = &Buf->Lines[i];
@@ -54,16 +54,16 @@ offset_to_line_index(buffer_t *Buf, s64 Offset) {
             Low = i + 1;
         }
     }
-    ASSERT(i >= 0 && i < sb_count(Buf->Lines)) ;
+    ASSERT(i < (u64)sb_count(Buf->Lines)) ;
     return i;
 }
 
-s64
-global_offset_to_column(buffer_t *Buf, s64 Offset) {
+u64
+global_offset_to_column(buffer_t *Buf, u64 Offset) {
     line_t *Line = &Buf->Lines[offset_to_line_index(Buf, Offset)];
-    s64 LineOffset = Offset - Line->Offset;
-    s64 Column = 0;
-    s64 c = 0;
+    u64 LineOffset = Offset - Line->Offset;
+    u64 Column = 0;
+    u64 c = 0;
     while(c < LineOffset) {
         c += utf8_char_width(Buf->Text.Data + Line->Offset + c);
         ++Column;
@@ -71,11 +71,11 @@ global_offset_to_column(buffer_t *Buf, s64 Offset) {
     return Column;
 }
 
-s64
-column_in_line_to_offset(buffer_t *Buf, line_t *Line, s64 Column) {
+u64
+column_in_line_to_offset(buffer_t *Buf, line_t *Line, u64 Column) {
     Column = MIN(Line->Length, Column);
-    s64 Offset = Line->Offset;
-    for(s64 i = 0; i < Column; ++i) {
+    u64 Offset = Line->Offset;
+    for(u64 i = 0; i < Column; ++i) {
         Offset += utf8_char_width(Buf->Text.Data + Offset);
     }
     
@@ -123,7 +123,7 @@ move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor
         case LEFT: {
             if(Selection->Cursor > 0) {
                 u8 *c = utf8_move_back_one(Buf->Text.Data + Selection->Cursor);
-                Selection->Cursor = (s64)(c - Buf->Text.Data);
+                Selection->Cursor = (c - Buf->Text.Data);
                 Selection->ColumnWas = global_offset_to_column(Buf, Selection->Cursor);
             }
         } break;
@@ -136,14 +136,15 @@ move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor
         } break;
         
         case UP: {
-            s64 Li = offset_to_line_index(Buf, Selection->Cursor) - 1;
-            if(Li < 0) { break; }
-            Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], Selection->ColumnWas);
+            u64 Li = offset_to_line_index(Buf, Selection->Cursor);
+            if(Li > 0) {
+                Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li - 1], Selection->ColumnWas);
+            }
         } break;
         
         case DOWN: {
-            s64 Li = offset_to_line_index(Buf, Selection->Cursor) + 1;
-            if(Li >= sb_count(Buf->Lines)) { break; }
+            u64 Li = offset_to_line_index(Buf, Selection->Cursor) + 1;
+            if(Li >= (u64)sb_count(Buf->Lines)) { break; }
             Selection->Cursor = column_in_line_to_offset(Buf, &Buf->Lines[Li], Selection->ColumnWas);
         } break;
     }
@@ -157,19 +158,19 @@ move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor
 
 b32
 selections_overlap(selection_t *a, selection_t *b) {
-    s64 aEnd = selection_end(a);
-    s64 bStart = selection_start(b);
+    u64 aEnd = selection_end(a);
+    u64 bStart = selection_start(b);
     return (aEnd >= bStart);
 }
 
-s64
-partition_selections(selection_t *Selections, s64 Low, s64 High) {
+u64
+partition_selections(selection_t *Selections, u64 Low, u64 High) {
     selection_t Pivot = Selections[High];
-    s64 pStart = selection_start(&Pivot);
-    s64 Mid = Low;
+    u64 pStart = selection_start(&Pivot);
+    u64 Mid = Low;
 #define SWAP(a, b) selection_t _temp_ = a; a = b; b = _temp_;
     
-    for(s64 i = Low; i < High; ++i) {
+    for(u64 i = Low; i < High; ++i) {
         if(selection_start(&Selections[i]) <= pStart) {
             SWAP(Selections[i], Selections[Mid]);
             ++Mid;
@@ -244,8 +245,8 @@ extend_selection(panel_t *Panel, dir_t Dir) {
 }
 
 typedef struct { 
-    s64 Offset;
-    s64 Size;
+    u64 Offset;
+    u64 Size;
 } deletion_t;
 
 void
@@ -264,7 +265,7 @@ update_all_selections_after_deletions(panel_t *Panel, deletion_t *Deletions, u64
                 if(Sel->Cursor > Deletions[i].Offset) {
                     // A deletion might start before a cursor but end after it. So decrease the cursor at most by
                     // the distance from the start of the deletion to the cursor.
-                    s64 d = Sel->Cursor - Deletions[i].Offset;
+                    u64 d = Sel->Cursor - Deletions[i].Offset;
                     Sel->Cursor -= MIN(d, Deletions[i].Size);
                     Sel->Anchor = Sel->Cursor;
                     Sel->ColumnIs = Sel->ColumnWas = global_offset_to_column(Panel->Buffer, Sel->Cursor);
@@ -278,8 +279,8 @@ update_all_selections_after_deletions(panel_t *Panel, deletion_t *Deletions, u64
 }
 
 typedef struct {
-    s64 Offset; 
-    s64 Size;
+    u64 Offset; 
+    u64 Size;
 } insertion_t;
 
 void
@@ -313,7 +314,7 @@ delete_selection(panel_t *Panel) {
     deletion_t *Deletions = 0;
     
     buffer_t *Buf = Panel->Buffer;
-    s64 BytesDeleted = 0;
+    u64 BytesDeleted = 0;
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         selection_t *Sel = &SelGrp->Selections[i];
@@ -321,8 +322,8 @@ delete_selection(panel_t *Panel) {
         Sel->Anchor -= BytesDeleted;
         
         
-        s64 Start = selection_start(Sel);
-        s64 End = selection_end(Sel);
+        u64 Start = selection_start(Sel);
+        u64 End = selection_end(Sel);
         
         // This is block cursor specific behavior. We're including the character under cursor in the deletion
         End += utf8_char_width(Buf->Text.Data + End);
@@ -353,7 +354,7 @@ void
 do_delete(panel_t *Panel) {
     deletion_t *Deletions = 0;
     
-    s64 BytesDeleted = 0;
+    u64 BytesDeleted = 0;
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         selection_t *Sel = &SelGrp->Selections[i];
@@ -420,7 +421,7 @@ void
 do_backspace(panel_t *Panel) {
     deletion_t *Deletions = 0;
     
-    s64 BytesDeleted = 0;
+    u64 BytesDeleted = 0;
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         selection_t *Sel = &SelGrp->Selections[i];

@@ -6,17 +6,17 @@
 typedef struct panel_t panel_t;
 
 typedef struct {
-    s64 Offset;
-    s64 Size; // size in bytes of entire line counting newline character
-    s64 Length; // characters, does not count newline character
+    u64 Offset;
+    u64 Size; // size in bytes of entire line counting newline character
+    u64 Length; // characters, does not count newline character
     u8 NewlineSize; // The size of the terminator, e.g. 1 for \n, 2 for \r\n and 0 when line is not newline terminated (it's the last line)
 } line_t;
 
 typedef struct {
-    s64 Anchor;
-    s64 Cursor;
-    s64 ColumnWas; // 0 based
-    s64 ColumnIs; // 0 based
+    u64 Anchor;
+    u64 Cursor;
+    u64 ColumnWas; // 0 based
+    u64 ColumnIs; // 0 based
     u64 Idx; // Unique over selections. The selection with the greatest Idx is the one that was created last.
 } selection_t;
 
@@ -46,8 +46,13 @@ typedef enum {
 
 typedef enum {
     MODE_Normal = 0,
-    MODE_Insert
+    MODE_Insert,
+    MODE_Select,
 } mode_t;
+
+typedef struct {
+    mem_buffer_t SearchTerm;
+} mode_select_ctx_t;
 
 // Only the leaf nodes are actually regions where text is drawn.
 struct panel_t {
@@ -59,6 +64,10 @@ struct panel_t {
     
     // Used when leaf node
     mode_t Mode;
+    union {
+        mode_select_ctx_t Select;
+    } ModeCtx;
+    
     s32 ScrollX, ScrollY;
     
     // Used when non-leaf node

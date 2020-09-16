@@ -29,6 +29,10 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 
 s32
 text_width(font_t *Font, u8 *Start, u8 *End) {
+    if(!Start) {
+        return 0;
+    }
+    
     if(!End) {
         End = Start;
         while(*End) { ++End; }
@@ -48,12 +52,15 @@ text_width(font_t *Font, u8 *Start, u8 *End) {
 // Returns {x, baseline}
 iv2_t 
 center_text_in_rect(font_t *Font, irect_t Rect, u8 *Start, u8 *End) {
-    if(!End) {
-        End = Start;
-        while(*End) { ++End; }
+    s32 TextWidth = 0;
+    if(Start) {
+        if(!End) {
+            End = Start;
+            while(*End) { ++End; }
+        }
+        TextWidth = text_width(Font, Start, End);
     }
     
-    s32 TextWidth = text_width(Font, Start, End);
     iv2_t Result;
     Result.x = Rect.x + (Rect.w - TextWidth) / 2;
     Result.y = Rect.y + (Rect.h + Font->MHeight) / 2;
@@ -111,14 +118,14 @@ void
 draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion) {
     buffer_t *Buf = Panel->Buffer;
     
-    s64 Start = selection_start(Selection);
-    s64 End = selection_end(Selection);
+    u64 Start = selection_start(Selection);
+    u64 End = selection_end(Selection);
     End += utf8_char_width(Buf->Text.Data + End);
-    s64 LineIndexStart = offset_to_line_index(Panel->Buffer, Start);
-    s64 LineIndexEnd = offset_to_line_index(Panel->Buffer, End);
+    u64 LineIndexStart = offset_to_line_index(Panel->Buffer, Start);
+    u64 LineIndexEnd = offset_to_line_index(Panel->Buffer, End);
     
     s32 LineHeight = line_height(Font);
-    for(s64 i = LineIndexStart; i <= LineIndexEnd; ++i) {
+    for(u64 i = LineIndexStart; i <= LineIndexEnd; ++i) {
         s32 y = TextRegion.y + (s32)i * LineHeight;
         line_t *Line = &Buf->Lines[i];
         
@@ -131,7 +138,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
         // last line in the file. The reason the cursor can go one byte outside like this is so that one can append to the end of the file.
         // Because this one-past-the-end byte could be anything we don't want to include it in the string we pass to text_width, so to handle
         // this we check if the cursor is past the end of the line and we're on the last line and then increase the size my the width of 'M'.
-        if(i == (sb_count(Buf->Lines) - 1) && End > Line->Offset + Line->Size) {
+        if(i == (u64)(sb_count(Buf->Lines) - 1) && End > Line->Offset + Line->Size) {
             Width += Font->MWidth;
         } 
         
@@ -156,7 +163,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             // Compute ScrollX and ScrollY
             {
                 selection_t Sel = get_selection_max_idx(Panel);
-                s64 Li = offset_to_line_index(Panel->Buffer, Sel.Cursor);
+                u64 Li = offset_to_line_index(Panel->Buffer, Sel.Cursor);
                 s32 OffsetY = (s32) Li * LineHeight;
                 if(OffsetY >= (Panel->ScrollY + TextRegion.h)) {
                     Panel->ScrollY = OffsetY - TextRegion.h + LineHeight;
@@ -193,7 +200,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 Fb->Clip = TextRegion;
                 draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, Start, End);
                 Fb->Clip = PanelRect;
-                s64 n = ABS(i - offset_to_line_index(Buf, get_selection_max_idx(Panel).Cursor));
+                s64 n = ABS(i - (s64)offset_to_line_index(Buf, get_selection_max_idx(Panel).Cursor));
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
@@ -237,20 +244,28 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             
             u8 *ModeStr = (u8 *)"Invalid mode";
             u32 ModeStrColor = 0xffffffff;
+            u64 ModeStrSize = c_str_len(ModeStr);
             switch(Panel->Mode) {
                 case MODE_Normal: {
                     ModeStr = (u8 *)"NORMAL";
+                    ModeStrSize = c_str_len(ModeStr);
                     ModeStrColor = COLOR_STATUS_NORMAL;
                 } break;
                 
                 case MODE_Insert: {
                     ModeStr = (u8 *)"INSERT";
+                    ModeStrSize = c_str_len(ModeStr);
                     ModeStrColor = COLOR_STATUS_INSERT;
+                } break;
+                
+                case MODE_Select: {
+                    ModeStr = Panel->ModeCtx.Select.SearchTerm.Data;
+                    ModeStrSize = Panel->ModeCtx.Select.SearchTerm.Used;
                 } break;
             }
             
-            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, 0);
-            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, 0);
+            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, ModeStr + ModeStrSize);
+            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, ModeStr + ModeStrSize);
             draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? (u8*)"|" : (u8*)"_", 0);
         }
     } else {
