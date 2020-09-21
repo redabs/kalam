@@ -368,11 +368,8 @@ k_do_editor(platform_shared_t *Shared) {
                                                 free_selections_and_reset_group(SelGrp);
                                                 *SelGrp = SelectCtx->SelectionGroup;
                                                 mem_zero_struct(&SelectCtx->SelectionGroup);
-                                                Panel->Mode = MODE_Normal;
-                                            } else {
-                                                
                                             }
-                                            
+                                            Panel->Mode = MODE_Normal;
                                         } break;
                                         
                                         case '\t': {
