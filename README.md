@@ -89,3 +89,6 @@ i3/vim style tiling with sane navigation.
 	[ ] Toggle a mode where shortcuts are displayed for jumping to any visible token in the
 		buffer. Think vim mode for browser where interactive elements are given key commands.
 
+#Media
+Early implementation of incremental search & replace using select mode
+![](media/select_mode.gif)
