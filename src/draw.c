@@ -180,14 +180,18 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     Panel->ScrollX = OffsetX;
                 }
             }
+            selection_group_t *SelGrp;
+            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0) {
+                SelGrp = &Panel->ModeCtx.Select.SelectionGroup;
+            } else {
+                SelGrp = get_selection_group(Panel->Buffer, Panel);
+            }
             
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
                 draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
                 draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
             }
-            
             // Draw lines
             irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {

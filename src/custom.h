@@ -122,7 +122,6 @@ key_mapping_t InsertMappings[] = {
 
 key_mapping_t SelectMappings[] = {
     { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
-    { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
     
 };
 

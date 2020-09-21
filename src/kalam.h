@@ -52,6 +52,7 @@ typedef enum {
 
 typedef struct {
     mem_buffer_t SearchTerm;
+    selection_group_t SelectionGroup; // Used as the working set when panel is in MODE_Select
 } mode_select_ctx_t;
 
 // Only the leaf nodes are actually regions where text is drawn.

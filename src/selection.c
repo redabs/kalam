@@ -82,6 +82,17 @@ column_in_line_to_offset(buffer_t *Buf, line_t *Line, u64 Column) {
     return Offset;
 }
 
+selection_t
+make_selection(buffer_t *Buffer, u64 Anchor, u64 Cursor, u64 Idx) {
+    selection_t Sel = {0};
+    Sel.Anchor = Anchor;
+    Sel.Cursor = Cursor;
+    Sel.Idx = Idx;
+    Sel.ColumnIs = global_offset_to_column(Buffer, Cursor);
+    Sel.ColumnWas = Sel.ColumnIs;
+    return Sel;
+}
+
 selection_group_t *
 get_selection_group(buffer_t *Buffer, panel_t *Owner) {
     selection_group_t *SelGrp = 0;
@@ -94,6 +105,12 @@ get_selection_group(buffer_t *Buffer, panel_t *Owner) {
     }
     ASSERT(SelGrp);
     return SelGrp;
+}
+
+void
+free_selections_and_reset_group(selection_group_t *SelectionGroup) {
+    sb_free(SelectionGroup->Selections);
+    mem_zero_struct(SelectionGroup);
 }
 
 selection_t

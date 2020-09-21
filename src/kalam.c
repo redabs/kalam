@@ -92,7 +92,13 @@ do_operation(operation_t Op) {
             panel_t *Panel = Ctx.PanelCtx.Selected;
             switch(Op.SetMode.Mode) {
                 case MODE_Select: {
-                    Panel->ModeCtx.Select.SearchTerm.Used = 0;
+                    mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
+                    SelectCtx->SearchTerm.Used = 0;
+                    SelectCtx->SelectionGroup.Owner = Panel;
+                    SelectCtx->SelectionGroup.SelectionIdxTop = 0;
+                    if(SelectCtx->SelectionGroup.Selections) {
+                        sb_set_count(SelectCtx->SelectionGroup.Selections, 0);
+                    }
                 } break;
             }
             
@@ -257,6 +263,54 @@ event_is_control_sequence(input_event_t *Event) {
     return true;
 }
 
+b32 
+find_next_search_term_in_range(buffer_t *Buffer, mem_buffer_t *SearchTerm, u64 Start, u64 End, u64 *Offset) {
+    if(SearchTerm->Used == 0) { 
+        return false;
+    }
+    
+    u64 TermIdx = 0;
+    for(u64 i = Start; i < End; ++i) {
+        if(Buffer->Text.Data[i] == SearchTerm->Data[TermIdx]) {
+            ++TermIdx;
+            if(TermIdx == SearchTerm->Used) {
+                *Offset = i - TermIdx + 1;
+                return true;
+            }
+        } else {
+            TermIdx = 0;
+        }
+    }
+    return false;
+}
+
+void
+update_select_state(panel_t *Panel) {
+    // Given the current selections in the buffer owned by the selected panel, find all occurences of 
+    // the entered search term. 
+    // The original set of selections need to be preserved if select mode is exited without submitting
+    // (hitting return). I think we need a separate working set of selections that - on submission - replaces
+    // the set in the selection group. As a matter of interactivity, the working is the one that should be
+    // rendered. I suppose we can in draw_panel check if the panel is in MODE_Select and then draw the 
+    // working set instead of the in the selection group for the buffer. As such the working set should be in the mode context in the panel struct.
+    mem_buffer_t *SearchTerm = &Panel->ModeCtx.Select.SearchTerm;
+    mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
+    for(s64 GrpIdx = 0; GrpIdx < sb_count(Panel->Buffer->SelectionGroups); ++GrpIdx) {
+        selection_group_t *SelGroup = &Panel->Buffer->SelectionGroups[GrpIdx];
+        for(s64 SelIdx = 0; SelIdx < sb_count(SelGroup->Selections); ++SelIdx) {
+            selection_t *Sel = &SelGroup->Selections[SelIdx];
+            u64 Start = selection_start(Sel); 
+            u64 End = selection_end(Sel); 
+            u64 ResultOffset;
+            while(find_next_search_term_in_range(Panel->Buffer, &SelectCtx->SearchTerm, Start, End, &ResultOffset)) {
+                Start = ResultOffset + SelectCtx->SearchTerm.Used;
+                selection_t s = make_selection(Panel->Buffer, ResultOffset, ResultOffset + SelectCtx->SearchTerm.Used - 1, SelectCtx->SelectionGroup.SelectionIdxTop++);
+                sb_push(SelectCtx->SelectionGroup.Selections, s);
+            }
+        }
+    }
+}
+
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
@@ -281,7 +335,6 @@ k_do_editor(platform_shared_t *Shared) {
                                 EventHandled = do_operation(m->Operation);
                             } else if(e->Type == INPUT_EVENT_Text) {
                                 // Ignore characters that were sent with the only modifier down being Ctrl (except for Caps Lock and Num Lock). I.e. ignore control sequences.
-                                //if((e->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
                                 if(!event_is_control_sequence(e)) {
                                     operation_t o = {
                                         .Type = OP_DoChar, 
@@ -303,26 +356,42 @@ k_do_editor(platform_shared_t *Shared) {
                             } else if(e->Type == INPUT_EVENT_Text && !event_is_control_sequence(e)) {
                                 // Append text to search term 
                                 u8 *Char = e->Text.Character;
+                                mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
                                 mem_buffer_t *SearchTerm = &Panel->ModeCtx.Select.SearchTerm;
                                 if(*Char < 0x20) {
                                     switch(*Char) {
                                         case '\n':
                                         case '\r': {
+                                            // Commit selections
+                                            if(SearchTerm->Used > 0) {
+                                                selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+                                                free_selections_and_reset_group(SelGrp);
+                                                *SelGrp = SelectCtx->SelectionGroup;
+                                                mem_zero_struct(&SelectCtx->SelectionGroup);
+                                                Panel->Mode = MODE_Normal;
+                                            } else {
+                                                
+                                            }
                                             
                                         } break;
                                         
                                         case '\t': {
-                                            mem_buf_append(SearchTerm, "\t", 1);
+                                            
+                                            //mem_buf_append(SearchTerm, "\t", 1);
                                         } break;
                                         
                                         case '\b': {
                                             u8 *End = SearchTerm->Data + SearchTerm->Used;
                                             u8 *Begin = utf8_move_back_one(End);
                                             mem_buf_pop_size(SearchTerm, (u64)(End - Begin));
+                                            sb_set_count(Panel->ModeCtx.Select.SelectionGroup.Selections, 0);
+                                            update_select_state(Panel);
                                         } break;
                                     }
                                 } else {
+                                    sb_set_count(Panel->ModeCtx.Select.SelectionGroup.Selections, 0);
                                     mem_buf_append(SearchTerm, Char, utf8_char_width(Char));
+                                    update_select_state(Panel);
                                 }
                             }
                         } break;
