@@ -5,6 +5,7 @@
 #include <Windowsx.h>
 
 #include "deps/stb_truetype.h"
+#include "deps/stretchy_buffer.h"
 
 #include "intrinsics.h"
 #include "memory.h"
@@ -32,6 +33,81 @@ win32_get_file_size(HANDLE FileHandle, s64 *Out) {
     return false;
 }
 
+typedef enum {
+    FILE_FLAGS_Unknown    = 0,
+    FILE_FLAGS_NormalFile = 1 << 1,
+    FILE_FLAGS_Directory  = 1 << 2,
+    FILE_FLAGS_Hidden     = 1 << 3,
+} file_flags_t; 
+
+typedef struct {
+    mem_buffer_t FileName;
+    file_flags_t Flags;
+} file_info_t;
+
+typedef struct {
+    file_info_t *Files; // stb
+} files_in_directory_t;
+
+void
+utf8_str_to_utf16_str(mem_buffer_t *U8, mem_buffer_t *U16) {
+    for(u64 i = 0; i < U8->Used; ++i) {
+        u8 *c = U8->Data + i;
+        
+        u32 Cp = 0;
+        c = utf8_to_codepoint(c, &Cp);
+        u32 Utf16 = codepoint_to_utf16(Cp);
+        // Surrogate pairs are 4 bytes total
+        if(Utf16 > 0xffff) {
+            mem_buf_append(U16, &Utf16, 4);
+        } else {
+            mem_buf_append(U16, &Utf16, 2);
+        }
+    }
+}
+
+void
+utf16_c_str_to_utf8_str(u16 *U16Str, mem_buffer_t *U8) {
+    u16 *c = U16Str;
+    while(*c) {
+        b32 IsSurrogatePair = (*c >= 0xdc00);
+        u32 Utf16 = IsSurrogatePair ? *(u32 *)c : *c;
+        u8 Utf16Size = IsSurrogatePair ? 4 : 2;
+        
+        u8 Utf8[4];
+        u8 n = utf16_to_utf8(Utf16, Utf8);
+        mem_buf_append(U8, Utf8, n);
+        
+        c += Utf16Size >> 1;
+    }
+}
+
+files_in_directory_t
+get_files_in_directory(mem_buffer_t *Path) {
+    files_in_directory_t Result = {0};
+    
+    WIN32_FIND_DATAW FoundFile;
+    
+    mem_buffer_t WidePath = {0};
+    {
+        utf8_str_to_utf16_str(Path, &WidePath);
+        // Null-terminate WidePath
+        u16 Zero = 0;
+        mem_buf_append(&WidePath, &Zero, 2);
+        HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);
+        if(FileHandle != INVALID_HANDLE_VALUE) {
+            for(b32 Go = true; Go; Go = FindNextFileW(FileHandle, &FoundFile)) {
+                file_info_t *Fi = sb_add(Result.Files, 1);
+                mem_zero_struct(Fi);
+                utf16_c_str_to_utf8_str(FoundFile.cFileName, &Fi->FileName);
+                // TODO: Set file flags
+            }
+        }
+    }
+    
+    mem_buf_free(&WidePath);
+    return Result;
+}
 
 b32 
 platform_read_file(char *Path, platform_file_data_t *FileData) {
@@ -124,37 +200,6 @@ push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
     ++Buffer->Count;
 }
 
-
-void
-utf16_to_utf8(u32 Utf16, u8 *Utf8) {
-    if(Utf16 <= 0x7f) {
-        Utf8[0] = Utf16 & 0x7f; 
-        
-    } else if(Utf16 <= 0x7ff) {
-        Utf8[0] = 0xc0 | ((Utf16 >> 6) & 0x1f);
-        Utf8[1] = 0x80 | (Utf16        & 0x3f);
-        
-    } else if(Utf16 >= 0xe000 && Utf16 <= 0xffff) {
-        Utf8[0] = 0xe0 | ((Utf16 >> 12) & 0xf);
-        Utf8[1] = 0x80 | ((Utf16 >> 6)  & 0x3f);
-        Utf8[2] = 0x80 | ( Utf16        & 0x3f);
-        
-    } else {
-        u32 High = Utf16 >> 16;
-        u32 Low = Utf16 & 0xffff;
-        // Surrogate pairs
-        if((High >= 0xd800 && High <= 0xdfff)  && (Low >= 0xd800 && Low <= 0xdfff)) {
-            High = (High - 0xd800) << 10;
-            Low = Low - 0xdc00;
-            u32 Codepoint = High + Low + 0x10000;
-            
-            Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
-            Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
-            Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
-            Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
-        } 
-    }
-}
 
 #include <stdio.h> // TODO: Remove me
 
@@ -253,6 +298,14 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     WindowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
     WindowClass.lpszClassName = L"window_class";
     RegisterClassW(&WindowClass);
+    
+    {
+        u8* str = (u8 *)"C:\\my_stuff\\code\\kalam\\src\\*";
+        mem_buffer_t Path = {0};
+        mem_buf_append(&Path, (void *)str, c_str_len(str));
+        files_in_directory_t Files = get_files_in_directory(&Path);
+        mem_buf_free(&Path);
+    }
     
     // Including borders and decorations
     s32 WindowWidth = 900;

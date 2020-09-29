@@ -26,7 +26,7 @@ typedef enum {
     
     OP_SetMode,
     
-    // TODO: These operations should not be mode specific. I.e. there should be no OP_Normal_Home, only OP_Normal with key mappings in the individual modes that implement the mode specific behavior.
+    // TODO: These operations should not be mode specific. I.e. there should be no OP_Normal_Home, only OP_Home with key mappings in the individual modes that implement the mode specific behavior.
     // Normal
     OP_Normal_Home,
     OP_Normal_End,
@@ -110,6 +110,7 @@ key_mapping_t NormalMappings[] = {
     
     { .IsKey = true, .Key = KEY_Space, .Operation.Type = OP_ClearSelections, },
     { .IsKey = false, .Character[0] = 's', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Select },
+    { .IsKey = false, .Character[0] = 'f', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Prompt },
 };
 
 key_mapping_t InsertMappings[] = {
@@ -139,6 +140,12 @@ key_mapping_t GlobalMappings[] = {
     { .IsKey = true, .Key = KEY_Right, .Operation.Type = OP_MoveSelection, .Operation.MoveSelection.Dir = RIGHT},
     { .IsKey = true, .Key = KEY_Up,    .Operation.Type = OP_MoveSelection, .Operation.MoveSelection.Dir = UP},
     { .IsKey = true, .Key = KEY_Down,  .Operation.Type = OP_MoveSelection, .Operation.MoveSelection.Dir = DOWN},
+    
+};
+
+key_mapping_t PromptMappings[] = {
+    { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
+    
     
 };
 

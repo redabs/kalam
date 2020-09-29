@@ -64,7 +64,7 @@ mem_buf_maybe_grow(mem_buffer_t *Buffer, u64 Size) {
     }
 }
 
-#define mem_buf_add_array(BUFFER, STRUCT_TYPE, COUNT) (STRUCT_TYPE *)mem_buf_add(BUFFER, sizeof(STRUCT_TYPE) * COUNT)
+#define mem_buf_add_array(BUFFER, ELEMENT_TYPE, COUNT) (ELEMENT_TYPE *)mem_buf_add(BUFFER, sizeof(ELEMENT_TYPE) * COUNT)
 #define mem_buf_add_struct(BUFFER, STRUCT_TYPE) (STRUCT_TYPE *)mem_buf_add(BUFFER, sizeof(STRUCT_TYPE))
 inline void *
 mem_buf_add(mem_buffer_t *Buffer, u64 Size) {
@@ -87,7 +87,7 @@ mem_buf_pop_size(mem_buffer_t *Buffer, u64 Size) {
     Buffer->Used -= MIN(Buffer->Used, Size);
 }
 
-#define mem_buf_add_array_idx(BUFFER, STRUCT_TYPE, COUNT, INDEX_PTR) (STRUCT_TYPE *)mem_buf_add_idx(BUFFER, COUNT, sizeof(STRUCT_TYPE), INDEX_PTR)
+#define mem_buf_add_array_idx(BUFFER, ELEMENT_TYPE, COUNT, INDEX_PTR) (ELEMENT_TYPE *)mem_buf_add_idx(BUFFER, COUNT, sizeof(ELEMENT_TYPE), INDEX_PTR)
 #define mem_buf_add_struct_idx(BUFFER, STRUCT_TYPE, INDEX_PTR) (STRUCT_TYPE *)mem_buf_add_idx(BUFFER, 1, sizeof(STRUCT_TYPE), INDEX_PTR)
 inline void *
 mem_buf_add_idx(mem_buffer_t *Buffer, u64 Count, u64 ElementSize, u64 *IndexOut) {
@@ -123,6 +123,11 @@ mem_buf_delete(mem_buffer_t *Buffer, u64 Start, u64 Size) {
         Buffer->Data[Start + i] = Buffer->Data[Start + Size + i];
     }
     Buffer->Used -= Size;
+}
+
+inline void
+mem_buf_free(mem_buffer_t *Buffer) {
+    free(Buffer->Data);
 }
 
 #endif //MEMORY_H

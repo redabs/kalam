@@ -114,11 +114,10 @@ free_selections_and_reset_group(selection_group_t *SelectionGroup) {
 }
 
 selection_t
-get_selection_max_idx(panel_t *Panel) {
-    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-    selection_t Result = SelGrp->Selections[0];
-    for(s64 i = 1; i < sb_count(SelGrp->Selections); ++i) {
-        selection_t *s = &SelGrp->Selections[i];
+get_selection_max_idx(selection_group_t *SelectionGroup) {
+    selection_t Result = SelectionGroup->Selections[0];
+    for(s64 i = 1; i < sb_count(SelectionGroup->Selections); ++i) {
+        selection_t *s = &SelectionGroup->Selections[i];
         if(s->Idx > Result.Idx) {
             Result = *s;
         }
@@ -128,8 +127,8 @@ get_selection_max_idx(panel_t *Panel) {
 
 void
 clear_selections(panel_t *Panel) {
-    selection_t Sel = get_selection_max_idx(Panel);
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+    selection_t Sel = get_selection_max_idx(SelGrp);
     sb_set_count(SelGrp->Selections, 0);
     sb_push(SelGrp->Selections, Sel);
 }

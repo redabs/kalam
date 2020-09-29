@@ -48,6 +48,7 @@ typedef enum {
     MODE_Normal = 0,
     MODE_Insert,
     MODE_Select,
+    MODE_Prompt
 } mode_t;
 
 typedef struct {

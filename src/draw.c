@@ -160,10 +160,18 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
         if(Buf) {
             s32 LineHeight = line_height(Font);
             
+            selection_group_t *SelGrp;
+            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0) {
+                SelGrp = &Panel->ModeCtx.Select.SelectionGroup;
+            } else {
+                SelGrp = get_selection_group(Panel->Buffer, Panel);
+            }
+            
+            selection_t SelectionMaxIdx = get_selection_max_idx(SelGrp);
+            
             // Compute ScrollX and ScrollY
             {
-                selection_t Sel = get_selection_max_idx(Panel);
-                u64 Li = offset_to_line_index(Panel->Buffer, Sel.Cursor);
+                u64 Li = offset_to_line_index(Panel->Buffer, SelectionMaxIdx.Cursor);
                 s32 OffsetY = (s32) Li * LineHeight;
                 if(OffsetY >= (Panel->ScrollY + TextRegion.h)) {
                     Panel->ScrollY = OffsetY - TextRegion.h + LineHeight;
@@ -172,7 +180,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 }
                 
                 u8 *Start = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Li].Offset;
-                u8 *End = Panel->Buffer->Text.Data + Sel.Cursor;
+                u8 *End = Panel->Buffer->Text.Data + SelectionMaxIdx.Cursor;
                 s32 OffsetX = text_width(&Ctx.Font, Start, End);
                 if(OffsetX >= (TextRegion.w + Panel->ScrollX)) {
                     Panel->ScrollX = OffsetX - TextRegion.w + Ctx.Font.MWidth;
@@ -180,18 +188,13 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     Panel->ScrollX = OffsetX;
                 }
             }
-            selection_group_t *SelGrp;
-            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0) {
-                SelGrp = &Panel->ModeCtx.Select.SelectionGroup;
-            } else {
-                SelGrp = get_selection_group(Panel->Buffer, Panel);
-            }
             
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
                 draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
                 draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
             }
+            
             // Draw lines
             irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
@@ -204,17 +207,16 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 Fb->Clip = TextRegion;
                 draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, Start, End);
                 Fb->Clip = PanelRect;
-                s64 n = ABS(i - (s64)offset_to_line_index(Buf, get_selection_max_idx(Panel).Cursor));
+                s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
-#if 0            
+#if 0
             {
-                selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
                 s32 x = 400; 
                 s32 y = 100;
                 char Debug[1024];
-                sprintf(Debug, "SelectionTopIdx: %llu", SelGrp->SelectionIdxTop);
+                sprintf(Debug, "SelectionMaxIdx: %llu", SelGrp->SelectionIdxTop);
                 draw_text_line(Fb, &Ctx.Font, x, y - 10, 0xffffffff, (u8*)Debug, 0);
                 for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                     s32 LineY = y + (s32)i * LineHeight;

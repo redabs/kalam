@@ -148,7 +148,7 @@ do_operation(operation_t Op) {
             panel_t *Panel = Ctx.PanelCtx.Selected;
             
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            selection_t Sel = get_selection_max_idx(Panel);
+            selection_t Sel = get_selection_max_idx(SelGrp);
             Sel.Idx = SelGrp->SelectionIdxTop++;
             move_selection(Panel->Buffer, &Sel, Op.DropSelectionAndMove.Dir, true);
             sb_push(SelGrp->Selections, Sel);
@@ -391,6 +391,10 @@ k_do_editor(platform_shared_t *Shared) {
                                     update_select_state(Panel);
                                 }
                             }
+                        } break;
+                        
+                        case MODE_Prompt: {
+                            
                         } break;
                     }
                     
