@@ -35,9 +35,8 @@ win32_get_file_size(HANDLE FileHandle, s64 *Out) {
 
 typedef enum {
     FILE_FLAGS_Unknown    = 0,
-    FILE_FLAGS_NormalFile = 1 << 1,
-    FILE_FLAGS_Directory  = 1 << 2,
-    FILE_FLAGS_Hidden     = 1 << 3,
+    FILE_FLAGS_Directory  = 1 << 1,
+    FILE_FLAGS_Hidden     = 1 << 2,
 } file_flags_t; 
 
 typedef struct {
@@ -100,8 +99,11 @@ get_files_in_directory(mem_buffer_t *Path) {
                 file_info_t *Fi = sb_add(Result.Files, 1);
                 mem_zero_struct(Fi);
                 utf16_c_str_to_utf8_str(FoundFile.cFileName, &Fi->FileName);
-                // TODO: Set file flags
+                
+                Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? FILE_FLAGS_Directory : 0;
+                Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ? FILE_FLAGS_Hidden : 0;
             }
+            
         }
     }
     
