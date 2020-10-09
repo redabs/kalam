@@ -11,7 +11,6 @@
 #include "kalam.h"
 #include "custom.h"
 
-
 ctx_t Ctx = {0};
 
 #include "selection.c"
@@ -67,10 +66,11 @@ load_file(char *Path) {
 }
 
 void
-k_init(platform_shared_t *Shared) {
+k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf("fonts/consola.ttf", 14);
     load_file("test.c");
     //load_file("../test/test.txt");
+    mem_buf_append(&Ctx.WorkingDirectory, WorkingDirectory.Data, WorkingDirectory.Size);
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
@@ -80,6 +80,15 @@ k_init(platform_shared_t *Shared) {
     Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
     
     panel_create(&Ctx.PanelCtx);
+}
+
+file_select_option_t *
+add_file_select_option(mem_buffer_t *OptionStorage, range_t Option) {
+    file_select_option_t *Dest = mem_buf_add(OptionStorage, Option.Size);
+    Dest->Size = Option.Size;
+    mem_copy(Dest->String, Option.Data, Option.Size);
+    
+    return Dest;
 }
 
 b32
@@ -99,6 +108,22 @@ do_operation(operation_t Op) {
                     if(SelectCtx->SelectionGroup.Selections) {
                         sb_set_count(SelectCtx->SelectionGroup.Selections, 0);
                     }
+                } break;
+                
+                case MODE_FileSelect: {
+                    // Get the files and populate the options list.
+                    files_in_directory_t Dir = platform_get_files_in_directory(mem_buffer_as_range(Ctx.WorkingDirectory));
+                    
+                    // Reset options
+                    mode_file_select_ctx_t *ModeCtx = &Panel->ModeCtx.FileSelect;
+                    ModeCtx->OptionStorage.Used = 0;
+                    
+                    for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
+                        file_info_t *Fi = &Dir.Files[i];
+                        add_file_select_option(&ModeCtx->OptionStorage, (range_t){.Data = Fi->FileName.Data, .Size = Fi->FileName.Used});
+                    }
+                    
+                    free_files_in_directory(&Dir);
                 } break;
             }
             
@@ -393,8 +418,11 @@ k_do_editor(platform_shared_t *Shared) {
                             }
                         } break;
                         
-                        case MODE_Prompt: {
-                            
+                        case MODE_FileSelect: {
+                            key_mapping_t *m = find_mapping_match(FileSelectMappings, ARRAY_COUNT(FileSelectMappings), e);
+                            if(m) {
+                                EventHandled = do_operation(m->Operation);
+                            } 
                         } break;
                     }
                     

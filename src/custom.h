@@ -110,7 +110,7 @@ key_mapping_t NormalMappings[] = {
     
     { .IsKey = true, .Key = KEY_Space, .Operation.Type = OP_ClearSelections, },
     { .IsKey = false, .Character[0] = 's', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Select },
-    { .IsKey = false, .Character[0] = 'f', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Prompt },
+    { .IsKey = false, .Character[0] = 'f', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_FileSelect },
 };
 
 key_mapping_t InsertMappings[] = {
@@ -143,7 +143,7 @@ key_mapping_t GlobalMappings[] = {
     
 };
 
-key_mapping_t PromptMappings[] = {
+key_mapping_t FileSelectMappings[] = {
     { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
     
     

@@ -268,6 +268,12 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     ModeStr = Panel->ModeCtx.Select.SearchTerm.Data;
                     ModeStrSize = Panel->ModeCtx.Select.SearchTerm.Used;
                 } break;
+                
+                case MODE_FileSelect: {
+                    ModeStr = (u8 *)"File Select";
+                    ModeStrSize = c_str_len(ModeStr);
+                    ModeStrColor = COLOR_STATUS_NORMAL;
+                } break;
             }
             
             iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, ModeStr + ModeStrSize);

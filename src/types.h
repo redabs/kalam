@@ -21,4 +21,14 @@ typedef enum {
     RIGHT = 1 << 3
 } dir_t;
 
+typedef struct {
+    void *Data; // NOTHING is implied or guaranteed wrt. the allocation type of Data, only that [Data, Data + Size) is accessible bytes.
+    u64 Size;
+} range_t;
+
+inline range_t
+mem_buffer_as_range(mem_buffer_t Buf) {
+    return (range_t){.Data = Buf.Data, .Size = Buf.Used};
+}
+
 #endif //TYPES_H

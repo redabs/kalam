@@ -14,8 +14,9 @@ REM /wd4100 unreferenced formal parameter
 REM /wd4189 local variable is initalized but not referenced
 REM /wd4201 nonstandard extension used: nameless struct/union
 REM /wd4204 nonstandard extension used: non-constant aggregate initializer
+REM /wd4200 nonstandard extension used: zero-sized array in struct/union
 
-set Warnings=/we4013 /we4296 /wd4100 /wd4189 /wd4201 /wd4204
+set Warnings=/we4013 /we4296 /wd4100 /wd4189 /wd4201 /wd4204 /wd4200
 REM  ------------------------------------
 
 REM -Zi Generate complete debug information

@@ -3,6 +3,7 @@
 #undef min
 #undef max
 #include <Windowsx.h>
+#include <direct.h> // _wgetcwd
 
 #include "deps/stb_truetype.h"
 #include "deps/stretchy_buffer.h"
@@ -33,25 +34,10 @@ win32_get_file_size(HANDLE FileHandle, s64 *Out) {
     return false;
 }
 
-typedef enum {
-    FILE_FLAGS_Unknown    = 0,
-    FILE_FLAGS_Directory  = 1 << 1,
-    FILE_FLAGS_Hidden     = 1 << 2,
-} file_flags_t; 
-
-typedef struct {
-    mem_buffer_t FileName;
-    file_flags_t Flags;
-} file_info_t;
-
-typedef struct {
-    file_info_t *Files; // stb
-} files_in_directory_t;
-
 void
-utf8_str_to_utf16_str(mem_buffer_t *U8, mem_buffer_t *U16) {
-    for(u64 i = 0; i < U8->Used; ++i) {
-        u8 *c = U8->Data + i;
+utf8_str_to_utf16_str(range_t U8, mem_buffer_t *U16) {
+    for(u64 i = 0; i < U8.Size; ++i) {
+        u8 *c = (u8 *)U8.Data + i;
         
         u32 Cp = 0;
         c = utf8_to_codepoint(c, &Cp);
@@ -82,7 +68,7 @@ utf16_c_str_to_utf8_str(u16 *U16Str, mem_buffer_t *U8) {
 }
 
 files_in_directory_t
-get_files_in_directory(mem_buffer_t *Path) {
+platform_get_files_in_directory(range_t Path) {
     files_in_directory_t Result = {0};
     
     WIN32_FIND_DATAW FoundFile;
@@ -149,7 +135,7 @@ platform_free_file(platform_file_data_t *File) {
 }
 
 void
-win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height) {
+resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height) {
     if(FbInfo->Fb.Data) {
         VirtualFree(FbInfo->Fb.Data, 0, MEM_RELEASE);
     }
@@ -168,7 +154,7 @@ win32_resize_framebuffer(win32_framebuffer_info_t *FbInfo, s32 Width, s32 Height
 }
 
 LRESULT CALLBACK
-win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LParameter) {
+window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LParameter) {
     LRESULT Result = 0;
     switch(Message) {
         case WM_CLOSE: {
@@ -178,7 +164,7 @@ win32_window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LPara
         case WM_SIZE: {
             s32 Width = LOWORD(LParameter);
             s32 Height = HIWORD(LParameter);
-            win32_resize_framebuffer(&FramebufferInfo, Width, Height);
+            resize_framebuffer(&FramebufferInfo, Width, Height);
         } break;
         
         case WM_SYSCOMMAND:
@@ -206,7 +192,7 @@ push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
 #include <stdio.h> // TODO: Remove me
 
 void
-win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
+handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier_t Modifiers; 
     local_persist input_toggles_t Toggles; 
     input_event_t Event = {0};
@@ -295,19 +281,11 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     
     WNDCLASSW WindowClass = {0};
     WindowClass.style = CS_OWNDC | CS_VREDRAW | CS_HREDRAW;
-    WindowClass.lpfnWndProc = win32_window_callback;
+    WindowClass.lpfnWndProc = window_callback;
     WindowClass.hInstance = Instance;
     WindowClass.hCursor = LoadCursor(NULL, IDC_ARROW);
     WindowClass.lpszClassName = L"window_class";
     RegisterClassW(&WindowClass);
-    
-    {
-        u8* str = (u8 *)"C:\\my_stuff\\code\\kalam\\src\\*";
-        mem_buffer_t Path = {0};
-        mem_buf_append(&Path, (void *)str, c_str_len(str));
-        files_in_directory_t Files = get_files_in_directory(&Path);
-        mem_buf_free(&Path);
-    }
     
     // Including borders and decorations
     s32 WindowWidth = 900;
@@ -321,20 +299,30 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             s32 BufferWidth = ClientRect.right - ClientRect.left;
             s32 BufferHeight = ClientRect.bottom - ClientRect.top;
             
-            win32_resize_framebuffer(&FramebufferInfo, BufferWidth, BufferHeight);
+            resize_framebuffer(&FramebufferInfo, BufferWidth, BufferHeight);
         }
-        k_init(&Shared);
+        
+        {
+            mem_buffer_t U8Path = {0};
+            
+            wchar_t *WPath = _wgetcwd(NULL, 0);
+            utf16_c_str_to_utf8_str(WPath, &U8Path);
+            
+            k_init(&Shared, (range_t){.Data = U8Path.Data, .Size = U8Path.Used});
+            
+            free(WPath);
+            mem_buf_free(&U8Path);
+        }
         
         b8 Running = true;
         while(Running && !WmClose) {
             
             MSG Message = {0};
             while(PeekMessageW(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
-                win32_handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
+                handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
                 TranslateMessage(&Message);
                 DispatchMessageW(&Message);
             }
-            
             
             k_do_editor(&Shared);
             
@@ -343,7 +331,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             ReleaseDC(WindowHandle, Dc);
         }
     } else {
-        // TODO
+        // TODO Diagnostics!
     }
     
     return 1;

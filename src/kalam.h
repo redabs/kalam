@@ -48,13 +48,24 @@ typedef enum {
     MODE_Normal = 0,
     MODE_Insert,
     MODE_Select,
-    MODE_Prompt
+    MODE_FileSelect,
 } mode_t;
 
 typedef struct {
     mem_buffer_t SearchTerm;
     selection_group_t SelectionGroup; // Used as the working set when panel is in MODE_Select
 } mode_select_ctx_t;
+
+typedef struct {
+    u64 Size;
+    u8 String[];
+} file_select_option_t;
+
+typedef struct {
+    mem_buffer_t OptionStorage; // { u64 Len; u8 String[]; } .. {  }
+    range_t *FileNames; // stb
+    u64 SelectedIdx; // FileNames index
+} mode_file_select_ctx_t;
 
 // Only the leaf nodes are actually regions where text is drawn.
 struct panel_t {
@@ -68,6 +79,7 @@ struct panel_t {
     mode_t Mode;
     union {
         mode_select_ctx_t Select;
+        mode_file_select_ctx_t FileSelect;
     } ModeCtx;
     
     s32 ScrollX, ScrollY;
@@ -127,6 +139,7 @@ typedef struct {
     font_t Font;
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;
+    mem_buffer_t WorkingDirectory;
 } ctx_t;
 
 #endif //KALAM_H
