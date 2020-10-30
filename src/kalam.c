@@ -322,16 +322,19 @@ update_select_state(panel_t *Panel) {
     mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
     for(s64 GrpIdx = 0; GrpIdx < sb_count(Panel->Buffer->SelectionGroups); ++GrpIdx) {
         selection_group_t *SelGroup = &Panel->Buffer->SelectionGroups[GrpIdx];
-        for(s64 SelIdx = 0; SelIdx < sb_count(SelGroup->Selections); ++SelIdx) {
-            selection_t *Sel = &SelGroup->Selections[SelIdx];
-            u64 Start = selection_start(Sel); 
-            u64 End = selection_end(Sel); 
-            u64 ResultOffset;
-            while(find_next_search_term_in_range(Panel->Buffer, &SelectCtx->SearchTerm, Start, End, &ResultOffset)) {
-                Start = ResultOffset + SelectCtx->SearchTerm.Used;
-                selection_t s = make_selection(Panel->Buffer, ResultOffset, ResultOffset + SelectCtx->SearchTerm.Used - 1, SelectCtx->SelectionGroup.SelectionIdxTop++);
-                sb_push(SelectCtx->SelectionGroup.Selections, s);
+        if(SelGroup->Owner == Panel) {
+            for(s64 SelIdx = 0; SelIdx < sb_count(SelGroup->Selections); ++SelIdx) {
+                selection_t *Sel = &SelGroup->Selections[SelIdx];
+                u64 Start = selection_start(Sel); 
+                u64 End = selection_end(Sel); 
+                u64 ResultOffset;
+                while(find_next_search_term_in_range(Panel->Buffer, &SelectCtx->SearchTerm, Start, End, &ResultOffset)) {
+                    Start = ResultOffset + SelectCtx->SearchTerm.Used;
+                    selection_t s = make_selection(Panel->Buffer, ResultOffset, ResultOffset + SelectCtx->SearchTerm.Used - 1, SelectCtx->SelectionGroup.SelectionIdxTop++);
+                    sb_push(SelectCtx->SelectionGroup.Selections, s);
+                }
             }
+            return;
         }
     }
 }

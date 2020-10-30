@@ -161,7 +161,9 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             s32 LineHeight = line_height(Font);
             
             selection_group_t *SelGrp;
-            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0) {
+            // If we're in Select mode and there is a search term and there are selections in the working set then
+            // we get the working set selection group instead of the one active in the buffer.
+            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0 && sb_count(Panel->ModeCtx.Select.SelectionGroup.Selections) != 0) {
                 SelGrp = &Panel->ModeCtx.Select.SelectionGroup;
             } else {
                 SelGrp = get_selection_group(Panel->Buffer, Panel);
