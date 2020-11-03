@@ -130,4 +130,9 @@ mem_buf_free(mem_buffer_t *Buffer) {
     free(Buffer->Data);
 }
 
+inline void
+mem_buf_clear(mem_buffer_t *Buffer) {
+    Buffer->Used = 0;
+}
+
 #endif //MEMORY_H

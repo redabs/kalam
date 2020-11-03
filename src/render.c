@@ -137,17 +137,9 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect
 
 // Text is null-terminated if End is 0
 void
-draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, u8 *Start, u8 *End) {
-    if(!Start) {
-        return;
-    }
-    
-    if(!End) {
-        End = Start;
-        while(*End) { ++End; }
-    }
-    
-    u8 *c = Start; 
+draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, range_t String) {
+    u8 *End = String.Data + String.Size;
+    u8 *c = String.Data;
     s32 CursorX = x;
     while(c < End) {
         u32 Codepoint;

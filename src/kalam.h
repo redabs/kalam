@@ -33,6 +33,7 @@ struct selection_group_t {
 };
 
 typedef struct {
+    // TODO: FileInformation
     buffer_type_t Type;
     mem_buffer_t Text;
     line_t *Lines; // stb
@@ -61,12 +62,6 @@ typedef struct {
     u8 String[];
 } file_select_option_t;
 
-typedef struct {
-    mem_buffer_t OptionStorage; // { u64 Len; u8 String[]; } .. {  }
-    range_t *FileNames; // stb
-    u64 SelectedIdx; // FileNames index
-} mode_file_select_ctx_t;
-
 // Only the leaf nodes are actually regions where text is drawn.
 struct panel_t {
     panel_t *Next; // Next free panel, if the panel is free
@@ -79,7 +74,6 @@ struct panel_t {
     mode_t Mode;
     union {
         mode_select_ctx_t Select;
-        mode_file_select_ctx_t FileSelect;
     } ModeCtx;
     
     s32 ScrollX, ScrollY;
@@ -136,6 +130,7 @@ typedef struct {
 } font_t;
 
 typedef struct {
+    mem_buffer_t EnumeratedFiles;
     font_t Font;
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;

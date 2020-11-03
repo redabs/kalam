@@ -334,5 +334,5 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
         // TODO Diagnostics!
     }
     
-    return 1;
+    return 0;
 }

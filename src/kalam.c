@@ -102,7 +102,7 @@ do_operation(operation_t Op) {
             switch(Op.SetMode.Mode) {
                 case MODE_Select: {
                     mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
-                    SelectCtx->SearchTerm.Used = 0;
+                    mem_buf_clear(&SelectCtx->SearchTerm);
                     SelectCtx->SelectionGroup.Owner = Panel;
                     SelectCtx->SelectionGroup.SelectionIdxTop = 0;
                     if(SelectCtx->SelectionGroup.Selections) {
@@ -115,12 +115,11 @@ do_operation(operation_t Op) {
                     files_in_directory_t Dir = platform_get_files_in_directory(mem_buffer_as_range(Ctx.WorkingDirectory));
                     
                     // Reset options
-                    mode_file_select_ctx_t *ModeCtx = &Panel->ModeCtx.FileSelect;
-                    ModeCtx->OptionStorage.Used = 0;
+                    mem_buf_clear(&Ctx.EnumeratedFiles);
                     
                     for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
                         file_info_t *Fi = &Dir.Files[i];
-                        add_file_select_option(&ModeCtx->OptionStorage, (range_t){.Data = Fi->FileName.Data, .Size = Fi->FileName.Used});
+                        add_file_select_option(&Ctx.EnumeratedFiles, (range_t){.Data = Fi->FileName.Data, .Size = Fi->FileName.Used});
                     }
                     
                     free_files_in_directory(&Dir);
@@ -445,6 +444,8 @@ k_do_editor(platform_shared_t *Shared) {
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
     draw_panels(Shared->Framebuffer, &Ctx.Font);
+    
+    
     
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {

@@ -28,18 +28,10 @@ get_x_advance(font_t *Font, u32 Codepoint) {
 }
 
 s32
-text_width(font_t *Font, u8 *Start, u8 *End) {
-    if(!Start) {
-        return 0;
-    }
-    
-    if(!End) {
-        End = Start;
-        while(*End) { ++End; }
-    }
-    
+text_width(font_t *Font, range_t Text) {
     s32 Result = 0;
-    u8 *c = Start;
+    u8 *c = Text.Data;
+    u8 *End = Text.Data + Text.Size;
     u32 Codepoint;
     while(c < End) {
         c = utf8_to_codepoint(c, &Codepoint);
@@ -51,19 +43,9 @@ text_width(font_t *Font, u8 *Start, u8 *End) {
 
 // Returns {x, baseline}
 iv2_t 
-center_text_in_rect(font_t *Font, irect_t Rect, u8 *Start, u8 *End) {
-    s32 TextWidth = 0;
-    if(Start) {
-        if(!End) {
-            End = Start;
-            while(*End) { ++End; }
-        }
-        TextWidth = text_width(Font, Start, End);
-    }
-    
-    iv2_t Result;
-    Result.x = Rect.x + (Rect.w - TextWidth) / 2;
-    Result.y = Rect.y + (Rect.h + Font->MHeight) / 2;
+center_text_in_rect(font_t *Font, irect_t Rect, range_t Text) {
+    s32 TextWidth = text_width(Font, Text);
+    iv2_t Result = {.x = Rect.x + (Rect.w - TextWidth) / 2, .y = Rect.y + (Rect.h + Font->MHeight) / 2};
     return Result;
 }
 
@@ -91,8 +73,9 @@ draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 L
         --c;
         *c = '0' + (i % 10);
     }
-    s32 Width = text_width(Font, c, c + n);
-    draw_text_line(Fb, Font, Rect.x + Rect.w - Width, Rect.y, Color, c, c + n);
+    range_t s = {.Data = c, .Size = n}; 
+    s32 Width = text_width(Font, s);
+    draw_text_line(Fb, Font, Rect.x + Rect.w - Width, Rect.y, Color, s);
 }
 
 void
@@ -103,13 +86,12 @@ draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *F
     s32 Width = Font->MWidth;
     if(Selection->Cursor < Panel->Buffer->Text.Used) {
         u8 *InBuf = Panel->Buffer->Text.Data + Selection->Cursor;
-        Width = text_width(Font, InBuf, InBuf + utf8_char_width(InBuf));
+        Width = text_width(Font, (range_t){.Data = InBuf, .Size = utf8_char_width(InBuf)});
     }
     line_t *Line = Panel->Buffer->Lines + LineIndex;
-    u8 *LineInBuffOff = Panel->Buffer->Text.Data + Line->Offset;
-    s32 x = text_width(Font, LineInBuffOff, Panel->Buffer->Text.Data + Selection->Cursor);
+    s32 PixelOffsetToCursor = text_width(Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = Selection->Cursor - Line->Offset});
     
-    irect_t Cursor = {.x = TextRegion.x + x - Panel->ScrollX, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
+    irect_t Cursor = {.x = TextRegion.x + PixelOffsetToCursor - Panel->ScrollX, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
     
     draw_rect(Fb, Cursor, Color);
 }
@@ -118,31 +100,45 @@ void
 draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion) {
     buffer_t *Buf = Panel->Buffer;
     
-    u64 Start = selection_start(Selection);
-    u64 End = selection_end(Selection);
-    End += utf8_char_width(Buf->Text.Data + End);
-    u64 LineIndexStart = offset_to_line_index(Panel->Buffer, Start);
-    u64 LineIndexEnd = offset_to_line_index(Panel->Buffer, End);
+    u64 SelectionStart = selection_start(Selection);
+    u64 SelectionEnd = selection_end(Selection);
+    SelectionEnd += utf8_char_width(Buf->Text.Data + SelectionEnd);
+    u64 LineIndexStart = offset_to_line_index(Panel->Buffer, SelectionStart);
+    u64 LineIndexEnd = offset_to_line_index(Panel->Buffer, SelectionEnd);
     
     s32 LineHeight = line_height(Font);
     for(u64 i = LineIndexStart; i <= LineIndexEnd; ++i) {
         s32 y = TextRegion.y + (s32)i * LineHeight;
         line_t *Line = &Buf->Lines[i];
         
-        u8 *SelectionStartOnCurrentLine = Buf->Text.Data + MAX(Line->Offset, Start);
-        u8 *SelectionEndOnCurrentLine = Buf->Text.Data + MIN(Line->Offset + Line->Size, End);
+        // Compute the extent of the selection on the current line.
+        // The selection might:
+        // A. fully include the current line, 
+        // [The quick brown fox]
         
-        s32 Width = text_width(Font, SelectionStartOnCurrentLine, SelectionEndOnCurrentLine);
+        // B. start some non-zero offset into it and include the end, 
+        // The [quick brown fox]
+        
+        // C. include the start of the current line but not the end,
+        // [The quick] brown fox
+        
+        // D. start at some non-zero offset into it and not include the end.
+        // The [quick brown] fox
+        
+        u64 Start = MAX(Line->Offset, SelectionStart);
+        u64 Size = MIN(Line->Offset + Line->Size, SelectionEnd) - Start;
+        
+        s32 Width = text_width(Font, (range_t){.Data = Buf->Text.Data + Start, .Size = Size});
         
         // There is one exception where the selection is allowed to go outside the line and it is on the last "imaginary" character on the 
         // last line in the file. The reason the cursor can go one byte outside like this is so that one can append to the end of the file.
         // Because this one-past-the-end byte could be anything we don't want to include it in the string we pass to text_width, so to handle
         // this we check if the cursor is past the end of the line and we're on the last line and then increase the size my the width of 'M'.
-        if(i == (u64)(sb_count(Buf->Lines) - 1) && End > Line->Offset + Line->Size) {
+        if(i == (u64)(sb_count(Buf->Lines) - 1) && SelectionEnd > Line->Offset + Line->Size) {
             Width += Font->MWidth;
         } 
-        
-        irect_t LineRect = {TextRegion.x + text_width(Font, Buf->Text.Data + Line->Offset, SelectionStartOnCurrentLine) - Panel->ScrollX, y - Panel->ScrollY, Width, LineHeight};
+        s32 PixelOffsetToSelectionStart = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Start - Line->Offset});
+        irect_t LineRect = {.x = TextRegion.x + PixelOffsetToSelectionStart - Panel->ScrollX, .y = y - Panel->ScrollY, .w = Width, .h = LineHeight};
         draw_rect(Fb, LineRect, COLOR_SELECTION);
     }
 }
@@ -181,9 +177,8 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                     Panel->ScrollY = OffsetY;
                 }
                 
-                u8 *Start = Panel->Buffer->Text.Data + Panel->Buffer->Lines[Li].Offset;
-                u8 *End = Panel->Buffer->Text.Data + SelectionMaxIdx.Cursor;
-                s32 OffsetX = text_width(&Ctx.Font, Start, End);
+                line_t *Line = &Panel->Buffer->Lines[Li];
+                s32 OffsetX = text_width(&Ctx.Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = SelectionMaxIdx.Cursor - Line->Offset});
                 if(OffsetX >= (TextRegion.w + Panel->ScrollX)) {
                     Panel->ScrollX = OffsetX - TextRegion.w + Ctx.Font.MWidth;
                 } else if(OffsetX < Panel->ScrollX) {
@@ -200,14 +195,12 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             // Draw lines
             irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
             for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-                u8 *Start = Buf->Text.Data + Buf->Lines[i].Offset;
-                u8 *End = Start + Buf->Lines[i].Size;
                 s32 LineY = TextRegion.y + (s32)i * LineHeight;
                 s32 Center = LineY + (LineHeight >> 1);
                 s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
                 
                 Fb->Clip = TextRegion;
-                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, Start, End);
+                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, (range_t){.Data = Buf->Text.Data + Buf->Lines[i].Offset, .Size = Buf->Lines[i].Size});
                 Fb->Clip = PanelRect;
                 s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
@@ -250,37 +243,31 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             draw_rect(Fb, r2, BorderColor);
             draw_rect(Fb, r3, BorderColor);
             
-            u8 *ModeStr = (u8 *)"Invalid mode";
             u32 ModeStrColor = 0xffffffff;
-            u64 ModeStrSize = c_str_len(ModeStr);
+            range_t ModeString = C_STR_AS_RANGE("Invalid mode");
             switch(Panel->Mode) {
                 case MODE_Normal: {
-                    ModeStr = (u8 *)"NORMAL";
-                    ModeStrSize = c_str_len(ModeStr);
+                    ModeString = C_STR_AS_RANGE("NORMAL");
                     ModeStrColor = COLOR_STATUS_NORMAL;
                 } break;
                 
                 case MODE_Insert: {
-                    ModeStr = (u8 *)"INSERT";
-                    ModeStrSize = c_str_len(ModeStr);
+                    ModeString = C_STR_AS_RANGE("INSERT");
                     ModeStrColor = COLOR_STATUS_INSERT;
                 } break;
                 
                 case MODE_Select: {
-                    ModeStr = Panel->ModeCtx.Select.SearchTerm.Data;
-                    ModeStrSize = Panel->ModeCtx.Select.SearchTerm.Used;
+                    ModeString = mem_buffer_as_range(Panel->ModeCtx.Select.SearchTerm);
                 } break;
                 
                 case MODE_FileSelect: {
-                    ModeStr = (u8 *)"File Select";
-                    ModeStrSize = c_str_len(ModeStr);
-                    ModeStrColor = COLOR_STATUS_NORMAL;
+                    ModeString = C_STR_AS_RANGE("File Select");
                 } break;
             }
             
-            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeStr, ModeStr + ModeStrSize);
-            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeStr, ModeStr + ModeStrSize);
-            draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? (u8*)"|" : (u8*)"_", 0);
+            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeString);
+            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeString);
+            draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
         }
     } else {
         irect_t r0, r1;
