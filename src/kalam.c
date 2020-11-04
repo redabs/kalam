@@ -83,10 +83,10 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
 }
 
 file_select_option_t *
-add_file_select_option(mem_buffer_t *OptionStorage, range_t Option) {
-    file_select_option_t *Dest = mem_buf_add(OptionStorage, Option.Size);
-    Dest->Size = Option.Size;
-    mem_copy(Dest->String, Option.Data, Option.Size);
+add_file_select_option(mem_buffer_t *OptionStorage, range_t String) {
+    file_select_option_t *Dest = mem_buf_add(OptionStorage, sizeof(file_select_option_t) + String.Size);
+    Dest->Size = String.Size;
+    mem_copy(Dest->String, String.Data, String.Size);
     
     return Dest;
 }
@@ -445,7 +445,12 @@ k_do_editor(platform_shared_t *Shared) {
     
     draw_panels(Shared->Framebuffer, &Ctx.Font);
     
-    
+    for(u64 Offset = 0, i = 0; Offset < Ctx.EnumeratedFiles.Used; ++i) {
+        file_select_option_t *Opt = (file_select_option_t *)(&Ctx.EnumeratedFiles.Data[Offset]); 
+        range_t Path = {.Data = Opt->String, .Size = Opt->Size};
+        draw_text_line(Shared->Framebuffer, &Ctx.Font, 600, line_height(&Ctx.Font) * (s32)(i + 1), 0xffffffff, Path);
+        Offset += Opt->Size + sizeof(file_select_option_t);
+    }
     
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {

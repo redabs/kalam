@@ -76,6 +76,8 @@ platform_get_files_in_directory(range_t Path) {
     mem_buffer_t WidePath = {0};
     {
         utf8_str_to_utf16_str(Path, &WidePath);
+        wchar_t Wildcard = L'*';
+        mem_buf_append(&WidePath, &Wildcard, sizeof(wchar_t));
         // Null-terminate WidePath
         u16 Zero = 0;
         mem_buf_append(&WidePath, &Zero, 2);
@@ -293,6 +295,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     
     HWND WindowHandle = CreateWindowExW(0, WindowClass.lpszClassName, L"kalam", WS_OVERLAPPEDWINDOW | WS_VISIBLE, 820, 380, WindowWidth, WindowHeight, 0, 0, Instance, 0);
     if(WindowHandle) {
+        b32 IsUnicode = IsWindowUnicode(WindowHandle);
+        ASSERT(IsUnicode);
         {
             RECT ClientRect;
             GetClientRect(WindowHandle, &ClientRect);
@@ -303,14 +307,31 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
         }
         
         {
-            mem_buffer_t U8Path = {0};
+            DWORD PathBufferSizeInChars = 512;
+            wchar_t *Path = malloc(sizeof(wchar_t) * PathBufferSizeInChars);
+            DWORD Length = GetCurrentDirectory((PathBufferSizeInChars - 1), Path); // Reserve a slot for the possibility to add a trailing backslash
             
-            wchar_t *WPath = _wgetcwd(NULL, 0);
-            utf16_c_str_to_utf8_str(WPath, &U8Path);
+            if(Length > PathBufferSizeInChars) {
+                PathBufferSizeInChars = Length + 1; // plus one for potentially adding a trailing backslash
+                Path = realloc(Path, PathBufferSizeInChars);
+                Length = GetCurrentDirectory(PathBufferSizeInChars, Path);
+            }
+            
+            { // Add trailing backslash if there is none 
+                wchar_t *c = Path;
+                while(*c) { ++c; }
+                if(c != Path && *(c - 1) != L'\\') {
+                    *c = L'\\';
+                    *(c + 1) = 0;
+                }
+            }
+            
+            mem_buffer_t U8Path = {0};
+            utf16_c_str_to_utf8_str(Path, &U8Path);
             
             k_init(&Shared, (range_t){.Data = U8Path.Data, .Size = U8Path.Used});
             
-            free(WPath);
+            free(Path);
             mem_buf_free(&U8Path);
         }
         

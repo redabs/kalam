@@ -21,7 +21,7 @@ REM  ------------------------------------
 
 REM -Zi Generate complete debug information
 REM -FC Display full path of source code passsed to cl.exe in diagnostics text
-set CFlags=-nologo -Od -Zi -FC -W4 %Warnings%
+set CFlags=-nologo -Od -Zi -FC -W4 %Warnings% /D UNICODE
 
 set LinkerFlags=-incremental:no User32.lib Gdi32.lib
 
