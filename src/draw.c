@@ -285,8 +285,45 @@ workspace_rect(framebuffer_t *Fb) {
 
 void
 draw_panels(framebuffer_t *Fb, font_t *Font) {
+    irect_t ClipSave = Fb->Clip;
     if(Ctx.PanelCtx.Root) {
         irect_t Rect = workspace_rect(Fb);
         draw_panel(Fb, Ctx.PanelCtx.Root, Font, Rect);
     }
+    Fb->Clip = ClipSave;
+}
+
+
+void
+draw_file_menu(framebuffer_t *Fb) {
+    irect_t Workspace = workspace_rect(Fb);
+    irect_t ClipSave = Fb->Clip;
+    
+    s32 hw = 250 >> 1;
+    s32 LineHeight = line_height(&Ctx.Font);
+    irect_t Box = {.x = (Workspace.w >> 1)  - hw, .y = 120, .w = hw * 2, LineHeight * 16};
+    draw_rect(Fb, Box, 0xdd2c302d);
+    
+    s32 y = Box.y;
+    s32 HalfLineHeight = LineHeight >> 1;
+    s32 HalfMHeight = (Ctx.Font.MHeight >> 1);
+    
+    range_t CurrentDirText = mem_buffer_as_range(Ctx.WorkingDirectory);
+    iv2_t CurrentDirTextPos = center_text_in_rect(&Ctx.Font, (irect_t){.x = Box.x, .y = Box.y - LineHeight, .w = Box.w, .h = LineHeight}, CurrentDirText);
+    draw_text_line(Fb, &Ctx.Font, CurrentDirTextPos.x, CurrentDirTextPos.y, 0xffffffff, CurrentDirText);
+    
+    Fb->Clip = Box;
+    for(u64 Offset = 0, i = 0; Offset < Ctx.EnumeratedFiles.Used; ++i) {
+        file_select_option_t *Opt = (file_select_option_t *)(&Ctx.EnumeratedFiles.Data[Offset]); 
+        range_t Path = {.Data = Opt->String, .Size = Opt->Size};
+        if(i == Ctx.SelectedFile.Index) {
+            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
+        }
+        s32 BaseLine = y + HalfLineHeight + HalfMHeight;
+        draw_text_line(Fb, &Ctx.Font, Box.x + 5, BaseLine, 0xffffffff, Path);
+        Offset += Opt->Size + sizeof(file_select_option_t);
+        y += LineHeight;
+    }
+    
+    Fb->Clip = ClipSave;
 }

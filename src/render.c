@@ -49,11 +49,11 @@ clear_framebuffer(framebuffer_t *Fb, u32 Color) {
 
 void 
 draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
-    s32 MinX = MAX(Rect.x, Fb->Clip.x);
-    s32 MaxX = MIN(MinX + Rect.w, Fb->Clip.x + Fb->Clip.w);
+    s32 MinX = CLAMP(0, Fb->Width, MAX(Rect.x, Fb->Clip.x));
+    s32 MaxX = CLAMP(0, Fb->Width, MIN(MinX + Rect.w, Fb->Clip.x + Fb->Clip.w));
     
-    s32 MinY = MAX(Rect.y, Fb->Clip.y); 
-    s32 MaxY = MIN(MinY + Rect.h, Fb->Clip.y + Fb->Clip.h);
+    s32 MinY = CLAMP(0, Fb->Height, MAX(Rect.y, Fb->Clip.y));
+    s32 MaxY = CLAMP(0, Fb->Height, MIN(MinY + Rect.h, Fb->Clip.y + Fb->Clip.h));
     
     if((Color >> 24) == 0xff) {
         u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
@@ -92,14 +92,14 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
 
 void
 draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect, bitmap_t *Bitmap) {
-    s32 BoxMinX = MAX(xPos, Fb->Clip.x);
-    s32 BoxMaxX = MIN(MAX(xPos + Rect.w, 0), Fb->Clip.x + Fb->Clip.w);
+    s32 BoxMinX = CLAMP(0, Fb->Width, MAX(xPos, Fb->Clip.x));
+    s32 BoxMaxX = CLAMP(0, Fb->Width, MIN(MAX(xPos + Rect.w, 0), Fb->Clip.x + Fb->Clip.w));
     s32 xOff = MIN(BoxMinX - xPos, Rect.w); 
     // When the box we're drawing into is clipped xOff gives us the x-offset into the bitmap
     // that we should start sampling from.
     
-    s32 BoxMinY = MAX(yPos, Fb->Clip.y);
-    s32 BoxMaxY = MIN(MAX(yPos + Rect.h, 0), Fb->Clip.y + Fb->Clip.h);
+    s32 BoxMinY = CLAMP(0, Fb->Height, MAX(yPos, Fb->Clip.y));
+    s32 BoxMaxY = CLAMP(0, Fb->Height, MIN(MAX(yPos + Rect.h, 0), Fb->Clip.y + Fb->Clip.h));
     s32 yOff = MIN(BoxMinY - yPos, Rect.h); 
     
     s32 w = BoxMaxX - BoxMinX;

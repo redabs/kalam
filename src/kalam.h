@@ -131,6 +131,7 @@ typedef struct {
 
 typedef struct {
     mem_buffer_t EnumeratedFiles; // file_select_option_t
+    struct { u32 Index; u64 Offset; } SelectedFile;
     font_t Font;
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;

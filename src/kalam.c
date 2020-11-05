@@ -444,14 +444,7 @@ k_do_editor(platform_shared_t *Shared) {
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
     draw_panels(Shared->Framebuffer, &Ctx.Font);
-    
-    for(u64 Offset = 0, i = 0; Offset < Ctx.EnumeratedFiles.Used; ++i) {
-        file_select_option_t *Opt = (file_select_option_t *)(&Ctx.EnumeratedFiles.Data[Offset]); 
-        range_t Path = {.Data = Opt->String, .Size = Opt->Size};
-        draw_text_line(Shared->Framebuffer, &Ctx.Font, 600, line_height(&Ctx.Font) * (s32)(i + 1), 0xffffffff, Path);
-        Offset += Opt->Size + sizeof(file_select_option_t);
-    }
-    
+    draw_file_menu(Shared->Framebuffer);
 #if 0    
     for(u32 i = 0, x = 0; i < Ctx.Font.SetCount; ++i) {
         bitmap_t *b = &Ctx.Font.GlyphSets[i].Set->Bitmap;
