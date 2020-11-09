@@ -9,8 +9,8 @@
 #include "deps/stretchy_buffer.h"
 
 #include "intrinsics.h"
-#include "memory.h"
 #include "types.h"
+#include "memory.h"
 #include "event.h"
 #include "platform.h" 
 
@@ -78,9 +78,7 @@ platform_get_files_in_directory(range_t Path) {
         utf8_str_to_utf16_str(Path, &WidePath);
         wchar_t Wildcard = L'*';
         mem_buf_append(&WidePath, &Wildcard, sizeof(wchar_t));
-        // Null-terminate WidePath
-        u16 Zero = 0;
-        mem_buf_append(&WidePath, &Zero, 2);
+        mem_buf_null_bytes(&WidePath, sizeof(wchar_t));
         HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);
         if(FileHandle != INVALID_HANDLE_VALUE) {
             for(b32 Go = true; Go; Go = FindNextFileW(FileHandle, &FoundFile)) {
@@ -100,10 +98,18 @@ platform_get_files_in_directory(range_t Path) {
 }
 
 b32 
-platform_read_file(char *Path, platform_file_data_t *FileData) {
+platform_read_file(range_t Path, platform_file_data_t *FileData) {
     b32 Success = true;
     // TODO: IMPORTANT! Non-ASCII file paths
-    HANDLE FileHandle = CreateFileA(Path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+    
+    HANDLE FileHandle;
+    {
+        mem_buffer_t WidePath = {0};
+        utf8_str_to_utf16_str(Path, &WidePath);
+        mem_buf_null_bytes(&WidePath, sizeof(wchar_t));
+        FileHandle = CreateFileW((wchar_t *)WidePath.Data, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+        mem_buf_free(&WidePath);
+    }
     
     s64 FileSize = 0;
     if(FileHandle != INVALID_HANDLE_VALUE) {

@@ -27,9 +27,4 @@ typedef struct {
     u64 Size;
 } range_t;
 
-inline range_t
-mem_buffer_as_range(mem_buffer_t Buf) {
-    return (range_t){.Data = Buf.Data, .Size = Buf.Used};
-}
-
 #endif //TYPES_H

@@ -26,6 +26,11 @@ typedef struct {
     u8 *Data;
 } mem_buffer_t;
 
+inline range_t
+mem_buf_as_range(mem_buffer_t Buf) {
+    return (range_t){.Data = Buf.Data, .Size = Buf.Used};
+}
+
 #define mem_buf_count(Buffer, Type) mem_buf_count_(Buffer, sizeof(Type))
 inline u64 
 mem_buf_count_(mem_buffer_t *Buffer, u64 ItemSize) {
@@ -64,6 +69,14 @@ mem_buf_maybe_grow(mem_buffer_t *Buffer, u64 Size) {
     }
 }
 
+// mem_buf_null_terminate does not change the size of the data. It maybe grows the buffer to fit
+// Count more bytes and writes Count null bytes after the data.
+inline void
+mem_buf_null_bytes(mem_buffer_t *Buffer, u64 Count) {
+    mem_buf_maybe_grow(Buffer, Count);
+    mem_zero(Buffer->Data + Buffer->Used, Count);
+}
+
 #define mem_buf_add_array(BUFFER, ELEMENT_TYPE, COUNT) (ELEMENT_TYPE *)mem_buf_add(BUFFER, sizeof(ELEMENT_TYPE) * COUNT)
 #define mem_buf_add_struct(BUFFER, STRUCT_TYPE) (STRUCT_TYPE *)mem_buf_add(BUFFER, sizeof(STRUCT_TYPE))
 inline void *
@@ -80,6 +93,11 @@ mem_buf_add(mem_buffer_t *Buffer, u64 Size) {
 inline void
 mem_buf_append(mem_buffer_t *Buffer, void *Data, u64 Size) {
     mem_copy(mem_buf_add(Buffer, Size), Data, Size);
+}
+
+inline void
+mem_buf_append_range(mem_buffer_t *Buffer, range_t Range) {
+    mem_buf_append(Buffer, Range.Data, Range.Size);
 }
 
 inline void 

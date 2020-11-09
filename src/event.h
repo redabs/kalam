@@ -37,6 +37,7 @@ typedef enum {
 typedef enum {
     KEY_Backspace = 0x8,
     KEY_Tab = 0x9,
+    KEY_Return = 0x0d,
     KEY_Shift = 0x10,
     KEY_Ctrl = 0x11,
     KEY_Alt = 0x12,

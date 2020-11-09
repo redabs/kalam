@@ -32,6 +32,16 @@ panel_child_index(panel_t *Panel) {
 }
 
 void
+panel_show_buffer(panel_t *Panel, buffer_t *Buffer) {
+    Panel->Buffer = Buffer;
+    selection_group_t *SelGrp = get_selection_group(Buffer, Panel);
+    if(!SelGrp) {
+        SelGrp = add_selection_group(Panel->Buffer, Panel);
+        sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
+    }
+}
+
+void
 panel_create(panel_ctx_t *PanelCtx) {
     // no hay nada mas
     if(!PanelCtx->FreeList) {
@@ -39,11 +49,9 @@ panel_create(panel_ctx_t *PanelCtx) {
     }
     
     if(!PanelCtx->Root) {
-        panel_t *p = panel_alloc(PanelCtx);;
-        p->Buffer = &Ctx.Buffers[0];
+        panel_t *p = panel_alloc(PanelCtx);
         
-        selection_group_t *SelGrp = add_selection_group(p->Buffer, p);
-        sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
+        panel_show_buffer(p, &Ctx.Buffers[0]);
         
         PanelCtx->Root = p;
         PanelCtx->Selected = p;
@@ -76,13 +84,11 @@ panel_create(panel_ctx_t *PanelCtx) {
         Selected->Parent = Sibling->Parent = Parent;
         
         Sibling->Split = Selected->Split;
-        Sibling->Buffer = Selected->Buffer,
         Sibling->Mode = MODE_Normal;
         Sibling->ScrollX = Selected->ScrollX;
         Sibling->ScrollY = Selected->ScrollY;
         
-        selection_group_t *SelGrp = add_selection_group(Sibling->Buffer, Sibling);
-        sb_push(SelGrp->Selections, (selection_t) {.Idx = SelGrp->SelectionIdxTop++});
+        panel_show_buffer(Sibling, Selected->Buffer);
         
         PanelCtx->Selected = Sibling;
         Sibling->Parent->LastSelected = panel_child_index(Sibling);

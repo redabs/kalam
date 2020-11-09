@@ -49,7 +49,6 @@ typedef enum {
     MODE_Normal = 0,
     MODE_Insert,
     MODE_Select,
-    MODE_FileSelect,
 } mode_t;
 
 typedef struct {
@@ -125,17 +124,31 @@ typedef struct {
 } font_t;
 
 typedef struct {
+    u64 Offset;
     u64 Size;
-    u8 String[];
-} file_select_option_t;
+    file_flags_t Flags;
+    // u64 Hash; 
+} file_name_info_t;
+
+typedef enum {
+    WIDGET_Panels = 0,
+    WIDGET_FileSelect,
+    
+    // WIDGET_FileTree,
+} widget_type_t;
 
 typedef struct {
-    mem_buffer_t EnumeratedFiles; // file_select_option_t
-    struct { u32 Index; u64 Offset; } SelectedFile;
+    mem_buffer_t FileNames; 
+    file_name_info_t *FileNameInfo;
+    s64 SelectedFileIndex; 
+    
+    widget_type_t WidgetFocused;
+    s32 FileSelectScrollY;
+    
     font_t Font;
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;
-    mem_buffer_t WorkingDirectory;
+    mem_buffer_t WorkingDirectory; // IMPORTANT: ALWAYS ends with a directory delimiter, forward- or backslash
 } ctx_t;
 
 #endif //KALAM_H

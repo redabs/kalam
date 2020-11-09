@@ -257,12 +257,9 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 } break;
                 
                 case MODE_Select: {
-                    ModeString = mem_buffer_as_range(Panel->ModeCtx.Select.SearchTerm);
+                    ModeString = mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm);
                 } break;
                 
-                case MODE_FileSelect: {
-                    ModeString = C_STR_AS_RANGE("File Select");
-                } break;
             }
             
             iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeString);
@@ -293,35 +290,44 @@ draw_panels(framebuffer_t *Fb, font_t *Font) {
     Fb->Clip = ClipSave;
 }
 
-
 void
 draw_file_menu(framebuffer_t *Fb) {
-    irect_t Workspace = workspace_rect(Fb);
     irect_t ClipSave = Fb->Clip;
+    irect_t Rect = workspace_rect(Fb);
     
     s32 hw = 250 >> 1;
     s32 LineHeight = line_height(&Ctx.Font);
-    irect_t Box = {.x = (Workspace.w >> 1)  - hw, .y = 120, .w = hw * 2, LineHeight * 16};
+    irect_t Box = {.x = Rect.x + (Rect.w >> 1) - hw, .y = Rect.y + 30, .w = hw * 2, LineHeight * 16};
     draw_rect(Fb, Box, 0xdd2c302d);
     
-    s32 y = Box.y;
     s32 HalfLineHeight = LineHeight >> 1;
     s32 HalfMHeight = (Ctx.Font.MHeight >> 1);
     
-    range_t CurrentDirText = mem_buffer_as_range(Ctx.WorkingDirectory);
+    range_t CurrentDirText = mem_buf_as_range(Ctx.WorkingDirectory);
     iv2_t CurrentDirTextPos = center_text_in_rect(&Ctx.Font, (irect_t){.x = Box.x, .y = Box.y - LineHeight, .w = Box.w, .h = LineHeight}, CurrentDirText);
     draw_text_line(Fb, &Ctx.Font, CurrentDirTextPos.x, CurrentDirTextPos.y, 0xffffffff, CurrentDirText);
     
     Fb->Clip = Box;
-    for(u64 Offset = 0, i = 0; Offset < Ctx.EnumeratedFiles.Used; ++i) {
-        file_select_option_t *Opt = (file_select_option_t *)(&Ctx.EnumeratedFiles.Data[Offset]); 
-        range_t Path = {.Data = Opt->String, .Size = Opt->Size};
-        if(i == Ctx.SelectedFile.Index) {
-            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
+    s32 y = Box.y;
+    
+    // Calculate vertical scroll
+    
+    s32 OffsetY = (s32)Ctx.SelectedFileIndex * LineHeight;
+    if(OffsetY >= (Ctx.FileSelectScrollY + Box.h)) {
+        Ctx.FileSelectScrollY = OffsetY - Box.h + LineHeight;
+    } else if(OffsetY < Ctx.FileSelectScrollY) {
+        Ctx.FileSelectScrollY = OffsetY;
+    }
+    
+    for(s64 i = 0; i < sb_count(Ctx.FileNameInfo); ++i) {
+        range_t Path = { .Data = &Ctx.FileNames.Data[Ctx.FileNameInfo[i].Offset], .Size = Ctx.FileNameInfo[i].Size };
+        
+        if(i == Ctx.SelectedFileIndex) {
+            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i - Ctx.FileSelectScrollY, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
         }
-        s32 BaseLine = y + HalfLineHeight + HalfMHeight;
+        
+        s32 BaseLine = y + HalfLineHeight + HalfMHeight - Ctx.FileSelectScrollY;
         draw_text_line(Fb, &Ctx.Font, Box.x + 5, BaseLine, 0xffffffff, Path);
-        Offset += Opt->Size + sizeof(file_select_option_t);
         y += LineHeight;
     }
     
