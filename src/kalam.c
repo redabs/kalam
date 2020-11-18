@@ -66,7 +66,7 @@ load_file(range_t Path) {
             for(u32 i = 0; i < PANEL_MAX; ++i) {
                 panel_t *p = &Ctx.PanelCtx.Panels[i];
                 if(p->IsLeaf) {
-                    p->Buffer = &Ctx.Buffers[(p->Buffer - OldBase) / sizeof(buffer_t)];
+                    p->Buffer = &Ctx.Buffers[p->Buffer - OldBase];
                 }
             }
         }
