@@ -25,7 +25,6 @@ typedef enum {
     FILE_FLAGS_Hidden     = 1 << 2,
 } file_flags_t; 
 
-
 // TODO: File names are dynamically allocated individually, they should all have the same storage for faster deallocation.
 typedef struct {
     mem_buffer_t FileName;
@@ -48,6 +47,7 @@ free_files_in_directory(files_in_directory_t *Dir) {
 b32 platform_read_file(range_t Path, platform_file_data_t *FileData);
 void platform_free_file(platform_file_data_t *FileData);
 files_in_directory_t platform_get_files_in_directory(range_t Path);
+b32 platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory);
 
 // From the editor to the platform
 void k_do_editor(platform_shared_t *Shared);

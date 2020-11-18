@@ -4,6 +4,7 @@
 #undef max
 #include <Windowsx.h>
 #include <direct.h> // _wgetcwd
+#include <shlwapi.h> // PathFileExistsW
 
 #include "deps/stb_truetype.h"
 #include "deps/stretchy_buffer.h"
@@ -49,6 +50,9 @@ utf8_str_to_utf16_str(range_t U8, mem_buffer_t *U16) {
             mem_buf_append(U16, &Utf16, 2);
         }
     }
+    // Because this function mostly exists to interface with windows and windows expects null terminated strings 
+    // we might aswell null terminate the string in here in case the caller forgets to.
+    mem_buf_null_bytes(U16, 2);
 }
 
 void
@@ -70,26 +74,28 @@ utf16_c_str_to_utf8_str(u16 *U16Str, mem_buffer_t *U8) {
 files_in_directory_t
 platform_get_files_in_directory(range_t Path) {
     files_in_directory_t Result = {0};
+    if(Path.Size == 0) {
+        return Result; 
+    }
     
     WIN32_FIND_DATAW FoundFile;
     
     mem_buffer_t WidePath = {0};
-    {
-        utf8_str_to_utf16_str(Path, &WidePath);
-        wchar_t Wildcard = L'*';
-        mem_buf_append(&WidePath, &Wildcard, sizeof(wchar_t));
-        mem_buf_null_bytes(&WidePath, sizeof(wchar_t));
-        HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);
-        if(FileHandle != INVALID_HANDLE_VALUE) {
-            for(b32 Go = true; Go; Go = FindNextFileW(FileHandle, &FoundFile)) {
-                file_info_t *Fi = sb_add(Result.Files, 1);
-                mem_zero_struct(Fi);
-                utf16_c_str_to_utf8_str(FoundFile.cFileName, &Fi->FileName);
-                
-                Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? FILE_FLAGS_Directory : 0;
-                Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ? FILE_FLAGS_Hidden : 0;
-            }
+    utf8_str_to_utf16_str(Path, &WidePath);
+    
+    wchar_t Wildcard = L'*';
+    mem_buf_append(&WidePath, &Wildcard, sizeof(wchar_t));
+    mem_buf_null_bytes(&WidePath, sizeof(wchar_t));
+    
+    HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);
+    if(FileHandle != INVALID_HANDLE_VALUE) {
+        for(b32 Go = true; Go; Go = FindNextFileW(FileHandle, &FoundFile)) {
+            file_info_t *Fi = sb_add(Result.Files, 1);
+            mem_zero_struct(Fi);
+            utf16_c_str_to_utf8_str(FoundFile.cFileName, &Fi->FileName);
             
+            Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? FILE_FLAGS_Directory : 0;
+            Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ? FILE_FLAGS_Hidden : 0;
         }
     }
     
@@ -100,7 +106,6 @@ platform_get_files_in_directory(range_t Path) {
 b32 
 platform_read_file(range_t Path, platform_file_data_t *FileData) {
     b32 Success = true;
-    // TODO: IMPORTANT! Non-ASCII file paths
     
     HANDLE FileHandle;
     {
@@ -283,6 +288,53 @@ handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *Ev
     }
 }
 
+mem_buffer_t 
+get_current_directory() {
+    DWORD PathBufferSizeInChars = MAX_PATH;
+    wchar_t *Path = malloc(sizeof(wchar_t) * PathBufferSizeInChars);
+    DWORD Length = GetCurrentDirectory((PathBufferSizeInChars - 1), Path); // Reserve a slot for the possibility to add a trailing backslash
+    
+    if(Length > PathBufferSizeInChars) {
+        PathBufferSizeInChars = Length + 1; // plus one for potentially adding a trailing backslash
+        Path = realloc(Path, PathBufferSizeInChars);
+        Length = GetCurrentDirectory(PathBufferSizeInChars, Path);
+    }
+    
+    { // Add trailing backslash if there is none 
+        wchar_t *c = Path;
+        while(*c) { ++c; }
+        if(c != Path && *(c - 1) != L'\\') {
+            *c = L'\\';
+            *(c + 1) = 0;
+        }
+    }
+    
+    mem_buffer_t U8Path = {0};
+    utf16_c_str_to_utf8_str(Path, &U8Path);
+    
+    free(Path);
+    
+    return U8Path;
+}
+
+// Writes new path to CurrentPath
+b32
+platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory) {
+    mem_buf_append_range(CurrentPath, SubDirectory);
+    
+    // We're always wide with Windows.
+    mem_buffer_t Utf16Dest = {0};
+    utf8_str_to_utf16_str(mem_buf_as_range(*CurrentPath), &Utf16Dest);
+    
+    b32 Success = PathFileExistsW((wchar_t *)Utf16Dest.Data);
+    if(!Success) {
+        mem_buf_pop_size(CurrentPath, SubDirectory.Size);
+    }
+    
+    mem_buf_free(&Utf16Dest);
+    return Success;
+}
+
 int CALLBACK 
 WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowCommand) {
     Shared.Framebuffer = &FramebufferInfo.Fb;
@@ -303,6 +355,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
     if(WindowHandle) {
         b32 IsUnicode = IsWindowUnicode(WindowHandle);
         ASSERT(IsUnicode);
+        
         {
             RECT ClientRect;
             GetClientRect(WindowHandle, &ClientRect);
@@ -313,32 +366,9 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
         }
         
         {
-            DWORD PathBufferSizeInChars = 512;
-            wchar_t *Path = malloc(sizeof(wchar_t) * PathBufferSizeInChars);
-            DWORD Length = GetCurrentDirectory((PathBufferSizeInChars - 1), Path); // Reserve a slot for the possibility to add a trailing backslash
-            
-            if(Length > PathBufferSizeInChars) {
-                PathBufferSizeInChars = Length + 1; // plus one for potentially adding a trailing backslash
-                Path = realloc(Path, PathBufferSizeInChars);
-                Length = GetCurrentDirectory(PathBufferSizeInChars, Path);
-            }
-            
-            { // Add trailing backslash if there is none 
-                wchar_t *c = Path;
-                while(*c) { ++c; }
-                if(c != Path && *(c - 1) != L'\\') {
-                    *c = L'\\';
-                    *(c + 1) = 0;
-                }
-            }
-            
-            mem_buffer_t U8Path = {0};
-            utf16_c_str_to_utf8_str(Path, &U8Path);
-            
-            k_init(&Shared, (range_t){.Data = U8Path.Data, .Size = U8Path.Used});
-            
-            free(Path);
-            mem_buf_free(&U8Path);
+            mem_buffer_t Path = get_current_directory();
+            k_init(&Shared, (range_t){.Data = Path.Data, .Size = Path.Used});
+            mem_buf_free(&Path);
         }
         
         b8 Running = true;

@@ -52,10 +52,10 @@ panel_create(panel_ctx_t *PanelCtx) {
         panel_t *p = panel_alloc(PanelCtx);
         
         panel_show_buffer(p, &Ctx.Buffers[0]);
+        p->IsLeaf = true;
         
         PanelCtx->Root = p;
         PanelCtx->Selected = p;
-        
     } else {
         // We allocate a new sibling and a parent. The selected node, the one which is split, becomes the second sibling of the new parent.
         panel_t *Parent = panel_alloc(PanelCtx);
@@ -75,6 +75,7 @@ panel_create(panel_ctx_t *PanelCtx) {
         Parent->Split = Selected->Split;
         Parent->Children[0] = Selected;
         Parent->Children[1] = Sibling;
+        Parent->IsLeaf = false;
         
         if(Selected->Parent) {
             Selected->Parent->Children[panel_child_index(Selected)] = Parent;
@@ -92,13 +93,15 @@ panel_create(panel_ctx_t *PanelCtx) {
         
         PanelCtx->Selected = Sibling;
         Sibling->Parent->LastSelected = panel_child_index(Sibling);
+        
+        Selected->IsLeaf = Sibling->IsLeaf = true;
     }
 }
 
 void
 panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
     // Don't kill the root panel or any non-leaf node panel.
-    if(Panel == PanelCtx->Root || Panel->Children[0] != 0 || Panel->Children[1] != 0) {
+    if(Panel == PanelCtx->Root || !Panel->IsLeaf) {
         return;
     }
     
@@ -117,19 +120,17 @@ panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
         Sibling->Parent = Parent->Parent;
     }
     
-    // The panel selection is now transferred over to either the sibling, if it is a leaf node (Sibling->Buffer != 0), or one of its descendants.
+    // The panel selection is now transferred over to either the sibling if it is a leaf node, or one of its descendants.
     // We decide which one of the decendants to transfer selection to by traversing the tree downwards following the node which was last selected.
-    if(Sibling->Buffer) {
+    if(Sibling->IsLeaf) {
         PanelCtx->Selected = Sibling;
     } else {
         panel_t *p = Sibling;
-        while(!p->Buffer) {
+        while(!p->IsLeaf) {
             p = p->Children[p->LastSelected];
         }
         PanelCtx->Selected = p;
     }
-    
-    //panel_unlink_leaf_node(PanelCtx, Panel);
     
     // TODO: Delete all selection groups owned by Panel.
     

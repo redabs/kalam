@@ -153,4 +153,10 @@ mem_buf_clear(mem_buffer_t *Buffer) {
     Buffer->Used = 0;
 }
 
+inline void
+mem_buf_replace(mem_buffer_t *Dest, mem_buffer_t *Src) {
+    mem_buf_clear(Dest);
+    mem_buf_append_range(Dest, mem_buf_as_range(*Src));
+}
+
 #endif //MEMORY_H

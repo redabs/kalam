@@ -97,8 +97,8 @@ make_selection(buffer_t *Buffer, u64 Anchor, u64 Cursor, u64 Idx) {
 selection_group_t *
 get_selection_group(buffer_t *Buffer, panel_t *Owner) {
     selection_group_t *SelGrp = 0;
-    for(s64 i = 0; i < sb_count(Owner->Buffer->SelectionGroups); ++i) {
-        selection_group_t *s = &Owner->Buffer->SelectionGroups[i];
+    for(s64 i = 0; i < sb_count(Buffer->SelectionGroups); ++i) {
+        selection_group_t *s = &Buffer->SelectionGroups[i];
         if(s->Owner == Owner) {
             SelGrp = s;
             break;

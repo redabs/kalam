@@ -58,11 +58,13 @@ typedef struct {
 
 // Only the leaf nodes are actually regions where text is drawn.
 struct panel_t {
-    panel_t *Next; // Next free panel, if the panel is free
+    panel_t *Next; // Next free panel, or next leaf node
     
     panel_t *Parent;
     split_mode_t Split; 
-    buffer_t *Buffer; // == 0 when not a leaf node (i.e. it doesn't hold a buffer to for editing)
+    buffer_t *Buffer;
+    
+    b32 IsLeaf;
     
     // Used when leaf node
     mode_t Mode;
@@ -82,7 +84,6 @@ typedef struct {
     panel_t *Root; // In the binary tree of panels
     panel_t *Selected; // The currently selected leaf node that the user has selected
     panel_t Panels[PANEL_MAX]; // Storage of all panels
-    panel_t *LeafNodeRoot; // Doubly linked list of the leaf nodes
     panel_t *FreeList;
 } panel_ctx_t; 
 
@@ -127,7 +128,6 @@ typedef struct {
     u64 Offset;
     u64 Size;
     file_flags_t Flags;
-    // u64 Hash; 
 } file_name_info_t;
 
 typedef enum {
@@ -149,6 +149,7 @@ typedef struct {
     buffer_t *Buffers; // stb
     panel_ctx_t PanelCtx;
     mem_buffer_t WorkingDirectory; // IMPORTANT: ALWAYS ends with a directory delimiter, forward- or backslash
+    mem_buffer_t SearchDirectory; // Holds the path that the user is entering during file selection
 } ctx_t;
 
 #endif //KALAM_H

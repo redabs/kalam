@@ -47,22 +47,33 @@ load_ttf(range_t Path, f32 Size) {
 
 void
 load_file(range_t Path) {
-    // TODO: Detect file encoding, we assume utf-8 for now
-    buffer_t *Buf = sb_add(Ctx.Buffers, 1);
-    mem_zero_struct(Buf);
     platform_file_data_t File;
-    ASSERT(platform_read_file(Path, &File));
-    
-    if(File.Size > 0) {
-        mem_buf_add(&Buf->Text, File.Size);
-        mem_copy(Buf->Text.Data, File.Data, File.Size);
-    } else {
-        mem_buf_grow(&Buf->Text, 128);
+    if(platform_read_file(Path, &File)) {
+        // TODO: Detect file encoding, we assume utf-8 for now
+        buffer_t *OldBase = Ctx.Buffers;
+        buffer_t *Buf = sb_add(Ctx.Buffers, 1);
+        mem_zero_struct(Buf);
+        
+        if(Ctx.Buffers != OldBase) {
+            for(u32 i = 0; i < PANEL_MAX; ++i) {
+                panel_t *p = &Ctx.PanelCtx.Panels[i];
+                if(p->IsLeaf) {
+                    p->Buffer = &Ctx.Buffers[(p->Buffer - OldBase) / sizeof(buffer_t)];
+                }
+            }
+        }
+        
+        if(File.Size > 0) {
+            mem_buf_add(&Buf->Text, File.Size);
+            mem_copy(Buf->Text.Data, File.Data, File.Size);
+        } else {
+            mem_buf_grow(&Buf->Text, 128);
+        }
+        
+        platform_free_file(&File);
+        
+        make_lines(Buf);
     }
-    
-    platform_free_file(&File);
-    
-    make_lines(Buf);
 }
 
 void
@@ -70,7 +81,9 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
     load_file(C_STR_AS_RANGE("test.c"));
     //load_file("../test/test.txt");
+    
     mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
+    mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
@@ -98,6 +111,33 @@ set_mode(panel_t *Panel, mode_t Mode) {
     Panel->Mode = Mode;
 }
 
+void
+update_current_directory_files() {
+    Ctx.SelectedFileIndex = 0;
+    // Get the files and populate the options list.
+    files_in_directory_t Dir = platform_get_files_in_directory(mem_buf_as_range(Ctx.SearchDirectory));
+    
+    mem_buf_clear(&Ctx.FileNames);
+    sb_set_count(Ctx.FileNameInfo, 0);
+    
+    for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
+        file_info_t *Fi = &Dir.Files[i];
+        if((Fi->FileName.Used == 1 && Fi->FileName.Data[0] == '.') || 
+           (Fi->FileName.Used == 2 && Fi->FileName.Data[0] == '.' || Fi->FileName.Data[1] == '.')) {
+            continue;
+        }
+        // Store the file name
+        u64 Offset;
+        void *d = mem_buf_add_idx(&Ctx.FileNames, Fi->FileName.Used, 1, &Offset);
+        mem_copy(d, Fi->FileName.Data, Fi->FileName.Used);
+        
+        // Push file info
+        file_name_info_t Info = {.Size = Fi->FileName.Used, .Offset = Offset, .Flags = Fi->Flags};
+        sb_push(Ctx.FileNameInfo, Info);
+    }
+    
+    free_files_in_directory(&Dir);
+}
 
 b32
 do_operation(operation_t Op) {
@@ -160,28 +200,8 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_OpenFileSelection: {
-            Ctx.SelectedFileIndex = 0;
-            // Get the files and populate the options list.
-            files_in_directory_t Dir = platform_get_files_in_directory(mem_buf_as_range(Ctx.WorkingDirectory));
-            
-            mem_buf_clear(&Ctx.FileNames);
-            sb_set_count(Ctx.FileNameInfo, 0);
-            
-            for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
-                file_info_t *Fi = &Dir.Files[i];
-                
-                // Store the file name
-                u64 Offset;
-                void *d = mem_buf_add_idx(&Ctx.FileNames, Fi->FileName.Used, 1, &Offset);
-                mem_copy(d, Fi->FileName.Data, Fi->FileName.Used);
-                
-                // Push file info
-                file_name_info_t Info = {.Size = Fi->FileName.Used, .Offset = Offset, .Flags = Fi->Flags};
-                sb_push(Ctx.FileNameInfo, Info);
-            }
-            
-            free_files_in_directory(&Dir);
-            
+            mem_buf_replace(&Ctx.SearchDirectory, &Ctx.WorkingDirectory);
+            update_current_directory_files();
             Ctx.WidgetFocused = WIDGET_FileSelect;
         } break;
         
@@ -427,24 +447,55 @@ handle_panel_input(input_event_t Event) {
 
 void
 handle_file_select_input(input_event_t Event) {
-    if(Event.Type == INPUT_EVENT_Press) {
+    if(Event.Type == INPUT_EVENT_Text && !event_is_control_sequence(&Event)) {
+        u8 *Char = Event.Text.Character;
+        if(*Char < 0x20) {
+            switch(*Char) {
+                case '\r':
+                case '\n': {
+                    if(sb_count(Ctx.FileNameInfo) > 0) {
+                        file_name_info_t *Fi = &Ctx.FileNameInfo[Ctx.SelectedFileIndex];
+                        // TODO: The paths are not constructed correctly. What we need to do is take the search path and 
+                        // auto-correct with the file or directory selected. This requires we truncate the search path
+                        // and append the selected item. We need to take the type of delimiter into account when we do this.
+                        if(Fi->Flags & FILE_FLAGS_Directory) {
+                            mem_buf_append(&Ctx.WorkingDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
+                            mem_buf_append_range(&Ctx.WorkingDirectory, C_STR_AS_RANGE("/"));
+                            
+                            mem_buf_replace(&Ctx.SearchDirectory, &Ctx.WorkingDirectory);
+                            update_current_directory_files();
+                        } else {
+                            mem_buffer_t Path = {0};
+                            
+                            mem_buf_append_range(&Path, mem_buf_as_range(Ctx.SearchDirectory));
+                            mem_buf_append_range(&Path, (range_t){.Data = Ctx.FileNames.Data + Fi->Offset, .Size = Fi->Size});
+                            
+                            load_file(mem_buf_as_range(Path));
+                            panel_show_buffer(Ctx.PanelCtx.Selected, &Ctx.Buffers[sb_count(Ctx.Buffers) - 1]);
+                            mem_buf_free(&Path);
+                            
+                            Ctx.WidgetFocused = WIDGET_Panels;
+                        }
+                    } else {
+                        // Strip file name from Ctx.SearchDirectory and ask the user if a file with that name should be created.
+                    }
+                } break;
+                
+                case '\b': {
+                    if(Ctx.SearchDirectory.Used > 0) {
+                        u64 i = Ctx.SearchDirectory.Used - 1;
+                        for(; i > 0 && (Ctx.SearchDirectory.Data[i] & 0xc0) == 0x80; --i);
+                        Ctx.SearchDirectory.Used = i;
+                        update_current_directory_files();
+                    }
+                } break;
+            }
+        } else {
+            mem_buf_append(&Ctx.SearchDirectory, Char, utf8_char_width(Char));
+            update_current_directory_files();
+        }
+    } else if(Event.Type == INPUT_EVENT_Press) {
         switch(Event.Key.KeyCode) {
-            case KEY_Return: {
-                file_name_info_t *Fi = &Ctx.FileNameInfo[Ctx.SelectedFileIndex];
-                if(!(Fi->Flags & FILE_FLAGS_Directory)) {
-                    mem_buffer_t Path = {0};
-                    
-                    mem_buf_append_range(&Path, mem_buf_as_range(Ctx.WorkingDirectory));
-                    mem_buf_append_range(&Path, (range_t){.Data = Ctx.FileNames.Data + Fi->Offset, .Size = Fi->Size});
-                    
-                    load_file(mem_buf_as_range(Path));
-                    panel_show_buffer(Ctx.PanelCtx.Selected, &Ctx.Buffers[sb_count(Ctx.Buffers) - 1]);
-                    mem_buf_free(&Path);
-                    
-                    Ctx.WidgetFocused = WIDGET_Panels;
-                }
-            } break;
-            
             case KEY_Up: {
                 Ctx.SelectedFileIndex = MAX(Ctx.SelectedFileIndex - 1, 0);
             } break;
@@ -453,11 +504,12 @@ handle_file_select_input(input_event_t Event) {
                 Ctx.SelectedFileIndex = MIN(Ctx.SelectedFileIndex + 1, sb_count(Ctx.FileNameInfo) - 1);
             } break;
             
+            
             case KEY_Escape: {
                 Ctx.WidgetFocused = WIDGET_Panels;
             } break;
         }
-    } 
+    }
 }
 
 void

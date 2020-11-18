@@ -171,7 +171,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             {
                 u64 Li = offset_to_line_index(Panel->Buffer, SelectionMaxIdx.Cursor);
                 s32 OffsetY = (s32) Li * LineHeight;
-                if(OffsetY >= (Panel->ScrollY + TextRegion.h)) {
+                if(OffsetY >= (Panel->ScrollY + TextRegion.h - LineHeight)) {
                     Panel->ScrollY = OffsetY - TextRegion.h + LineHeight;
                 } else if(OffsetY < Panel->ScrollY) {
                     Panel->ScrollY = OffsetY;
@@ -293,27 +293,29 @@ draw_panels(framebuffer_t *Fb, font_t *Font) {
 void
 draw_file_menu(framebuffer_t *Fb) {
     irect_t ClipSave = Fb->Clip;
-    irect_t Rect = workspace_rect(Fb);
     
     s32 hw = 250 >> 1;
     s32 LineHeight = line_height(&Ctx.Font);
-    irect_t Box = {.x = Rect.x + (Rect.w >> 1) - hw, .y = Rect.y + 30, .w = hw * 2, LineHeight * 16};
-    draw_rect(Fb, Box, 0xdd2c302d);
+    
+    irect_t SearchPathBox = {.x = BORDER_SIZE, .y = BORDER_SIZE, .w = Fb->Width - BORDER_SIZE * 2, .h = STATUS_BAR_HEIGHT};
+    draw_rect(Fb, SearchPathBox, 0xff000000);
     
     s32 HalfLineHeight = LineHeight >> 1;
     s32 HalfMHeight = (Ctx.Font.MHeight >> 1);
     
-    range_t CurrentDirText = mem_buf_as_range(Ctx.WorkingDirectory);
-    iv2_t CurrentDirTextPos = center_text_in_rect(&Ctx.Font, (irect_t){.x = Box.x, .y = Box.y - LineHeight, .w = Box.w, .h = LineHeight}, CurrentDirText);
-    draw_text_line(Fb, &Ctx.Font, CurrentDirTextPos.x, CurrentDirTextPos.y, 0xffffffff, CurrentDirText);
+    range_t SearchPathText = mem_buf_as_range(Ctx.SearchDirectory);
+    iv2_t SearchPathTextPos = center_text_in_rect(&Ctx.Font, SearchPathBox, SearchPathText);
+    draw_text_line(Fb, &Ctx.Font, BORDER_SIZE + 5, SearchPathTextPos.y, 0xffffffff, SearchPathText);
     
+    irect_t Box = {.x = BORDER_SIZE, .y = SearchPathBox.y + SearchPathBox.h, .w = Fb->Width - BORDER_SIZE * 2, .h = MIN((s32)sb_count(Ctx.FileNameInfo) * LineHeight, 250)};
+    draw_rect(Fb, Box, 0xdd2c302d);
     Fb->Clip = Box;
     s32 y = Box.y;
     
     // Calculate vertical scroll
     
     s32 OffsetY = (s32)Ctx.SelectedFileIndex * LineHeight;
-    if(OffsetY >= (Ctx.FileSelectScrollY + Box.h)) {
+    if(OffsetY >= (Ctx.FileSelectScrollY + Box.h - LineHeight)) {
         Ctx.FileSelectScrollY = OffsetY - Box.h + LineHeight;
     } else if(OffsetY < Ctx.FileSelectScrollY) {
         Ctx.FileSelectScrollY = OffsetY;
