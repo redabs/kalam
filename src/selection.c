@@ -38,6 +38,9 @@ selection_end(selection_t *Selection) {
 
 u64
 offset_to_line_index(buffer_t *Buf, u64 Offset) {
+    if(sb_count(Buf->Lines) == 0) {
+        return 0;
+    }
     u64 Low = 0;
     u64 High = sb_count(Buf->Lines);
     u64 i = 0;

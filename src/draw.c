@@ -102,7 +102,9 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
     
     u64 SelectionStart = selection_start(Selection);
     u64 SelectionEnd = selection_end(Selection);
-    SelectionEnd += utf8_char_width(Buf->Text.Data + SelectionEnd);
+    if(Buf->Text.Used > 0) {
+        SelectionEnd += utf8_char_width(Buf->Text.Data + SelectionEnd);
+    }
     u64 LineIndexStart = offset_to_line_index(Panel->Buffer, SelectionStart);
     u64 LineIndexEnd = offset_to_line_index(Panel->Buffer, SelectionEnd);
     
@@ -168,7 +170,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             selection_t SelectionMaxIdx = get_selection_max_idx(SelGrp);
             
             // Compute ScrollX and ScrollY
-            {
+            if(sb_count(Panel->Buffer->Lines) > 0) {
                 u64 Li = offset_to_line_index(Panel->Buffer, SelectionMaxIdx.Cursor);
                 s32 OffsetY = (s32) Li * LineHeight;
                 if(OffsetY >= (Panel->ScrollY + TextRegion.h - LineHeight)) {

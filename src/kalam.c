@@ -45,15 +45,23 @@ load_ttf(range_t Path, f32 Size) {
     return Font;
 }
 
-void
+buffer_t *
+add_buffer() {
+    buffer_t *Buf = sb_add(Ctx.Buffers, 1);
+    mem_zero_struct(Buf);
+    make_lines(Buf);
+    
+    return Buf;
+}
+
+b32
 load_file(range_t Path) {
     platform_file_data_t File;
-    if(platform_read_file(Path, &File)) {
+    b32 FileReadSuccess = platform_read_file(Path, &File);
+    if(FileReadSuccess) {
         // TODO: Detect file encoding, we assume utf-8 for now
         buffer_t *OldBase = Ctx.Buffers;
-        buffer_t *Buf = sb_add(Ctx.Buffers, 1);
-        mem_zero_struct(Buf);
-        
+        buffer_t *Buf = add_buffer();
         if(Ctx.Buffers != OldBase) {
             for(u32 i = 0; i < PANEL_MAX; ++i) {
                 panel_t *p = &Ctx.PanelCtx.Panels[i];
@@ -74,16 +82,20 @@ load_file(range_t Path) {
         
         make_lines(Buf);
     }
+    
+    return FileReadSuccess;
 }
 
 void
 k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
-    load_file(C_STR_AS_RANGE("test.c"));
-    //load_file("../test/test.txt");
+    if(!load_file(C_STR_AS_RANGE("test.c"))) {
+        add_buffer();
+    }
     
     mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
     mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);
+    
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
@@ -445,6 +457,31 @@ handle_panel_input(input_event_t Event) {
     }
 }
 
+#define IS_DIRECTORY_DELMITER(Character) (Character == '\\' || Character == '/')
+
+// "/path/too/foo" -> "/path/too"
+// "/path/too/foo/" -> "/path/too/foo/"
+// "/path" -> "/"
+// "C:/" -> "C:/" same with backslash \
+// "C:" -> ""
+void
+truncate_path_to_nearest_directory(mem_buffer_t *Path) {
+    if(Path->Used > 0) {
+        // Return if the last character is a directory delimiter
+        if(!IS_DIRECTORY_DELMITER(Path->Data[Path->Used - 1])) {
+            
+            // Chop off characters until we reach either the base of the path, or a directory delimiter
+            while(Path->Used > 0) {
+                u8 *c = utf8_move_back_one(Path->Data + Path->Used);
+                if(IS_DIRECTORY_DELMITER(*c)) {
+                    break;
+                }
+                --Path->Used;
+            }
+        }
+    }
+}
+
 void
 handle_file_select_input(input_event_t Event) {
     if(Event.Type == INPUT_EVENT_Text && !event_is_control_sequence(&Event)) {
@@ -455,37 +492,39 @@ handle_file_select_input(input_event_t Event) {
                 case '\n': {
                     if(sb_count(Ctx.FileNameInfo) > 0) {
                         file_name_info_t *Fi = &Ctx.FileNameInfo[Ctx.SelectedFileIndex];
-                        // TODO: The paths are not constructed correctly. What we need to do is take the search path and 
-                        // auto-correct with the file or directory selected. This requires we truncate the search path
-                        // and append the selected item. We need to take the type of delimiter into account when we do this.
                         if(Fi->Flags & FILE_FLAGS_Directory) {
-                            mem_buf_append(&Ctx.WorkingDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
-                            mem_buf_append_range(&Ctx.WorkingDirectory, C_STR_AS_RANGE("/"));
+                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
+                            mem_buf_append(&Ctx.SearchDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
+                            mem_buf_append_range(&Ctx.SearchDirectory, C_STR_AS_RANGE("/"));
                             
-                            mem_buf_replace(&Ctx.SearchDirectory, &Ctx.WorkingDirectory);
+                            mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
                             update_current_directory_files();
                         } else {
-                            mem_buffer_t Path = {0};
                             
-                            mem_buf_append_range(&Path, mem_buf_as_range(Ctx.SearchDirectory));
-                            mem_buf_append_range(&Path, (range_t){.Data = Ctx.FileNames.Data + Fi->Offset, .Size = Fi->Size});
+                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
+                            mem_buf_append_range(&Ctx.SearchDirectory, (range_t){.Data = Ctx.FileNames.Data + Fi->Offset, .Size = Fi->Size});
                             
-                            load_file(mem_buf_as_range(Path));
+                            load_file(mem_buf_as_range(Ctx.SearchDirectory));
                             panel_show_buffer(Ctx.PanelCtx.Selected, &Ctx.Buffers[sb_count(Ctx.Buffers) - 1]);
-                            mem_buf_free(&Path);
                             
                             Ctx.WidgetFocused = WIDGET_Panels;
                         }
                     } else {
-                        // Strip file name from Ctx.SearchDirectory and ask the user if a file with that name should be created.
+                        // TODO: Strip file name from Ctx.SearchDirectory and ask the user if a file with that name should be created.
                     }
                 } break;
                 
                 case '\b': {
                     if(Ctx.SearchDirectory.Used > 0) {
-                        u64 i = Ctx.SearchDirectory.Used - 1;
-                        for(; i > 0 && (Ctx.SearchDirectory.Data[i] & 0xc0) == 0x80; --i);
-                        Ctx.SearchDirectory.Used = i;
+                        u8 *c = utf8_move_back_one(Ctx.SearchDirectory.Data + Ctx.SearchDirectory.Used);
+                        Ctx.SearchDirectory.Used -= utf8_char_width(c);
+                        // If a directory delimiter is deleted then truncate the search path down to the nearest folder.
+                        // This allows popping the last directory off by hitting backspace once. E.g. hitting backspace on
+                        // the directory "/path/to/foo/" jumps to "/path/to/".
+                        if(IS_DIRECTORY_DELMITER(*c)) {
+                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
+                            mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
+                        }
                         update_current_directory_files();
                     }
                 } break;
