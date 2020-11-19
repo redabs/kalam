@@ -220,8 +220,8 @@ do_operation(operation_t Op) {
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             SelGrp->Selections[0].Anchor = 0;
             SelGrp->Selections[0].Cursor = Panel->Buffer->Text.Used;
-            
-            merge_overlapping_selections(Panel);
+            SelGrp->Selections[0].Idx = SelGrp->SelectionIdxTop++;
+            sb_set_count(SelGrp->Selections, 1);
         } break;
         
         // Insert
