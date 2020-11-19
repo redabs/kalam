@@ -21,7 +21,7 @@ typedef enum {
     RIGHT = 1 << 3
 } dir_t;
 
-#define C_STR_AS_RANGE(C_STR) (range_t){.Data = (u8 *)C_STR, .Size = sizeof(C_STR) - 1}
+#define C_STR_AS_RANGE(C_STR) (range_t){.Data = (u8 *)C_STR, .Size = sizeof(C_STR) - sizeof(C_STR[0])}
 typedef struct {
     u8 *Data; // NOTHING is implied or guaranteed wrt. the allocation type of Data, only that [Data, Data + Size) are accessible bytes.
     u64 Size;

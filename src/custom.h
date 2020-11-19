@@ -35,6 +35,7 @@ typedef enum {
     OP_DropSelectionAndMove,
     OP_ClearSelections,
     OP_OpenFileSelection, 
+    OP_SelectEntireBuffer,
     
     // Insert
     OP_Insert_Home,
@@ -99,6 +100,7 @@ key_mapping_t NormalMappings[] = {
     { .IsKey = false, .Character[0] = 's', .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Select },
     { .IsKey = false, .Character[0] = 'f', .Operation.Type = OP_OpenFileSelection },
     { .IsKey = false, .Character[0] = 'd', .Operation.Type = OP_DeleteSelection, },
+    { .IsKey = false, .Character[0] = '%', .Operation.Type = OP_SelectEntireBuffer, },
     
     { .IsKey = true, .Key = KEY_Left,  .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = LEFT},
     { .IsKey = true, .Key = KEY_Right, .Modifiers = INPUT_MOD_Shift, .Operation.Type = OP_ExtendSelection, .Operation.ExtendSelection.Dir = RIGHT},
@@ -144,12 +146,6 @@ key_mapping_t SelectMappings[] = {
     { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },
     
 };
-
-#if 0
-key_mapping_t GlobalMappings[] = {
-    
-};
-#endif
 
 key_mapping_t FileSelectMappings[] = {
     { .IsKey = true, .Key = KEY_Escape, .Operation.Type = OP_SetMode, .Operation.SetMode.Mode = MODE_Normal },

@@ -83,8 +83,7 @@ platform_get_files_in_directory(range_t Path) {
     mem_buffer_t WidePath = {0};
     utf8_str_to_utf16_str(Path, &WidePath);
     
-    wchar_t Wildcard = L'*';
-    mem_buf_append(&WidePath, &Wildcard, sizeof(wchar_t));
+    mem_buf_append_range(&WidePath, C_STR_AS_RANGE(L"*"));
     mem_buf_null_bytes(&WidePath, sizeof(wchar_t));
     
     HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);

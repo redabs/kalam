@@ -89,9 +89,7 @@ load_file(range_t Path) {
 void
 k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
-    if(!load_file(C_STR_AS_RANGE("test.c"))) {
-        add_buffer();
-    }
+    add_buffer();
     
     mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
     mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);
@@ -215,6 +213,15 @@ do_operation(operation_t Op) {
             mem_buf_replace(&Ctx.SearchDirectory, &Ctx.WorkingDirectory);
             update_current_directory_files();
             Ctx.WidgetFocused = WIDGET_FileSelect;
+        } break;
+        
+        case OP_SelectEntireBuffer: {
+            panel_t *Panel = Ctx.PanelCtx.Selected;
+            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
+            SelGrp->Selections[0].Anchor = 0;
+            SelGrp->Selections[0].Cursor = Panel->Buffer->Text.Used;
+            
+            merge_overlapping_selections(Panel);
         } break;
         
         // Insert
@@ -525,11 +532,16 @@ handle_file_select_input(input_event_t Event) {
                             truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
                             mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
                         }
-                        update_current_directory_files();
+                        
+                        if(Ctx.SearchDirectory.Used > 0) {
+                            update_current_directory_files();
+                        }
                     }
                 } break;
             }
         } else {
+            // TODO: Only call update_current_directory_files if we insert a directory delimiter. We should be doing the filtering in the
+            // editor rather than the platform layer.
             mem_buf_append(&Ctx.SearchDirectory, Char, utf8_char_width(Char));
             update_current_directory_files();
         }
@@ -542,7 +554,6 @@ handle_file_select_input(input_event_t Event) {
             case KEY_Down: {
                 Ctx.SelectedFileIndex = MIN(Ctx.SelectedFileIndex + 1, sb_count(Ctx.FileNameInfo) - 1);
             } break;
-            
             
             case KEY_Escape: {
                 Ctx.WidgetFocused = WIDGET_Panels;
