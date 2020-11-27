@@ -1,29 +1,3 @@
-void
-make_lines(buffer_t *Buf) {
-    sb_set_count(Buf->Lines, 0);
-    if(Buf->Text.Used == 0) {
-        sb_push(Buf->Lines, (line_t){0});
-    } else {
-        line_t *Line = sb_add(Buf->Lines, 1);
-        mem_zero_struct(Line);
-        u8 n = 0;
-        for(u64 i = 0; i < Buf->Text.Used; i += n) {
-            n = utf8_char_width(Buf->Text.Data + i);
-            
-            Line->Size += n;
-            if(Buf->Text.Data[i] == '\n') {
-                Line->NewlineSize = n;
-                // Push next line and init it
-                Line = sb_add(Buf->Lines, 1);
-                mem_zero_struct(Line);
-                Line->Offset = i + n;
-            } else {
-                Line->Length += 1;
-            }
-        }
-    }
-}
-
 u64
 selection_start(selection_t *Selection) {
     u64 Start = MIN(Selection->Anchor, Selection->Cursor);

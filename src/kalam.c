@@ -13,6 +13,7 @@
 
 ctx_t Ctx = {0};
 
+#include "parse.c"
 #include "selection.c"
 #include "panel.c"
 #include "layout.c"
@@ -81,6 +82,13 @@ load_file(range_t Path) {
         platform_free_file(&File);
         
         make_lines(Buf);
+        if(Buf->Text.Used > 0) {
+            u64 Offset = 0;
+            token_t Token;
+            while(Offset < Buf->Text.Used && c_parse(Buf, Offset, &Token)) {
+                Offset = Token.Offset + Token.Size;
+            }
+        }
     }
     
     return FileReadSuccess;

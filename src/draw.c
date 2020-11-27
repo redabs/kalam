@@ -145,8 +145,6 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
     }
 }
 
-#include <stdio.h> // TODO: Remove
-
 void
 draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
@@ -208,26 +206,6 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
-#if 0
-            {
-                s32 x = 400; 
-                s32 y = 100;
-                char Debug[1024];
-                sprintf(Debug, "SelectionMaxIdx: %llu", SelGrp->SelectionIdxTop);
-                draw_text_line(Fb, &Ctx.Font, x, y - 10, 0xffffffff, (u8*)Debug, 0);
-                for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                    s32 LineY = y + (s32)i * LineHeight;
-                    s32 Center = LineY + (LineHeight >> 1);
-                    s32 Baseline = Center + (Font->MHeight >> 1);
-                    char *c = Debug;
-                    selection_t *s = &SelGrp->Selections[i];
-                    c += sprintf(c, "Idx: %lld, Anchor %lld, Cursor %lld, ColumnIs %lld, ColumnWas %lld", s->Idx, s->Anchor, s->Cursor, s->ColumnIs, s->ColumnWas);
-                    draw_rect(Fb, (irect_t){x, LineY, text_width(&Ctx.Font, (u8*)Debug, 0), LineHeight}, 0xff000000);
-                    draw_text_line(Fb, &Ctx.Font, x, Baseline, 0xffffffff, (u8*)Debug, 0);
-                }
-            }
-#endif
-            
             irect_t StatusBar = status_bar_rect(PanelRect);
             draw_rect(Fb, StatusBar, COLOR_STATUS_BAR);
             
@@ -246,26 +224,30 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             draw_rect(Fb, r3, BorderColor);
             
             u32 ModeStrColor = 0xffffffff;
-            range_t ModeString = C_STR_AS_RANGE("Invalid mode");
+            mem_buffer_t ModeString = {0};
             switch(Panel->Mode) {
                 case MODE_Normal: {
-                    ModeString = C_STR_AS_RANGE("NORMAL");
+                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("NORMAL"));
                     ModeStrColor = COLOR_STATUS_NORMAL;
                 } break;
                 
                 case MODE_Insert: {
-                    ModeString = C_STR_AS_RANGE("INSERT");
+                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("INSERT"));
                     ModeStrColor = COLOR_STATUS_INSERT;
                 } break;
                 
                 case MODE_Select: {
-                    ModeString = mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm);
+                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Select:"));
+                    mem_buf_append_range(&ModeString, mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm));
                 } break;
                 
+                default: {
+                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Invalid mode"));
+                } break;
             }
             
-            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, ModeString);
-            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, ModeString);
+            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, mem_buf_as_range(ModeString));
+            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, mem_buf_as_range(ModeString));
             draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
         }
     } else {

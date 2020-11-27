@@ -201,8 +201,6 @@ push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
 }
 
 
-#include <stdio.h> // TODO: Remove me
-
 void
 handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier_t Modifiers; 
