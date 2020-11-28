@@ -82,13 +82,6 @@ load_file(range_t Path) {
         platform_free_file(&File);
         
         make_lines(Buf);
-        if(Buf->Text.Used > 0) {
-            u64 Offset = 0;
-            token_t Token;
-            while(Offset < Buf->Text.Used && c_parse(Buf, Offset, &Token)) {
-                Offset = Token.Offset + Token.Size;
-            }
-        }
     }
     
     return FileReadSuccess;
@@ -101,7 +94,6 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     
     mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
     mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);
-    
     
     u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {

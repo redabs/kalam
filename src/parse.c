@@ -1,3 +1,17 @@
+u64 KeywordHashes[] = {
+    0xe7599c190572c560, 0x7f2b6c605332dd30, 0x2138d5192571b731, 0x2587bcef32493841, 0x5dc77784260a7236, 0x915ea6605dc15d80, 0x554667f2165fec5d, 0x5a5fe3720c9584cf, 0xcd2fd49bc6b014bd, 0xf7b24048d2701d49, 0xc5a11c2dd9ab8cec, 0x5b5c98ef514dbfa5, 0x93b7591debc7ce38, 0xedb2d39755161f73, 0x38fe7925726e5cbd, 0x570ac119447423ee, 0xb55e6190e8792fd1, 0x5cc53b62ea063f7, 0xf4b72165f60f5b60, 0xe51f408ea2730be4, 0xc1b2e33b13ec076c, 0xb5fae2c14238b978, 0x134dcf77c0b3eea0, 0x690b0e3f4c3bef38, 0xf2a393910b5b3ebd, 0xa00a62a942b20165, 0xe10e210d0e407655, 0x91853f297dfecb6e, 0xd11655952fcbab9f, 0xdcb27818fed9da90, 0xc5c7b983377cad5f, 0x4b2a584e9a909034, 0x65c9718e19e3df34, 0xb501d7a879f0854d, 0xf6915548f781cd55, 0xb7b1a6ed402882e6, 0xcb762a9f4cf6f292, 0x9d40d1720eeae746, 0x5055c58f7a753b55, 0xd9bcbc712744e027, 0xd2bfd5accd1966a4, 0x8b73007b55c3e26, 0x8a4a6236192e319d, 0x3a8bdbd8e17b835c, 0xebada5168620c5fe, 0xe43c3b14f8fd3d4, 0xc534816d6d11e97b, 0x3173c900e37ae1df, 0xf3fe6b5fdb85d50a, 0x2b9fff192bd4c83e, 0x384157e47f809f43, 0x9575f08fb5a48f0d, 0x8915907b53bb494, 0xcde8c9ad70d16733, 0xc318a9d898991720, 0xcd074885fe311c91, 0xa0880a9ce131dea8, 0xd3ac3c45566efde9, 0xa5a87ac5b0b379b1, 0xce87a3885811296e, 0xb706dc12aa9d9f5c, 0xdc1c4a04cb5c6da0, 0x33609a5e9eb92f4b, 0xf999b7199ff422e6, 0x6f34c0c3c2ddfeed, 0x3108fe3d785c2b3d, 0xbfa9b2197fe7163e, 0x1e5b266ba57eb071, 0x6d36868e1dbec272, 0x8b05407b5565ca4, 0x557847ce6cc35ba9, 0x598feba3d9002de9, 0x215ad619258e9f4a, 0x6ca17d73a48b7847
+};
+
+u64
+fnv1a_64(range_t String) {
+    u64 Hash = 0xcbf29ce484222325;
+    for(u64 i = 0; i < String.Size; ++i) {
+        Hash ^= String.Data[i];
+        Hash *= 0x100000001b3;
+    }
+    return Hash;
+}
+
 void
 make_lines(buffer_t *Buf) {
     sb_set_count(Buf->Lines, 0);
@@ -126,7 +140,7 @@ next_char(buffer_t *Buffer, u8 *Char) {
 }
 
 b8
-c_parse(buffer_t *Buffer, u64 Offset, token_t *Out) {
+next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
     b8 HasNext = true;
     token_t Token = {.Offset = Offset};
     if(Buffer->Text.Used > 0) {

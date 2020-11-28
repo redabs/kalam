@@ -145,6 +145,40 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
     }
 }
 
+// For now
+u32
+token_color(buffer_t *Buf, token_t Token) {
+    u32 Color = COLOR_TEXT;
+    switch(Token.Type) {
+        case TOKEN_StringLiteral: {
+            return 0xfff3e333;
+        } break; 
+        
+        case TOKEN_Keyword: {
+            u64 Hash = fnv1a_64((range_t){.Data = Buf->Text.Data + Token.Offset, .Size = Token.Size});
+            for(u64 i = 0; i < ARRAY_COUNT(KeywordHashes); ++i) {
+                if(KeywordHashes[i] == Hash) {
+                    Color = 0xffee9999;
+                    break;
+                }
+            }
+        } break;
+        
+        case TOKEN_HexadecimalLiteral:
+        case TOKEN_BinaryLiteral:
+        case TOKEN_OctalLiteral:
+        case TOKEN_DecimalLiteral: {
+            Color = 0xff32acee;
+        } break;
+        
+        case TOKEN_Bracket: {
+            Color = 0xff809fb0;
+        } break; 
+        
+    }
+    return Color;
+}
+
 void
 draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
@@ -198,9 +232,20 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 s32 LineY = TextRegion.y + (s32)i * LineHeight;
                 s32 Center = LineY + (LineHeight >> 1);
                 s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
+                line_t *Line = &Buf->Lines[i];
                 
                 Fb->Clip = TextRegion;
-                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, (range_t){.Data = Buf->Text.Data + Buf->Lines[i].Offset, .Size = Buf->Lines[i].Size});
+                
+                // Use tokens to draw the lines instead of drawing each line as one string.
+                token_t Token = {.Offset = Line->Offset, .Size = 0};
+                while(next_token(Buf, Token.Offset + Token.Size, &Token) && Token.Offset < (Line->Offset + Line->Size)) {
+                    // TODO: Make fast
+                    s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Token.Offset - Line->Offset});
+                    u32 Color = token_color(Buf, Token);
+                    draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, (range_t){.Data = Buf->Text.Data + Token.Offset, .Size = Token.Size});
+                }
+                
+                //draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, (range_t){.Data = Buf->Text.Data + Buf->Lines[i].Offset, .Size = Line->Size});
                 Fb->Clip = PanelRect;
                 s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
                 draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
