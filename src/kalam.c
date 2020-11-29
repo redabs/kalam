@@ -90,7 +90,9 @@ load_file(range_t Path) {
 void
 k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
-    add_buffer();
+    if(!load_file(C_STR_AS_RANGE("test.c"))) {
+        add_buffer();
+    }
     
     mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
     mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);

@@ -235,29 +235,42 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
             }
             
-            // Draw lines
-            irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
-            for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-                s32 LineY = TextRegion.y + (s32)i * LineHeight;
-                s32 Center = LineY + (LineHeight >> 1);
-                s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
-                line_t *Line = &Buf->Lines[i];
+            {
+                token_t Token;
+                b8 HasTokens = next_token(Buf, 0, &Token);
                 
-                Fb->Clip = TextRegion;
-                
-                // Use tokens to draw the lines instead of drawing each line as one string.
-                token_t Token = {.Offset = Line->Offset, .Size = 0};
-                while(next_token(Buf, Token.Offset + Token.Size, &Token) && Token.Offset < (Line->Offset + Line->Size)) {
-                    // TODO: Make fast
-                    s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Token.Offset - Line->Offset});
-                    u32 Color = token_color(Buf, Token);
-                    draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, (range_t){.Data = Buf->Text.Data + Token.Offset, .Size = Token.Size});
+                // Draw lines
+                irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
+                for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
+                    s32 LineY = TextRegion.y + (s32)i * LineHeight;
+                    s32 Center = LineY + (LineHeight >> 1);
+                    s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
+                    line_t *Line = &Buf->Lines[i];
+                    
+                    Fb->Clip = TextRegion;
+                    if(HasTokens) {
+                        u64 Offset = Line->Offset;
+                        while(HasTokens && Offset < (Line->Offset + Line->Size)) {
+                            // Do we need a new token?
+                            if(Offset >= (Token.Offset + Token.Size)) {
+                                HasTokens = next_token(Buf, Token.Offset + Token.Size, &Token);
+                            } else {
+                                u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size);
+                                range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
+                                
+                                u32 Color = token_color(Buf, Token);
+                                s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Offset - Line->Offset});
+                                
+                                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, Text);
+                                Offset = End;
+                            }
+                        }
+                    }
+                    
+                    Fb->Clip = PanelRect;
+                    s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
+                    draw_line_number(Fb, Font, (irect_t){.x = LineNumberRect.x, .y = Baseline, .w = LineNumberRect.w, .h = LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
                 }
-                
-                //draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX, Baseline, COLOR_TEXT, (range_t){.Data = Buf->Text.Data + Buf->Lines[i].Offset, .Size = Line->Size});
-                Fb->Clip = PanelRect;
-                s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
-                draw_line_number(Fb, Font, (irect_t){LineNumberRect.x, Baseline, LineNumberRect.w, LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
             
             irect_t StatusBar = status_bar_rect(PanelRect);

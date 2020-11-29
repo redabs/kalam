@@ -168,6 +168,7 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                         break;
                     }
                 }
+                // TODO: Set Token.KeywordId in here
                 Token.Type = TOKEN_Keyword;
                 Token.Size = End - Token.Offset;
             } else {
