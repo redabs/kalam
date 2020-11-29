@@ -100,7 +100,7 @@ typedef struct {
     
     union {
         u8 Bracket; // Top bit 1 if open bracket, 0 if closed
-        u32 KeywordId;
+        u64 KeywordHash;
     };
 } token_t;
 
@@ -168,9 +168,9 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                         break;
                     }
                 }
-                // TODO: Set Token.KeywordId in here
                 Token.Type = TOKEN_Keyword;
                 Token.Size = End - Token.Offset;
+                Token.KeywordHash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size});
             } else {
                 switch(*c) {
                     // Pre-processor directives

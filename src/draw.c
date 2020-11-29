@@ -147,7 +147,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
 
 // For now
 u32
-token_color(buffer_t *Buf, token_t Token) {
+token_color(token_t Token) {
     u32 Color = COLOR_TEXT;
     switch(Token.Type) {
         case TOKEN_StringLiteral: {
@@ -155,9 +155,8 @@ token_color(buffer_t *Buf, token_t Token) {
         } break; 
         
         case TOKEN_Keyword: {
-            u64 Hash = fnv1a_64((range_t){.Data = Buf->Text.Data + Token.Offset, .Size = Token.Size});
             for(u64 i = 0; i < ARRAY_COUNT(KeywordHashes); ++i) {
-                if(KeywordHashes[i] == Hash) {
+                if(KeywordHashes[i] == Token.KeywordHash) {
                     Color = 0xffee9999;
                     break;
                 }
@@ -258,7 +257,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                                 u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size);
                                 range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
                                 
-                                u32 Color = token_color(Buf, Token);
+                                u32 Color = token_color(Token);
                                 s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Offset - Line->Offset});
                                 
                                 draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, Text);
