@@ -39,6 +39,8 @@ make_lines(buffer_t *Buf) {
 }
 
 typedef enum {
+    TOKEN_Unknown = 0,
+    
     TOKEN_Keyword,
     
     TOKEN_CppDirective, // #define, #assert, #if, #error, etc..
@@ -432,7 +434,8 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                     case ',': { Token.Type = TOKEN_Comma;          Token.Size = 1; } break;
                     
                     default: {
-                        HasNext = false;
+                        Token.Type = TOKEN_Unknown;
+                        Token.Size = utf8_char_width(c);
                     } break;
                 }
             }

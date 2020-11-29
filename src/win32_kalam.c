@@ -200,7 +200,6 @@ push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
     ++Buffer->Count;
 }
 
-
 void
 handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
     local_persist input_modifier_t Modifiers; 
@@ -208,6 +207,7 @@ handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *Ev
     input_event_t Event = {0};
     switch(Message->message) {
         case WM_CHAR: {
+            // TODO: Surrogate pairs don't come packed into wParam as two 16-bit values, they are separated into two different WM_CHARs.
             Event.Type = INPUT_EVENT_Text;
             utf16_to_utf8((u32)Message->wParam, Event.Text.Character);
         } goto process_key;

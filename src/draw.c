@@ -179,6 +179,11 @@ token_color(buffer_t *Buf, token_t Token) {
             Color = 0xff809fb0;
         } break; 
         
+        case TOKEN_SingleLineComment:
+        case TOKEN_MultiLineComment: {
+            Color = 0xff1f508f;
+        } break;
+        
     }
     return Color;
 }
