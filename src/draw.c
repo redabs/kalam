@@ -167,8 +167,12 @@ token_color(buffer_t *Buf, token_t Token) {
         case TOKEN_HexadecimalLiteral:
         case TOKEN_BinaryLiteral:
         case TOKEN_OctalLiteral:
+        case TOKEN_FloatLiteral: {
+            Color = 0xff3232ff;
+        } break;
+        
         case TOKEN_DecimalLiteral: {
-            Color = 0xff32acee;
+            Color = 0xffffffff;
         } break;
         
         case TOKEN_Bracket: {

@@ -53,6 +53,7 @@ typedef enum {
     TOKEN_DecimalLiteral, // 1234
     TOKEN_OctalLiteral, // 02322
     TOKEN_BinaryLiteral, // 0b10011010010
+    TOKEN_FloatLiteral,
     
     TOKEN_Bracket, // [] {} (), does not include <>
     
@@ -273,10 +274,49 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                                 }
                             } 
                         }
+                        
                         switch(Token.Type) {
                             case TOKEN_DecimalLiteral: {
+                                // Could be decimal number or float
                                 u64 End = Token.Offset + 1;
-                                for(; End < Buffer->Text.Used && is_numeric(Buffer->Text.Data[End]); ++End);
+                                for(; End < Buffer->Text.Used; ++End) {
+                                    u8 Char = Buffer->Text.Data[End];
+                                    if(!is_numeric(Char)) {
+                                        if((Char == 'f') || (Char == '.') || (Char == 'e')) {
+                                            Token.Type = TOKEN_FloatLiteral;
+                                        }
+                                        break;
+                                    }
+                                }
+                                if(Token.Type == TOKEN_FloatLiteral) {
+                                    b32 DecimalPointHasBeenPresent = false;
+                                    b32 ExponentHasBeenPresent = false;
+                                    for(; End < Buffer->Text.Used; ++End) {
+                                        u8 Char = Buffer->Text.Data[End];
+                                        if(Char == '.') {
+                                            if(DecimalPointHasBeenPresent) {
+                                                break;
+                                            } else {
+                                                DecimalPointHasBeenPresent = true;
+                                            }
+                                        } else if (Char == 'e') {
+                                            if(ExponentHasBeenPresent) {
+                                                break;
+                                            } else {
+                                                ExponentHasBeenPresent = true;
+                                            }
+                                        } else {
+                                            if(!is_numeric(Char)) {
+                                                if(Char != 'f') {
+                                                    break;
+                                                } else {
+                                                    End += 1;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 Token.Size = End - Token.Offset;
                             } break;
                             
@@ -295,7 +335,7 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                                 u64 End = Token.Offset + 2; // 0x followed by 0-9 or a-f, ignoring case
                                 for(; End < Buffer->Text.Used; ++End) {
                                     u8 Char = Buffer->Text.Data[End];
-                                    b32 IsHex = is_numeric(Char) || (Char >= 'a' && Char >= 'f') || (Char >= 'A' && Char >= 'F');
+                                    b32 IsHex = is_numeric(Char) || (Char >= 'a' && Char <= 'f') || (Char >= 'A' && Char <= 'F');
                                     if(!IsHex) {
                                         break;
                                     }
@@ -314,6 +354,45 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                                 Token.Size = End - Token.Offset;
                             } break;
                         }
+                    } break;
+                    
+                    case '.': {
+                        // Preemptively assume it's just a dot.
+                        Token.Type = TOKEN_Dot;
+                        Token.Size = 1;
+                        
+                        u8 *NextChar = next_char(Buffer, c);
+                        if(NextChar) {
+                            // Floating point number written as .3 or .3f
+                            if(is_numeric(*NextChar)) {
+                                u64 End = Token.Offset + 2;
+                                b32 ExponentHasBeenPresent = false;
+                                for(; End < Buffer->Text.Used; ++End) {
+                                    u8 Char = Buffer->Text.Data[End];
+                                    if(Char == '.') {
+                                        break;
+                                    } else if (Char == 'e') {
+                                        if(ExponentHasBeenPresent) {
+                                            break;
+                                        } else {
+                                            ExponentHasBeenPresent = true;
+                                        }
+                                    } else {
+                                        if(!is_numeric(Char)) {
+                                            if(Char != 'f') {
+                                                break;
+                                            } else {
+                                                End += 1;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                Token.Size = End - Token.Offset;
+                                Token.Type = TOKEN_FloatLiteral;
+                            }
+                        }
+                        
                     } break;
                     
                     // Bracket, 
@@ -344,10 +423,8 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                     case '^': { Token.Type = TOKEN_Xor;            Token.Size = 1; } break;
                     case '~': { Token.Type = TOKEN_BitwiseNot;     Token.Size = 1; } break;
                     case '=': { Token.Type = TOKEN_Assignment;     Token.Size = 1; } break;
-                    case '.': { Token.Type = TOKEN_Dot;            Token.Size = 1; } break;
                     case ';': { Token.Type = TOKEN_Semicolon;      Token.Size = 1; } break;
                     case ',': { Token.Type = TOKEN_Comma;          Token.Size = 1; } break;
-                    
                     
                     default: {
                         HasNext = false;
