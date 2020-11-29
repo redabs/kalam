@@ -160,10 +160,13 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
             if(is_alphabetic(*c)) {
                 // keyword, identifier
                 u64 End = Token.Offset + utf8_char_width(c);
-                while(End < Buffer->Text.Used && is_alphabetic(Buffer->Text.Data[End])) {
-                    End += utf8_char_width(&Buffer->Text.Data[End]);
-                    Token.Type = TOKEN_Keyword;
+                for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
+                    u8 Char = Buffer->Text.Data[End];
+                    if(!is_alphabetic(Char) && !is_numeric(Char)) {
+                        break;
+                    }
                 }
+                Token.Type = TOKEN_Keyword;
                 Token.Size = End - Token.Offset;
             } else {
                 switch(*c) {
@@ -279,15 +282,17 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                             case TOKEN_DecimalLiteral: {
                                 // Could be decimal number or float
                                 u64 End = Token.Offset + 1;
+                                
                                 for(; End < Buffer->Text.Used; ++End) {
                                     u8 Char = Buffer->Text.Data[End];
                                     if(!is_numeric(Char)) {
-                                        if((Char == 'f') || (Char == '.') || (Char == 'e')) {
+                                        if((Char == '.') || (Char == 'e')) {
                                             Token.Type = TOKEN_FloatLiteral;
                                         }
                                         break;
                                     }
                                 }
+                                
                                 if(Token.Type == TOKEN_FloatLiteral) {
                                     b32 DecimalPointHasBeenPresent = false;
                                     b32 ExponentHasBeenPresent = false;
