@@ -150,13 +150,18 @@ u32
 token_color(token_t Token) {
     u32 Color = COLOR_TEXT;
     switch(Token.Type) {
+        case TOKEN_CharLiteral:
         case TOKEN_StringLiteral: {
             return 0xfff3e333;
         } break; 
         
+        case TOKEN_IncludePath: {
+            return 0xff84eac1;
+        } break;
+        
         case TOKEN_Keyword: {
-            for(u64 i = 0; i < ARRAY_COUNT(KeywordHashes); ++i) {
-                if(KeywordHashes[i] == Token.KeywordHash) {
+            for(u64 i = 0; i < ARRAY_COUNT(CppPredefHashes); ++i) {
+                if(CppPredefHashes[i] == Token.Hash) {
                     Color = 0xffee9999;
                     break;
                 }
@@ -235,8 +240,8 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             }
             
             {
-                token_t Token;
-                b8 HasTokens = next_token(Buf, 0, &Token);
+                token_t Token = {0};
+                b8 HasTokens = next_token(Buf, Token, &Token);
                 
                 // Draw lines
                 irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
@@ -252,7 +257,7 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                         while(HasTokens && Offset < (Line->Offset + Line->Size)) {
                             // Do we need a new token?
                             if(Offset >= (Token.Offset + Token.Size)) {
-                                HasTokens = next_token(Buf, Token.Offset + Token.Size, &Token);
+                                HasTokens = next_token(Buf, Token, &Token);
                             } else {
                                 u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size);
                                 range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};

@@ -542,8 +542,9 @@ handle_file_select_input(input_event_t Event) {
                 } break;
             }
         } else {
-            // TODO: Only call update_current_directory_files if we insert a directory delimiter. We should be doing the filtering in the
-            // editor rather than the platform layer.
+            // TODO: Right now we're filtering using wildcards on that platform side. We just get all the files in the current directory 
+            // and do the filtering in the editor instead so it's consistent across platforms. Additionally, we only need to call out 
+            // to the platform when the search directory changes. 
             mem_buf_append(&Ctx.SearchDirectory, Char, utf8_char_width(Char));
             update_current_directory_files();
         }

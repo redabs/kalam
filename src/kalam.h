@@ -152,4 +152,6 @@ typedef struct {
     mem_buffer_t SearchDirectory; // Holds the path that the user is entering during file selection
 } ctx_t;
 
+u64 offset_to_line_index(buffer_t *Buf, u64 Offset);
+
 #endif //KALAM_H

@@ -1,5 +1,104 @@
-u64 KeywordHashes[] = {
-    0xe7599c190572c560, 0x7f2b6c605332dd30, 0x2138d5192571b731, 0x2587bcef32493841, 0x5dc77784260a7236, 0x915ea6605dc15d80, 0x554667f2165fec5d, 0x5a5fe3720c9584cf, 0xcd2fd49bc6b014bd, 0xf7b24048d2701d49, 0xc5a11c2dd9ab8cec, 0x5b5c98ef514dbfa5, 0x93b7591debc7ce38, 0xedb2d39755161f73, 0x38fe7925726e5cbd, 0x570ac119447423ee, 0xb55e6190e8792fd1, 0x5cc53b62ea063f7, 0xf4b72165f60f5b60, 0xe51f408ea2730be4, 0xc1b2e33b13ec076c, 0xb5fae2c14238b978, 0x134dcf77c0b3eea0, 0x690b0e3f4c3bef38, 0xf2a393910b5b3ebd, 0xa00a62a942b20165, 0xe10e210d0e407655, 0x91853f297dfecb6e, 0xd11655952fcbab9f, 0xdcb27818fed9da90, 0xc5c7b983377cad5f, 0x4b2a584e9a909034, 0x65c9718e19e3df34, 0xb501d7a879f0854d, 0xf6915548f781cd55, 0xb7b1a6ed402882e6, 0xcb762a9f4cf6f292, 0x9d40d1720eeae746, 0x5055c58f7a753b55, 0xd9bcbc712744e027, 0xd2bfd5accd1966a4, 0x8b73007b55c3e26, 0x8a4a6236192e319d, 0x3a8bdbd8e17b835c, 0xebada5168620c5fe, 0xe43c3b14f8fd3d4, 0xc534816d6d11e97b, 0x3173c900e37ae1df, 0xf3fe6b5fdb85d50a, 0x2b9fff192bd4c83e, 0x384157e47f809f43, 0x9575f08fb5a48f0d, 0x8915907b53bb494, 0xcde8c9ad70d16733, 0xc318a9d898991720, 0xcd074885fe311c91, 0xa0880a9ce131dea8, 0xd3ac3c45566efde9, 0xa5a87ac5b0b379b1, 0xce87a3885811296e, 0xb706dc12aa9d9f5c, 0xdc1c4a04cb5c6da0, 0x33609a5e9eb92f4b, 0xf999b7199ff422e6, 0x6f34c0c3c2ddfeed, 0x3108fe3d785c2b3d, 0xbfa9b2197fe7163e, 0x1e5b266ba57eb071, 0x6d36868e1dbec272, 0x8b05407b5565ca4, 0x557847ce6cc35ba9, 0x598feba3d9002de9, 0x215ad619258e9f4a, 0x6ca17d73a48b7847
+enum {
+    KEYWORD_asm = 0,
+    KEYWORD_else,
+    KEYWORD_new,
+    KEYWORD_this,
+    KEYWORD_auto,
+    KEYWORD_enum,
+    KEYWORD_operator,
+    KEYWORD_throw,
+    KEYWORD_bool,
+    KEYWORD_explicit,
+    KEYWORD_private,
+    KEYWORD_true,
+    KEYWORD_break,
+    KEYWORD_export,
+    KEYWORD_protected,
+    KEYWORD_try,
+    KEYWORD_case,
+    KEYWORD_extern,
+    KEYWORD_public,
+    KEYWORD_typedef,
+    KEYWORD_catch,
+    KEYWORD_false,
+    KEYWORD_register,
+    KEYWORD_typeid,
+    KEYWORD_char,
+    KEYWORD_float,
+    KEYWORD_reinterpret_cast,
+    KEYWORD_typename,
+    KEYWORD_class,
+    KEYWORD_for,
+    KEYWORD_return,
+    KEYWORD_union,
+    KEYWORD_const,
+    KEYWORD_friend,
+    KEYWORD_short,
+    KEYWORD_unsigned,
+    KEYWORD_const_cast,
+    KEYWORD_goto,
+    KEYWORD_signed,
+    KEYWORD_using,
+    KEYWORD_continue,
+    KEYWORD_if,
+    KEYWORD_sizeof,
+    KEYWORD_virtual,
+    KEYWORD_default,
+    KEYWORD_inline,
+    KEYWORD_static,
+    KEYWORD_void,
+    KEYWORD_delete,
+    KEYWORD_int,
+    KEYWORD_static_cast,
+    KEYWORD_volatile,
+    KEYWORD_do,
+    KEYWORD_long,
+    KEYWORD_struct,
+    KEYWORD_wchar_t,
+    KEYWORD_double,
+    KEYWORD_mutable,
+    KEYWORD_switch,
+    KEYWORD_while,
+    KEYWORD_dynamic_cast,
+    KEYWORD_namespace,
+    KEYWORD_template,
+    KEYWORD_And,
+    KEYWORD_bitor,
+    KEYWORD_not_eq,
+    KEYWORD_xor,
+    KEYWORD_and_eq,
+    KEYWORD_compl,
+    KEYWORD_or,
+    KEYWORD_xor_eq,
+    KEYWORD_bitand,
+    KEYWORD_not,
+    KEYWORD_or_eq,
+    
+    CPPDIRECTIVE_assert,
+    CPPDIRECTIVE_define,
+    CPPDIRECTIVE_elif,
+    CPPDIRECTIVE_else,
+    CPPDIRECTIVE_endif,
+    CPPDIRECTIVE_error,
+    CPPDIRECTIVE_ident,
+    CPPDIRECTIVE_if,
+    CPPDIRECTIVE_ifdef,
+    CPPDIRECTIVE_ifndef,
+    CPPDIRECTIVE_import,
+    CPPDIRECTIVE_include,
+    CPPDIRECTIVE_include_next,
+    CPPDIRECTIVE_line,
+    CPPDIRECTIVE_pragma,
+    CPPDIRECTIVE_sccs,
+    CPPDIRECTIVE_unassert,
+    CPPDIRECTIVE_undef,
+    CPPDIRECTIVE_warning,
+    
+    CPP_PREDEF_MAX,
+};
+
+u64 CppPredefHashes[CPP_PREDEF_MAX] = {
+    0xe7599c190572c560, 0x7f2b6c605332dd30, 0x2138d5192571b731, 0x2587bcef32493841, 0x5dc77784260a7236, 0x915ea6605dc15d80, 0x554667f2165fec5d, 0x5a5fe3720c9584cf, 0xcd2fd49bc6b014bd, 0xf7b24048d2701d49, 0xc5a11c2dd9ab8cec, 0x5b5c98ef514dbfa5, 0x93b7591debc7ce38, 0xedb2d39755161f73, 0x38fe7925726e5cbd, 0x570ac119447423ee, 0xb55e6190e8792fd1, 0x5cc53b62ea063f7, 0xf4b72165f60f5b60, 0xe51f408ea2730be4, 0xc1b2e33b13ec076c, 0xb5fae2c14238b978, 0x134dcf77c0b3eea0, 0x690b0e3f4c3bef38, 0xf2a393910b5b3ebd, 0xa00a62a942b20165, 0xe10e210d0e407655, 0x91853f297dfecb6e, 0xd11655952fcbab9f, 0xdcb27818fed9da90, 0xc5c7b983377cad5f, 0x4b2a584e9a909034, 0x65c9718e19e3df34, 0xb501d7a879f0854d, 0xf6915548f781cd55, 0xb7b1a6ed402882e6, 0xcb762a9f4cf6f292, 0x9d40d1720eeae746, 0x5055c58f7a753b55, 0xd9bcbc712744e027, 0xd2bfd5accd1966a4, 0x8b73007b55c3e26, 0x8a4a6236192e319d, 0x3a8bdbd8e17b835c, 0xebada5168620c5fe, 0xe43c3b14f8fd3d4, 0xc534816d6d11e97b, 0x3173c900e37ae1df, 0xf3fe6b5fdb85d50a, 0x2b9fff192bd4c83e, 0x384157e47f809f43, 0x9575f08fb5a48f0d, 0x8915907b53bb494, 0xcde8c9ad70d16733, 0xc318a9d898991720, 0xcd074885fe311c91, 0xa0880a9ce131dea8, 0xd3ac3c45566efde9, 0xa5a87ac5b0b379b1, 0xce87a3885811296e, 0xb706dc12aa9d9f5c, 0xdc1c4a04cb5c6da0, 0x33609a5e9eb92f4b, 0xf999b7199ff422e6, 0x6f34c0c3c2ddfeed, 0x3108fe3d785c2b3d, 0xbfa9b2197fe7163e, 0x1e5b266ba57eb071, 0x6d36868e1dbec272, 0x8b05407b5565ca4, 0x557847ce6cc35ba9, 0x598feba3d9002de9, 0x215ad619258e9f4a, 0x6ca17d73a48b7847, 0xe5fa41199584a158, 0xcaacbf9bb2bdb94d, 0x87b47ae7e47b5eb0, 0x879289e7e45e91c7, 0xc46b4f1a2a853aac, 0xbd70f873b2728fd4, 0x915c06ca0dd8041c, 0xcd52a917d46dfb25, 0xda33cddabf5b2ccc, 0x6b431a068c4c0588, 0xcfc287309225a9cf, 0x1237c3cc4a3b9012, 0x42abc43bd655ea76, 0xb4713123458252a0, 0x4635f63b0358f1c2, 0x622bb42f2062664e, 0xae92f47dd56a0487, 0xceb0ae86a9c2c408, 0xf04062bfafba2bde, 
 };
 
 u64
@@ -91,6 +190,7 @@ typedef enum {
     TOKEN_Semicolon, 
     TOKEN_Comma,
     
+    TOKEN_IncludePath,
 } token_type_t;
 
 typedef struct {
@@ -100,7 +200,7 @@ typedef struct {
     
     union {
         u8 Bracket; // Top bit 1 if open bracket, 0 if closed
-        u64 KeywordHash;
+        u64 Hash;
     };
 } token_t;
 
@@ -113,7 +213,7 @@ is_numeric(u8 Char) {
 }
 
 b8
-is_alphabetic(u8 Char) {
+is_keyword_or_identifier_char(u8 Char) {
     if((Char >= 'a' && Char <= 'z') ||
        (Char >= 'A' && Char <= 'Z') ||
        (Char == '_') || (Char >= 128) // >= 128 is utf8 char
@@ -142,10 +242,11 @@ next_char(buffer_t *Buffer, u8 *Char) {
     return 0;
 }
 
+// Set Previous = {0} to get the first token.
 b8
-next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
+next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     b8 HasNext = true;
-    token_t Token = {.Offset = Offset};
+    token_t Token = {.Offset = Previous.Offset + Previous.Size};
     if(Buffer->Text.Used > 0) {
         // Find the start of the next token by skipping white space.
         while(Token.Offset < Buffer->Text.Used) {
@@ -159,18 +260,18 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
         if(Token.Offset < Buffer->Text.Used) {
             u8 *c = &Buffer->Text.Data[Token.Offset];
             
-            if(is_alphabetic(*c)) {
+            if(is_keyword_or_identifier_char(*c)) {
                 // keyword, identifier
                 u64 End = Token.Offset + utf8_char_width(c);
                 for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
                     u8 Char = Buffer->Text.Data[End];
-                    if(!is_alphabetic(Char) && !is_numeric(Char)) {
+                    if(!is_keyword_or_identifier_char(Char) && !is_numeric(Char)) {
                         break;
                     }
                 }
                 Token.Type = TOKEN_Keyword;
                 Token.Size = End - Token.Offset;
-                Token.KeywordHash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size});
+                Token.Hash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size}); 
             } else {
                 switch(*c) {
                     // Pre-processor directives
@@ -181,6 +282,9 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                         }
                         Token.Type = TOKEN_CppDirective;
                         Token.Size = (End - Token.Offset);
+                        
+                        // TODO: For speed we could to this in the loop above, if needed.
+                        Token.Hash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size});
                     } break;
                     
                     case '/': {
@@ -220,19 +324,36 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                     } break;
                     
                     case '"': {
-                        u64 End = Token.Offset + 1;
-                        while(End < Buffer->Text.Used) {
-                            if(Buffer->Text.Data[End] == '"') {
-                                if(Buffer->Text.Data[End - 1] != '\\') {
+                        b32 PreviousIsInclude = (Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include] || Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include_next]);
+                        if(PreviousIsInclude && (offset_to_line_index(Buffer, Previous.Offset) == offset_to_line_index(Buffer, Token.Offset))) {
+                            u64 End = Token.Offset + 1;
+                            for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
+                                u8 Char = Buffer->Text.Data[End];
+                                if(Char == '"') {
                                     End += 1;
+                                    Token.Type = TOKEN_IncludePath;
+                                    break;
+                                } else if(Char == '\n') {
+                                    Token.Type = TOKEN_Unknown;
                                     break;
                                 }
                             }
-                            
-                            End += utf8_char_width(&Buffer->Text.Data[End]);
+                            Token.Size = End - Token.Offset;
+                        } else {
+                            u64 End = Token.Offset + 1;
+                            while(End < Buffer->Text.Used) {
+                                if(Buffer->Text.Data[End] == '"') {
+                                    if(Buffer->Text.Data[End - 1] != '\\') {
+                                        End += 1;
+                                        break;
+                                    }
+                                }
+                                
+                                End += utf8_char_width(&Buffer->Text.Data[End]);
+                            }
+                            Token.Type = TOKEN_StringLiteral;
+                            Token.Size = End - Token.Offset;
                         }
-                        Token.Type = TOKEN_StringLiteral;
-                        Token.Size = End - Token.Offset;
                     } break;
                     
                     case '\'': {
@@ -400,10 +521,9 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                                 Token.Type = TOKEN_FloatLiteral;
                             }
                         }
-                        
                     } break;
                     
-                    // Bracket, 
+                    // Bracket
                     case '[': Token.Bracket = 0x80; goto parse_bracket;
                     case ']': Token.Bracket = 0; goto parse_bracket;
                     
@@ -423,7 +543,29 @@ next_token(buffer_t *Buffer, u64 Offset, token_t *Out) {
                     case '*': { Token.Type = TOKEN_Multiplication; Token.Size = 1; } break;
                     case '%': { Token.Type = TOKEN_Modulo;         Token.Size = 1; } break;
                     case '+': { Token.Type = TOKEN_Addition;       Token.Size = 1; } break;
-                    case '<': { Token.Type = TOKEN_LessThan;       Token.Size = 1; } break;
+                    
+                    case '<': { 
+                        Token.Type = TOKEN_LessThan;
+                        Token.Size = 1; 
+                        if(Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include] || Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include_next]) {
+                            
+                            if(offset_to_line_index(Buffer, Previous.Offset) == offset_to_line_index(Buffer, Token.Offset)) { 
+                                u64 End = Token.Offset + 1;
+                                for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
+                                    u8 Char = Buffer->Text.Data[End];
+                                    if(Char == '>') {
+                                        End += 1;
+                                        Token.Size = End - Token.Offset;
+                                        Token.Type = TOKEN_IncludePath;
+                                        break;
+                                    } else if(Char == '\n') {
+                                        break;
+                                    }
+                                }
+                            } 
+                        }
+                    } break;
+                    
                     case '>': { Token.Type = TOKEN_GreaterThan;    Token.Size = 1; } break;
                     case '-': { Token.Type = TOKEN_Subtraction;    Token.Size = 1; } break;
                     case '&': { Token.Type = TOKEN_And;            Token.Size = 1; } break;
