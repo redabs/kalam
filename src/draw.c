@@ -152,7 +152,7 @@ token_color(token_t Token) {
     switch(Token.Type) {
         case TOKEN_CharLiteral:
         case TOKEN_StringLiteral: {
-            return 0xfff3e333;
+            return 0xffffffff;
         } break; 
         
         case TOKEN_IncludePath: {

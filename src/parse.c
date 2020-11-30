@@ -242,6 +242,34 @@ next_char(buffer_t *Buffer, u8 *Char) {
     return 0;
 }
 
+b8
+parse_string_or_char_literal(buffer_t *Buffer, u64 Offset, token_t *Out) {
+    u8 Symbol = Buffer->Text.Data[Offset];
+    if(Symbol != '"' && Symbol != '\'') {
+        return false;
+    }
+    
+    u64 End = Offset + 1;
+    for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
+        u8 *Char = &Buffer->Text.Data[End];
+        if(*Char == Symbol || *Char == '\n') {
+            s32 Count = 0;
+            for(u8 *c = Char - 1; c >= Buffer->Text.Data && *c == '\\'; --c) {
+                ++Count;
+            }
+            if((Count & 1) == 0) {
+                End += 1;
+                break;
+            }
+        } 
+    }
+    
+    Out->Offset = Offset;
+    Out->Type = (Symbol == '"') ? TOKEN_StringLiteral : TOKEN_CharLiteral;
+    Out->Size = End - Offset;
+    return true;
+}
+
 // Set Previous = {0} to get the first token.
 b8
 next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
@@ -340,36 +368,12 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                             }
                             Token.Size = End - Token.Offset;
                         } else {
-                            u64 End = Token.Offset + 1;
-                            while(End < Buffer->Text.Used) {
-                                if(Buffer->Text.Data[End] == '"') {
-                                    if(Buffer->Text.Data[End - 1] != '\\') {
-                                        End += 1;
-                                        break;
-                                    }
-                                }
-                                
-                                End += utf8_char_width(&Buffer->Text.Data[End]);
-                            }
-                            Token.Type = TOKEN_StringLiteral;
-                            Token.Size = End - Token.Offset;
+                            parse_string_or_char_literal(Buffer, Token.Offset, &Token);
                         }
                     } break;
                     
-                    case '\'': {
-                        u64 End = Token.Offset + 1;
-                        while(End < Buffer->Text.Used) {
-                            if(Buffer->Text.Data[End] == '\'') {
-                                if(Buffer->Text.Data[End - 1] != '\\') {
-                                    End += 1;
-                                    break;
-                                }
-                            }
-                            
-                            End += utf8_char_width(&Buffer->Text.Data[End]);
-                        }
-                        Token.Type = TOKEN_CharLiteral;
-                        Token.Size = End - Token.Offset;
+                    case '\'': { 
+                        parse_string_or_char_literal(Buffer, Token.Offset, &Token);
                     } break;
                     
                     case '0': case '1': case '2': case '3': case '4': 
