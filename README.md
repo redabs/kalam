@@ -11,5 +11,5 @@ i3/vim style tiling with sane navigation.
 Early implementation of incremental search & replace using select mode
 ![](media/select_mode.gif)
 
-C/C++ Syntax highlighting
+C/C++ Syntax highlighting and file selection
 ![](media/syntax_highlight.gif)
