@@ -149,14 +149,14 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
 u32
 token_color(token_t Token) {
     u32 Color = COLOR_TEXT;
-    switch(Token.Type) {
+    switch(Token.Type) { 
         case TOKEN_CharLiteral:
         case TOKEN_StringLiteral: {
             return 0xffffffff;
         } break; 
         
         case TOKEN_IncludePath: {
-            return 0xff84eac1;
+            return 0xff8455ff;
         } break;
         
         case TOKEN_Keyword: {
@@ -258,8 +258,11 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                             // Do we need a new token?
                             if(Offset >= (Token.Offset + Token.Size)) {
                                 HasTokens = next_token(Buf, Token, &Token);
+                                // TODO: Now we're skipping characters that aren't tokenized and fall between tokens. This is fine if we don't want
+                                // to draw blank characters but simply advance the cursor, but it's a problem if the tokenizer incorrectly skips characters.
+                                Offset = Token.Offset;
                             } else {
-                                u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size);
+                                u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size); // Don't write past this line if token spans multiple lines
                                 range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
                                 
                                 u32 Color = token_color(Token);

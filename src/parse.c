@@ -191,12 +191,17 @@ typedef enum {
     TOKEN_Comma,
     
     TOKEN_IncludePath,
+    
+    TOKEN_EscapedNewline,
 } token_type_t;
 
 typedef struct {
     u64 Offset;
     u64 Size;
     token_type_t Type;
+    
+    // This is non-zero if this token is either a pre-processor directive or syntactically part of one.
+    u64 CppDirectiveHash; // CppPredefHashes[CPPDIRECTIVE_*] 
     
     union {
         u8 Bracket; // Top bit 1 if open bracket, 0 if closed
@@ -274,23 +279,35 @@ parse_string_or_char_literal(buffer_t *Buffer, u64 Offset, token_t *Out) {
 b8
 next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     b8 HasNext = true;
-    token_t Token = {.Offset = Previous.Offset + Previous.Size};
+    token_t Token = {.Offset = Previous.Offset + Previous.Size, .CppDirectiveHash = Previous.CppDirectiveHash};
     if(Buffer->Text.Used > 0) {
         // Find the start of the next token by skipping white space.
         while(Token.Offset < Buffer->Text.Used) {
-            u8 *c = &Buffer->Text.Data[Token.Offset];
-            if(!is_blank(*c)) {
-                break;
+            u8 *Char = &Buffer->Text.Data[Token.Offset];
+            
+            if(!is_blank(*Char)) {
+                b32 IsEscapedNewlineCharacter = (*Char == '\\' && Token.Offset < Buffer->Text.Used && *(Char + 1) == '\n');
+                if(IsEscapedNewlineCharacter) {
+                    Token.Size = 2;
+                    Token.Type = TOKEN_EscapedNewline;
+                    *Out = Token;
+                    return true;
+                } else {
+                    break;
+                }
+            } else if(*Char == '\n') {
+                Token.CppDirectiveHash = 0;
             }
-            Token.Offset += utf8_char_width(c);
+            
+            Token.Offset += utf8_char_width(Char);
         }
         
         if(Token.Offset < Buffer->Text.Used) {
-            u8 *c = &Buffer->Text.Data[Token.Offset];
+            u8 *Cursor = &Buffer->Text.Data[Token.Offset];
             
-            if(is_keyword_or_identifier_char(*c)) {
+            if(is_keyword_or_identifier_char(*Cursor)) {
                 // keyword, identifier
-                u64 End = Token.Offset + utf8_char_width(c);
+                u64 End = Token.Offset + utf8_char_width(Cursor);
                 for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
                     u8 Char = Buffer->Text.Data[End];
                     if(!is_keyword_or_identifier_char(Char) && !is_numeric(Char)) {
@@ -301,7 +318,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                 Token.Size = End - Token.Offset;
                 Token.Hash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size}); 
             } else {
-                switch(*c) {
+                switch(*Cursor) {
                     // Pre-processor directives
                     case '#': {
                         u64 End = Token.Offset + 1;
@@ -313,10 +330,11 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                         
                         // TODO: For speed we could to this in the loop above, if needed.
                         Token.Hash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size});
+                        Token.CppDirectiveHash = Token.Hash;
                     } break;
                     
                     case '/': {
-                        u8 *NextChar = next_char(Buffer, c);
+                        u8 *NextChar = next_char(Buffer, Cursor);
                         if(NextChar) {
                             switch(*NextChar) {
                                 case '*': {
@@ -335,8 +353,8 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                                     Token.Type = TOKEN_SingleLineComment;
                                     u64 End = Token.Offset + 2;
                                     for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
-                                        u8 Char = Buffer->Text.Data[End];
-                                        if(Char == '\n' && Buffer->Text.Data[End - 1] != '\\') {
+                                        u8 *Char = &Buffer->Text.Data[End];
+                                        if(*Char == '\n' && *(Char - 1) != '\\') {
                                             break;
                                         }
                                     }
@@ -352,8 +370,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     } break;
                     
                     case '"': {
-                        b32 PreviousIsInclude = (Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include] || Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include_next]);
-                        if(PreviousIsInclude && (offset_to_line_index(Buffer, Previous.Offset) == offset_to_line_index(Buffer, Token.Offset))) {
+                        if(Token.CppDirectiveHash == CppPredefHashes[CPPDIRECTIVE_include] || Token.CppDirectiveHash == CppPredefHashes[CPPDIRECTIVE_include_next]) {
                             u64 End = Token.Offset + 1;
                             for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
                                 u8 Char = Buffer->Text.Data[End];
@@ -379,12 +396,12 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     case '0': case '1': case '2': case '3': case '4': 
                     case '5': case '6': case '7': case '8': case '9': {
                         Token.Type = TOKEN_DecimalLiteral;
-                        if(*c == '0') {
+                        if(*Cursor == '0') {
                             // Could be:
                             // binary literal 0b100101010, 
                             // hexadecimal literal 0x12345
                             // octal literal 027364
-                            u8 *NextChar = next_char(Buffer, c);
+                            u8 *NextChar = next_char(Buffer, Cursor);
                             if(NextChar) {
                                 switch(*NextChar) {
                                     // Binary
@@ -494,7 +511,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                         Token.Type = TOKEN_Dot;
                         Token.Size = 1;
                         
-                        u8 *NextChar = next_char(Buffer, c);
+                        u8 *NextChar = next_char(Buffer, Cursor);
                         if(NextChar) {
                             // Floating point number written as .3 or .3f
                             if(is_numeric(*NextChar)) {
@@ -540,7 +557,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     parse_bracket: {
                         Token.Type = TOKEN_Bracket;
                         Token.Size = 1;
-                        Token.Bracket |= (*c) & 0x7f;
+                        Token.Bracket |= (*Cursor) & 0x7f;
                     } break;
                     
                     // Operators
@@ -551,22 +568,19 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     case '<': { 
                         Token.Type = TOKEN_LessThan;
                         Token.Size = 1; 
-                        if(Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include] || Previous.Hash == CppPredefHashes[CPPDIRECTIVE_include_next]) {
-                            
-                            if(offset_to_line_index(Buffer, Previous.Offset) == offset_to_line_index(Buffer, Token.Offset)) { 
-                                u64 End = Token.Offset + 1;
-                                for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
-                                    u8 Char = Buffer->Text.Data[End];
-                                    if(Char == '>') {
-                                        End += 1;
-                                        Token.Size = End - Token.Offset;
-                                        Token.Type = TOKEN_IncludePath;
-                                        break;
-                                    } else if(Char == '\n') {
-                                        break;
-                                    }
+                        if(Token.CppDirectiveHash == CppPredefHashes[CPPDIRECTIVE_include] || Token.CppDirectiveHash == CppPredefHashes[CPPDIRECTIVE_include_next]) {
+                            u64 End = Token.Offset + 1;
+                            for(; End < Buffer->Text.Used; End += utf8_char_width(&Buffer->Text.Data[End])) {
+                                u8 Char = Buffer->Text.Data[End];
+                                if(Char == '>') {
+                                    End += 1;
+                                    Token.Size = End - Token.Offset;
+                                    Token.Type = TOKEN_IncludePath;
+                                    break;
+                                } else if(Char == '\n') {
+                                    break;
                                 }
-                            } 
+                            }
                         }
                     } break;
                     
@@ -582,7 +596,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     
                     default: {
                         Token.Type = TOKEN_Unknown;
-                        Token.Size = utf8_char_width(c);
+                        Token.Size = utf8_char_width(Cursor);
                     } break;
                 }
             }
