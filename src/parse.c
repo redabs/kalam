@@ -281,7 +281,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     b8 HasNext = true;
     token_t Token = {.Offset = Previous.Offset + Previous.Size, .CppDirectiveHash = Previous.CppDirectiveHash};
     
-    // There can't be multiple include 
+    // There can't be multiple include paths
     if(Previous.Type == TOKEN_IncludePath) {
         Token.CppDirectiveHash = 0;
     }
