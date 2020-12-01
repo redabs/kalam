@@ -280,6 +280,12 @@ b8
 next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     b8 HasNext = true;
     token_t Token = {.Offset = Previous.Offset + Previous.Size, .CppDirectiveHash = Previous.CppDirectiveHash};
+    
+    // There can't be multiple include 
+    if(Previous.Type == TOKEN_IncludePath) {
+        Token.CppDirectiveHash = 0;
+    }
+    
     if(Buffer->Text.Used > 0) {
         // Find the start of the next token by skipping white space.
         while(Token.Offset < Buffer->Text.Used) {
