@@ -606,6 +606,8 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     } break;
                 }
             }
+        } else {
+            HasNext = false;
         }
     } else {
         HasNext = false;
@@ -615,3 +617,4 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     
     return HasNext;
 }
+
