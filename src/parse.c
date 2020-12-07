@@ -141,6 +141,7 @@ typedef enum {
     TOKEN_Unknown = 0,
     
     TOKEN_Keyword,
+    TOKEN_Identifier,
     
     TOKEN_CppDirective, // #define, #assert, #if, #error, etc..
     
@@ -285,8 +286,8 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     if(Previous.Type == TOKEN_IncludePath) {
         Token.CppDirectiveHash = 0;
     }
-    
-    if(Buffer->Text.Used > 0) {
+    HasNext = Buffer->Text.Used > 0;
+    if(HasNext) {
         // Find the start of the next token by skipping white space.
         while(Token.Offset < Buffer->Text.Used) {
             u8 *Char = &Buffer->Text.Data[Token.Offset];
@@ -307,8 +308,8 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
             
             Token.Offset += utf8_char_width(Char);
         }
-        
-        if(Token.Offset < Buffer->Text.Used) {
+        HasNext = Token.Offset < Buffer->Text.Used;
+        if(HasNext) {
             u8 *Cursor = &Buffer->Text.Data[Token.Offset];
             
             if(is_keyword_or_identifier_char(*Cursor)) {
@@ -320,9 +321,14 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                         break;
                     }
                 }
-                Token.Type = TOKEN_Keyword;
                 Token.Size = End - Token.Offset;
                 Token.Hash = fnv1a_64((range_t){.Data = Buffer->Text.Data + Token.Offset, .Size = Token.Size}); 
+                Token.Type = TOKEN_Identifier;
+                for(int i = 0; i < ARRAY_COUNT(CppPredefHashes); ++i) {
+                    if(CppPredefHashes[i] == Token.Hash) {
+                        Token.Type = TOKEN_Keyword;
+                    }
+                }
             } else {
                 switch(*Cursor) {
                     // Pre-processor directives
@@ -551,19 +557,15 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     } break;
                     
                     // Bracket
-                    case '[': Token.Bracket = 0x80; goto parse_bracket;
-                    case ']': Token.Bracket = 0; goto parse_bracket;
-                    
-                    case '{': Token.Bracket = 0x80; goto parse_bracket;
-                    case '}': Token.Bracket = 0; goto parse_bracket;
-                    
-                    case '(': Token.Bracket = 0x80; goto parse_bracket;
-                    case ')': Token.Bracket = 0; goto parse_bracket;
-                    
-                    parse_bracket: {
+                    case '[':
+                    case ']':
+                    case '{':
+                    case '}':
+                    case '(':
+                    case ')': {
                         Token.Type = TOKEN_Bracket;
                         Token.Size = 1;
-                        Token.Bracket |= (*Cursor) & 0x7f;
+                        Token.Bracket = (*Cursor);
                     } break;
                     
                     // Operators
@@ -606,12 +608,8 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     } break;
                 }
             }
-        } else {
-            HasNext = false;
-        }
-    } else {
-        HasNext = false;
-    }
+        } 
+    } 
     
     *Out = Token;
     
