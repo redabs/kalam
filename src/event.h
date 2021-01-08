@@ -101,7 +101,6 @@ typedef enum {
     
     KEY_MAX,
 } input_key_t;
-
 typedef struct {
     input_event_type_t Type;
     input_device_t Device;

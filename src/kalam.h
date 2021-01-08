@@ -147,7 +147,10 @@ typedef struct {
     
     font_t Font;
     buffer_t *Buffers; // stb, TODO: Stbs forces us to update live pointer whenever there's a reallocation, maybe store these in batches instead?
+    
     panel_ctx_t PanelCtx;
+    ui_ctx_t UiCtx;
+    
     mem_buffer_t WorkingDirectory; // IMPORTANT: ALWAYS ends with a directory delimiter, forward- or backslash
     mem_buffer_t SearchDirectory; // Holds the path that the user is entering during file selection
 } ctx_t;

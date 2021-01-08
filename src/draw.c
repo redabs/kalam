@@ -201,7 +201,7 @@ token_color(token_t Token) {
 }
 
 void
-draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
+draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Font, irect_t PanelRect) {
     if(Panel->Buffer) {
         irect_t TextRegion = text_buffer_rect(Panel, Font, PanelRect);
         
@@ -233,9 +233,9 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 }
                 
                 line_t *Line = &Panel->Buffer->Lines[Li];
-                s32 OffsetX = text_width(&Ctx.Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = SelectionMaxIdx.Cursor - Line->Offset});
+                s32 OffsetX = text_width(Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = SelectionMaxIdx.Cursor - Line->Offset});
                 if(OffsetX >= (TextRegion.w + Panel->ScrollX)) {
-                    Panel->ScrollX = OffsetX - TextRegion.w + Ctx.Font.MWidth;
+                    Panel->ScrollX = OffsetX - TextRegion.w + Font->MWidth;
                 } else if(OffsetX < Panel->ScrollX) {
                     Panel->ScrollX = OffsetX;
                 }
@@ -243,8 +243,8 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
-                draw_selection(Fb, Panel, s, &Ctx.Font, TextRegion);
-                draw_cursor(Fb, Panel, s, &Ctx.Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
+                draw_selection(Fb, Panel, s, Font, TextRegion);
+                draw_cursor(Fb, Panel, s, Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
             }
             
             {
@@ -295,9 +295,9 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
             panel_border_rects(PanelRect, &r0, &r1, &r2, &r3);
             
             u32 BorderColor = COLOR_BG;
-            if(Ctx.PanelCtx.Selected == Panel) {
+            if(PanelCtx->Selected == Panel) {
                 BorderColor = COLOR_PANEL_SELECTED;
-            } else if(Panel != Ctx.PanelCtx.Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
+            } else if(Panel != PanelCtx->Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
                 BorderColor = COLOR_PANEL_LAST_SELECTED;
             } 
             draw_rect(Fb, r0, BorderColor);
@@ -329,15 +329,15 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 } break;
             }
             
-            iv2_t TextPos = center_text_in_rect(&Ctx.Font, StatusBar, mem_buf_as_range(ModeString));
-            draw_text_line(Fb, &Ctx.Font, TextPos.x, TextPos.y, ModeStrColor, mem_buf_as_range(ModeString));
-            draw_text_line(Fb, &Ctx.Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
+            iv2_t TextPos = center_text_in_rect(Font, StatusBar, mem_buf_as_range(ModeString));
+            draw_text_line(Fb, Font, TextPos.x, TextPos.y, ModeStrColor, mem_buf_as_range(ModeString));
+            draw_text_line(Fb, Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
         }
     } else {
         irect_t r0, r1;
         split_panel_rect(Panel, PanelRect, &r0, &r1);
-        draw_panel(Fb, Panel->Children[0], Font, r0);
-        draw_panel(Fb, Panel->Children[1], Font, r1);
+        draw_panel(Fb, PanelCtx, Panel->Children[0], Font, r0);
+        draw_panel(Fb, PanelCtx, Panel->Children[1], Font, r1);
     }
 }
 
@@ -348,55 +348,54 @@ workspace_rect(framebuffer_t *Fb) {
 }
 
 void
-draw_panels(framebuffer_t *Fb, font_t *Font) {
+draw_panels(framebuffer_t *Fb, panel_ctx_t *PanelCtx, font_t *Font) {
     irect_t ClipSave = Fb->Clip;
-    if(Ctx.PanelCtx.Root) {
+    if(PanelCtx->Root) {
         irect_t Rect = workspace_rect(Fb);
-        draw_panel(Fb, Ctx.PanelCtx.Root, Font, Rect);
+        draw_panel(Fb, PanelCtx, PanelCtx->Root, Font, Rect);
     }
     Fb->Clip = ClipSave;
 }
 
 void
-draw_file_menu(framebuffer_t *Fb) {
+draw_file_menu(ctx_t *Ctx, framebuffer_t *Fb) {
     irect_t ClipSave = Fb->Clip;
     
-    s32 hw = 250 >> 1;
-    s32 LineHeight = line_height(&Ctx.Font);
+    s32 LineHeight = line_height(&Ctx->Font);
     
     irect_t SearchPathBox = {.x = BORDER_SIZE, .y = BORDER_SIZE, .w = Fb->Width - BORDER_SIZE * 2, .h = STATUS_BAR_HEIGHT};
     draw_rect(Fb, SearchPathBox, 0xff000000);
     
     s32 HalfLineHeight = LineHeight >> 1;
-    s32 HalfMHeight = (Ctx.Font.MHeight >> 1);
+    s32 HalfMHeight = (Ctx->Font.MHeight >> 1);
     
-    range_t SearchPathText = mem_buf_as_range(Ctx.SearchDirectory);
-    iv2_t SearchPathTextPos = center_text_in_rect(&Ctx.Font, SearchPathBox, SearchPathText);
-    draw_text_line(Fb, &Ctx.Font, BORDER_SIZE + 5, SearchPathTextPos.y, 0xffffffff, SearchPathText);
+    range_t SearchPathText = mem_buf_as_range(Ctx->SearchDirectory);
+    iv2_t SearchPathTextPos = center_text_in_rect(&Ctx->Font, SearchPathBox, SearchPathText);
+    draw_text_line(Fb, &Ctx->Font, BORDER_SIZE + 5, SearchPathTextPos.y, 0xffffffff, SearchPathText);
     
-    irect_t Box = {.x = BORDER_SIZE, .y = SearchPathBox.y + SearchPathBox.h, .w = Fb->Width - BORDER_SIZE * 2, .h = MIN((s32)sb_count(Ctx.FileNameInfo) * LineHeight, 250)};
+    irect_t Box = {.x = BORDER_SIZE, .y = SearchPathBox.y + SearchPathBox.h, .w = Fb->Width - BORDER_SIZE * 2, .h = MIN((s32)sb_count(Ctx->FileNameInfo) * LineHeight, 250)};
     draw_rect(Fb, Box, 0xdd2c302d);
     Fb->Clip = Box;
     s32 y = Box.y;
     
     // Calculate vertical scroll
     
-    s32 OffsetY = (s32)Ctx.SelectedFileIndex * LineHeight;
-    if(OffsetY >= (Ctx.FileSelectScrollY + Box.h - LineHeight)) {
-        Ctx.FileSelectScrollY = OffsetY - Box.h + LineHeight;
-    } else if(OffsetY < Ctx.FileSelectScrollY) {
-        Ctx.FileSelectScrollY = OffsetY;
+    s32 OffsetY = (s32)Ctx->SelectedFileIndex * LineHeight;
+    if(OffsetY >= (Ctx->FileSelectScrollY + Box.h - LineHeight)) {
+        Ctx->FileSelectScrollY = OffsetY - Box.h + LineHeight;
+    } else if(OffsetY < Ctx->FileSelectScrollY) {
+        Ctx->FileSelectScrollY = OffsetY;
     }
     
-    for(s64 i = 0; i < sb_count(Ctx.FileNameInfo); ++i) {
-        range_t Path = { .Data = &Ctx.FileNames.Data[Ctx.FileNameInfo[i].Offset], .Size = Ctx.FileNameInfo[i].Size };
+    for(s64 i = 0; i < sb_count(Ctx->FileNameInfo); ++i) {
+        range_t Path = { .Data = &Ctx->FileNames.Data[Ctx->FileNameInfo[i].Offset], .Size = Ctx->FileNameInfo[i].Size };
         
-        if(i == Ctx.SelectedFileIndex) {
-            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i - Ctx.FileSelectScrollY, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
+        if(i == Ctx->SelectedFileIndex) {
+            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i - Ctx->FileSelectScrollY, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
         }
         
-        s32 BaseLine = y + HalfLineHeight + HalfMHeight - Ctx.FileSelectScrollY;
-        draw_text_line(Fb, &Ctx.Font, Box.x + 5, BaseLine, 0xffffffff, Path);
+        s32 BaseLine = y + HalfLineHeight + HalfMHeight - Ctx->FileSelectScrollY;
+        draw_text_line(Fb, &Ctx->Font, Box.x + 5, BaseLine, 0xffffffff, Path);
         y += LineHeight;
     }
     

@@ -42,8 +42,8 @@ panel_show_buffer(panel_t *Panel, buffer_t *Buffer) {
 }
 
 void
-panel_create(panel_ctx_t *PanelCtx) {
-    // no hay nada mas
+panel_create(ctx_t *Ctx) {
+    panel_ctx_t *PanelCtx = &Ctx->PanelCtx;
     if(!PanelCtx->FreeList) {
         return;
     }
@@ -51,7 +51,7 @@ panel_create(panel_ctx_t *PanelCtx) {
     if(!PanelCtx->Root) {
         panel_t *p = panel_alloc(PanelCtx);
         
-        panel_show_buffer(p, &Ctx.Buffers[0]);
+        panel_show_buffer(p, &Ctx->Buffers[0]);
         p->IsLeaf = true;
         
         PanelCtx->Root = p;

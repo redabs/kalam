@@ -9,11 +9,8 @@
 #include "platform.h"
 #include "util.h"
 #include "ui.h"
-
 #include "kalam.h"
 #include "custom.h"
-
-ctx_t Ctx = {0};
 
 #include "parse.c"
 #include "selection.c"
@@ -21,6 +18,9 @@ ctx_t Ctx = {0};
 #include "layout.c"
 #include "render.c"
 #include "draw.c"
+#include "ui.c"
+
+ctx_t Ctx = {0};
 
 font_t
 load_ttf(range_t Path, f32 Size) {
@@ -107,7 +107,7 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.PanelCtx.Panels[n - 1].Next = 0;
     Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
     
-    panel_create(&Ctx.PanelCtx);
+    panel_create(&Ctx);
 }
 
 void
@@ -272,7 +272,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_NewPanel: {
-            panel_create(&Ctx.PanelCtx);
+            panel_create(&Ctx);
         } break;
         
         case OP_KillPanel: {
@@ -588,9 +588,9 @@ k_do_editor(platform_shared_t *Shared) {
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
     
-    draw_panels(Shared->Framebuffer, &Ctx.Font);
+    draw_panels(Shared->Framebuffer, &Ctx.PanelCtx, &Ctx.Font);
     
     if(Ctx.WidgetFocused == WIDGET_FileSelect) {
-        draw_file_menu(Shared->Framebuffer);
+        draw_file_menu(&Ctx, Shared->Framebuffer);
     }
 }

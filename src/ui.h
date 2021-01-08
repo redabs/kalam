@@ -72,13 +72,12 @@ typedef struct {
     iv2_t MousePos;
     iv2_t MousePosPrev;
     
-    // Events is set by kalam during initialization to point to the buffer that is filled by the
+    // EventBuffer is set by kalam during initialization to point to the buffer that is filled by the
     // platform layer.
-    input_event_buffer_t *Events;
+    input_event_buffer_t *EventBuffer;
     
     // The container currently being modified between calls to ui_begin_container and ui_end_container
     ui_container_t *ActiveContainer; 
-    
     
     // OpenContainerCount records how used slots Containers has. Containers is an array with holes;
     // linear search to find an available slot.
