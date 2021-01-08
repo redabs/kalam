@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "event.h"
 #include "platform.h"
+#include "util.h"
 
 #include "kalam.h"
 #include "custom.h"
@@ -88,6 +89,7 @@ load_file(range_t Path) {
 }
 
 void
+
 k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
     if(!load_file(C_STR_AS_RANGE("test.c"))) {
@@ -105,6 +107,7 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
     
     panel_create(&Ctx.PanelCtx);
+    
 }
 
 void
@@ -135,7 +138,7 @@ update_current_directory_files() {
     for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
         file_info_t *Fi = &Dir.Files[i];
         if((Fi->FileName.Used == 1 && Fi->FileName.Data[0] == '.') || 
-           (Fi->FileName.Used == 2 && Fi->FileName.Data[0] == '.' || Fi->FileName.Data[1] == '.')) {
+           (Fi->FileName.Used == 2 && (Fi->FileName.Data[0] == '.' && Fi->FileName.Data[1] == '.'))) {
             continue;
         }
         // Store the file name
@@ -579,6 +582,8 @@ k_do_editor(platform_shared_t *Shared) {
             } break;
         }
     } Events->Count = 0;
+    
+    do_declaration_stuff(&Ctx.Buffers[0]);
     
     clear_framebuffer(Shared->Framebuffer, COLOR_BG);
     Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};

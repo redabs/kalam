@@ -1,6 +1,8 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
+#include <stdlib.h> // malloc, realloc, free
+
 inline void *
 mem_copy(void *Dest, void *Src, u64 Size) {
     u8 *D = (u8 *)Dest;
@@ -11,15 +13,14 @@ mem_copy(void *Dest, void *Src, u64 Size) {
     return D;
 } 
 
-#define mem_zero_struct(Ptr) mem_zero((u8 *)Ptr, sizeof(*Ptr))
+#define mem_zero_struct(Ptr) mem_zero((void *)Ptr, sizeof(*Ptr))
 inline void
-mem_zero(u8 *Ptr, u64 Size) {
+mem_zero(void *Ptr, u64 Size) {
     for(u64 i = 0; i < Size; ++i) {
-        Ptr[i] = 0;
+        ((u8 *)Ptr)[i] = 0;
     }
 }
 
-#include <stdlib.h> // malloc, realloc, free
 typedef struct {
     u64 Capacity; // Bytes allocated
     u64 Used; // Bytes used.

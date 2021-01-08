@@ -33,4 +33,5 @@ set IncludeDirs=
 
 cl %CFlags% %IncludeDirs% ../win32_kalam.c ../kalam.c /link %LinkerFlags% /OUT:kalam.exe
 
-REM cl %CFlags% /I ../ ../test/main.c /D _CRT_SECURE_NO_WARNINGS=1  /link %LinkerFlags% /OUT:test.exe
+REM This is just to verify that the test case for the syntax highlighter and declaration parser is valid code
+REM cl %CFlags% ../test/test.c /link /OUT:test_binary_do_not_run.exe

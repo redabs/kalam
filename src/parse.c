@@ -1,5 +1,5 @@
-enum {
-    KEYWORD_asm = 0,
+typedef enum {
+    KEYWORD_asm = 1,
     KEYWORD_else,
     KEYWORD_new,
     KEYWORD_this,
@@ -62,7 +62,7 @@ enum {
     KEYWORD_dynamic_cast,
     KEYWORD_namespace,
     KEYWORD_template,
-    KEYWORD_And,
+    KEYWORD_and,
     KEYWORD_bitor,
     KEYWORD_not_eq,
     KEYWORD_xor,
@@ -95,21 +95,11 @@ enum {
     CPPDIRECTIVE_warning,
     
     CPP_PREDEF_MAX,
-};
+} cpp_keyword_type_t, cpp_directive_type_t;
 
 u64 CppPredefHashes[CPP_PREDEF_MAX] = {
-    0xe7599c190572c560, 0x7f2b6c605332dd30, 0x2138d5192571b731, 0x2587bcef32493841, 0x5dc77784260a7236, 0x915ea6605dc15d80, 0x554667f2165fec5d, 0x5a5fe3720c9584cf, 0xcd2fd49bc6b014bd, 0xf7b24048d2701d49, 0xc5a11c2dd9ab8cec, 0x5b5c98ef514dbfa5, 0x93b7591debc7ce38, 0xedb2d39755161f73, 0x38fe7925726e5cbd, 0x570ac119447423ee, 0xb55e6190e8792fd1, 0x5cc53b62ea063f7, 0xf4b72165f60f5b60, 0xe51f408ea2730be4, 0xc1b2e33b13ec076c, 0xb5fae2c14238b978, 0x134dcf77c0b3eea0, 0x690b0e3f4c3bef38, 0xf2a393910b5b3ebd, 0xa00a62a942b20165, 0xe10e210d0e407655, 0x91853f297dfecb6e, 0xd11655952fcbab9f, 0xdcb27818fed9da90, 0xc5c7b983377cad5f, 0x4b2a584e9a909034, 0x65c9718e19e3df34, 0xb501d7a879f0854d, 0xf6915548f781cd55, 0xb7b1a6ed402882e6, 0xcb762a9f4cf6f292, 0x9d40d1720eeae746, 0x5055c58f7a753b55, 0xd9bcbc712744e027, 0xd2bfd5accd1966a4, 0x8b73007b55c3e26, 0x8a4a6236192e319d, 0x3a8bdbd8e17b835c, 0xebada5168620c5fe, 0xe43c3b14f8fd3d4, 0xc534816d6d11e97b, 0x3173c900e37ae1df, 0xf3fe6b5fdb85d50a, 0x2b9fff192bd4c83e, 0x384157e47f809f43, 0x9575f08fb5a48f0d, 0x8915907b53bb494, 0xcde8c9ad70d16733, 0xc318a9d898991720, 0xcd074885fe311c91, 0xa0880a9ce131dea8, 0xd3ac3c45566efde9, 0xa5a87ac5b0b379b1, 0xce87a3885811296e, 0xb706dc12aa9d9f5c, 0xdc1c4a04cb5c6da0, 0x33609a5e9eb92f4b, 0xf999b7199ff422e6, 0x6f34c0c3c2ddfeed, 0x3108fe3d785c2b3d, 0xbfa9b2197fe7163e, 0x1e5b266ba57eb071, 0x6d36868e1dbec272, 0x8b05407b5565ca4, 0x557847ce6cc35ba9, 0x598feba3d9002de9, 0x215ad619258e9f4a, 0x6ca17d73a48b7847, 0xe5fa41199584a158, 0xcaacbf9bb2bdb94d, 0x87b47ae7e47b5eb0, 0x879289e7e45e91c7, 0xc46b4f1a2a853aac, 0xbd70f873b2728fd4, 0x915c06ca0dd8041c, 0xcd52a917d46dfb25, 0xda33cddabf5b2ccc, 0x6b431a068c4c0588, 0xcfc287309225a9cf, 0x1237c3cc4a3b9012, 0x42abc43bd655ea76, 0xb4713123458252a0, 0x4635f63b0358f1c2, 0x622bb42f2062664e, 0xae92f47dd56a0487, 0xceb0ae86a9c2c408, 0xf04062bfafba2bde, 
+    0, 0xe7599c190572c560, 0x7f2b6c605332dd30, 0x2138d5192571b731, 0x2587bcef32493841, 0x5dc77784260a7236, 0x915ea6605dc15d80, 0x554667f2165fec5d, 0x5a5fe3720c9584cf, 0xcd2fd49bc6b014bd, 0xf7b24048d2701d49, 0xc5a11c2dd9ab8cec, 0x5b5c98ef514dbfa5, 0x93b7591debc7ce38, 0xedb2d39755161f73, 0x38fe7925726e5cbd, 0x570ac119447423ee, 0xb55e6190e8792fd1, 0x5cc53b62ea063f7, 0xf4b72165f60f5b60, 0xe51f408ea2730be4, 0xc1b2e33b13ec076c, 0xb5fae2c14238b978, 0x134dcf77c0b3eea0, 0x690b0e3f4c3bef38, 0xf2a393910b5b3ebd, 0xa00a62a942b20165, 0xe10e210d0e407655, 0x91853f297dfecb6e, 0xd11655952fcbab9f, 0xdcb27818fed9da90, 0xc5c7b983377cad5f, 0x4b2a584e9a909034, 0x65c9718e19e3df34, 0xb501d7a879f0854d, 0xf6915548f781cd55, 0xb7b1a6ed402882e6, 0xcb762a9f4cf6f292, 0x9d40d1720eeae746, 0x5055c58f7a753b55, 0xd9bcbc712744e027, 0xd2bfd5accd1966a4, 0x8b73007b55c3e26, 0x8a4a6236192e319d, 0x3a8bdbd8e17b835c, 0xebada5168620c5fe, 0xe43c3b14f8fd3d4, 0xc534816d6d11e97b, 0x3173c900e37ae1df, 0xf3fe6b5fdb85d50a, 0x2b9fff192bd4c83e, 0x384157e47f809f43, 0x9575f08fb5a48f0d, 0x8915907b53bb494, 0xcde8c9ad70d16733, 0xc318a9d898991720, 0xcd074885fe311c91, 0xa0880a9ce131dea8, 0xd3ac3c45566efde9, 0xa5a87ac5b0b379b1, 0xce87a3885811296e, 0xb706dc12aa9d9f5c, 0xdc1c4a04cb5c6da0, 0x33609a5e9eb92f4b, 0xe6f79719051ff286, 0x6f34c0c3c2ddfeed, 0x3108fe3d785c2b3d, 0xbfa9b2197fe7163e, 0x1e5b266ba57eb071, 0x6d36868e1dbec272, 0x8b05407b5565ca4, 0x557847ce6cc35ba9, 0x598feba3d9002de9, 0x215ad619258e9f4a, 0x6ca17d73a48b7847, 0xe5fa41199584a158, 0xcaacbf9bb2bdb94d, 0x87b47ae7e47b5eb0, 0x879289e7e45e91c7, 0xc46b4f1a2a853aac, 0xbd70f873b2728fd4, 0x915c06ca0dd8041c, 0xcd52a917d46dfb25, 0xda33cddabf5b2ccc, 0x6b431a068c4c0588, 0xcfc287309225a9cf, 0x1237c3cc4a3b9012, 0x42abc43bd655ea76, 0xb4713123458252a0, 0x4635f63b0358f1c2, 0x622bb42f2062664e, 0xae92f47dd56a0487, 0xceb0ae86a9c2c408, 0xf04062bfafba2bde, 
 };
-
-u64
-fnv1a_64(range_t String) {
-    u64 Hash = 0xcbf29ce484222325;
-    for(u64 i = 0; i < String.Size; ++i) {
-        Hash ^= String.Data[i];
-        Hash *= 0x100000001b3;
-    }
-    return Hash;
-}
 
 void
 make_lines(buffer_t *Buf) {
@@ -160,7 +150,7 @@ typedef enum {
     TOKEN_Bracket, // [] {} (), does not include <>
     
     TOKEN_Division, // / 
-    TOKEN_Multiplication, // *
+    TOKEN_Star, // *
     TOKEN_Modulo, // %
     TOKEN_Addition, // + 
     TOKEN_Subtraction, // -
@@ -569,7 +559,7 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                     } break;
                     
                     // Operators
-                    case '*': { Token.Type = TOKEN_Multiplication; Token.Size = 1; } break;
+                    case '*': { Token.Type = TOKEN_Star; Token.Size = 1; } break;
                     case '%': { Token.Type = TOKEN_Modulo;         Token.Size = 1; } break;
                     case '+': { Token.Type = TOKEN_Addition;       Token.Size = 1; } break;
                     
@@ -592,15 +582,15 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
                         }
                     } break;
                     
-                    case '>': { Token.Type = TOKEN_GreaterThan;    Token.Size = 1; } break;
-                    case '-': { Token.Type = TOKEN_Subtraction;    Token.Size = 1; } break;
-                    case '&': { Token.Type = TOKEN_And;            Token.Size = 1; } break;
-                    case '!': { Token.Type = TOKEN_LogicalNot;     Token.Size = 1; } break;
-                    case '^': { Token.Type = TOKEN_Xor;            Token.Size = 1; } break;
-                    case '~': { Token.Type = TOKEN_BitwiseNot;     Token.Size = 1; } break;
-                    case '=': { Token.Type = TOKEN_Assignment;     Token.Size = 1; } break;
-                    case ';': { Token.Type = TOKEN_Semicolon;      Token.Size = 1; } break;
-                    case ',': { Token.Type = TOKEN_Comma;          Token.Size = 1; } break;
+                    case '>': { Token.Type = TOKEN_GreaterThan; Token.Size = 1; } break;
+                    case '-': { Token.Type = TOKEN_Subtraction; Token.Size = 1; } break;
+                    case '&': { Token.Type = TOKEN_And;         Token.Size = 1; } break;
+                    case '!': { Token.Type = TOKEN_LogicalNot;  Token.Size = 1; } break;
+                    case '^': { Token.Type = TOKEN_Xor;         Token.Size = 1; } break;
+                    case '~': { Token.Type = TOKEN_BitwiseNot;  Token.Size = 1; } break;
+                    case '=': { Token.Type = TOKEN_Assignment;  Token.Size = 1; } break;
+                    case ';': { Token.Type = TOKEN_Semicolon;   Token.Size = 1; } break;
+                    case ',': { Token.Type = TOKEN_Comma;       Token.Size = 1; } break;
                     
                     default: {
                         Token.Type = TOKEN_Unknown;
@@ -616,3 +606,164 @@ next_token(buffer_t *Buffer, token_t Previous, token_t *Out) {
     return HasNext;
 }
 
+b8
+is_token_keyword(token_t *Token, cpp_keyword_type_t Keyword) {
+    if(Keyword >= CPP_PREDEF_MAX) { 
+        return false;
+    }
+    
+    return (Token->Type == TOKEN_Keyword && Token->Hash == CppPredefHashes[Keyword]);
+}
+
+typedef enum {
+    DECL_Function = 1,
+    DECL_FunctionPrototype,
+    DECL_Typedef,
+    DECL_Enum,
+    DECL_Struct,
+    DECL_Class,
+    DECL_Array
+} declaration_type_t;
+
+typedef struct {
+    s64 Curly, Paren, Square;
+} scope_depth_t;
+
+b8
+scope_depth_equal(scope_depth_t s0, scope_depth_t s1) {
+    return (s0.Curly == s1.Curly) && (s0.Paren == s1.Paren) && (s0.Square == s1.Square);
+}
+
+typedef struct {
+    u64 Offset;
+    u64 Size;
+    u64 IdentifierOffset;
+    u64 IdentifierSize;
+    
+    scope_depth_t ScopeDepth;
+    
+    declaration_type_t Type;
+} declaration_t;
+
+void
+do_declaration_stuff(buffer_t *Buffer) {
+    token_t *Tokens = 0;
+    for(token_t Token = {0}; next_token(Buffer, Token, &Token); ) {
+        sb_push(Tokens, Token);
+    }
+    
+    s64 DeclTokenStart = -1;
+    declaration_t Decl = {0};
+    
+    scope_depth_t ScopeDepth = {0};
+    scope_depth_t ScopeDepthZero = {0};
+    
+    declaration_t *Declarations = 0;
+    
+    for(s64 TokenIndex = 0; TokenIndex < sb_count(Tokens); ++TokenIndex) {
+        token_t Tok = Tokens[TokenIndex];
+        if((Tok.Type == TOKEN_Keyword || Tok.Type == TOKEN_Identifier) && DeclTokenStart == -1 && scope_depth_equal(ScopeDepth, ScopeDepthZero)) {
+            DeclTokenStart = TokenIndex;
+            Decl.Offset = Tok.Offset;
+            Decl.ScopeDepth = ScopeDepth;
+        }
+        
+        switch(Tok.Type) {
+            case TOKEN_Keyword: {
+                if(TokenIndex == DeclTokenStart) {
+                    if(Tok.Hash == CppPredefHashes[KEYWORD_struct]) {
+                        Decl.Type = DECL_Struct;
+                    } else if(Tok.Hash == CppPredefHashes[KEYWORD_enum]) {
+                        Decl.Type = DECL_Enum;
+                    } else if(Tok.Hash == CppPredefHashes[KEYWORD_class]) {
+                        Decl.Type = DECL_Class;
+                    } 
+                }
+            } break;
+            
+            case TOKEN_Assignment: {
+                mem_zero_struct(&Decl);
+                DeclTokenStart = -1;
+            } break;
+            
+            case TOKEN_Identifier: {
+                b8 ScopeDepthEqual = scope_depth_equal(Decl.ScopeDepth, ScopeDepth);
+                if(DeclTokenStart == TokenIndex || !ScopeDepthEqual) {
+                    continue;
+                } else {
+                    token_t *Prev = &Tokens[TokenIndex - 1];
+                    if((Decl.Type == DECL_Struct || Decl.Type == DECL_Enum || Decl.Type == DECL_Class) &&
+                       (is_token_keyword(Prev, KEYWORD_struct) || is_token_keyword(Prev, KEYWORD_enum) || is_token_keyword(Prev, KEYWORD_struct))) {
+                        // Example: struct foo_t { int x; } funcy_stuff() { return (struct foo_t){123}; }
+                        // This defines a struct type foo_t that can be used later, so we need to save it as a 
+                        // declaration on it's own.
+                        declaration_t d = Decl;
+                        d.Size = Tok.Offset + Tok.Size - Decl.Offset;
+                        d.IdentifierOffset = Tok.Offset;
+                        d.IdentifierSize = Tok.Size;
+                        sb_push(Declarations, d);
+                    }
+                    
+                    if((TokenIndex + 1) < sb_count(Tokens)) {
+                        token_t Next = Tokens[TokenIndex + 1];
+                        if(Next.Type == TOKEN_Bracket && Next.Bracket == '(') {
+                            Decl.Type = DECL_Function;
+                            Decl.IdentifierOffset = Tok.Offset;
+                            Decl.IdentifierSize = Tok.Size;
+                        }
+                    }
+                }
+            } break;
+            
+            case TOKEN_Bracket: {
+                switch(Tok.Bracket) {
+                    case '{': { 
+                        if(Decl.Type == DECL_Function && scope_depth_equal(Decl.ScopeDepth, ScopeDepth)) {
+                            // This is the start of a function function, let's submit the function declaration
+                            Decl.Size = Tok.Offset - Decl.Offset;
+                            
+                            sb_push(Declarations, Decl);
+                            mem_zero_struct(&Decl);
+                            DeclTokenStart = -1;
+                        }
+                        
+                        ScopeDepth.Curly += 1; 
+                    } break;
+                    case '}': { ScopeDepth.Curly -= 1; } break;
+                    
+                    case '(': { ScopeDepth.Paren += 1; } break;
+                    case ')': { ScopeDepth.Paren -= 1; } break;
+                    
+                    case '[': { ScopeDepth.Square += 1; } break;
+                    case ']': { ScopeDepth.Square -= 1; } break;
+                }
+            } break;
+            
+            case TOKEN_Semicolon: {
+                b8 ScopeDepthEqual = scope_depth_equal(Decl.ScopeDepth, ScopeDepth);
+                if(ScopeDepthEqual) {
+                    if(Decl.Type == DECL_Function) {
+                        // This is the start of a function function, let's submit the function declaration
+                        Decl.Size = Tok.Offset - Decl.Offset;
+                        Decl.Type = DECL_FunctionPrototype;
+                        
+                        sb_push(Declarations, Decl);
+                        mem_zero_struct(&Decl);
+                    }
+                    DeclTokenStart = -1;
+                }
+            } break;
+            
+            default: {
+                
+            } break;
+        }
+    }
+    
+    for(s64 i = 0; i < sb_count(Declarations); ++i) {
+        declaration_t d = Declarations[i];
+        int a = 3;
+    }
+    
+    sb_free(Tokens);
+}

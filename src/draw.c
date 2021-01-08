@@ -152,7 +152,7 @@ token_color(token_t Token) {
     switch(Token.Type) { 
         case TOKEN_CharLiteral:
         case TOKEN_StringLiteral: {
-            return 0xffffffff;
+            return 0xffffff00;
         } break; 
         
         case TOKEN_IncludePath: {
@@ -160,25 +160,33 @@ token_color(token_t Token) {
         } break;
         
         case TOKEN_Keyword: {
-            for(u64 i = 0; i < ARRAY_COUNT(CppPredefHashes); ++i) {
-                if(CppPredefHashes[i] == Token.Hash) {
-                    Color = 0xffee9999;
-                    break;
-                }
-            }
+            Color = 0xffee9999;
+        } break;
+        
+        case TOKEN_Identifier: {
         } break;
         
         case TOKEN_HexadecimalLiteral:
         case TOKEN_BinaryLiteral:
         case TOKEN_OctalLiteral:
         case TOKEN_FloatLiteral: {
-            Color = 0xff3232ff;
+            Color = 0xff6666aa;
         } break;
         
         case TOKEN_DecimalLiteral: {
             Color = 0xffffffff;
         } break;
         
+        case TOKEN_Dot:
+        case TOKEN_GreaterThan:
+        case TOKEN_Subtraction:
+        case TOKEN_And:
+        case TOKEN_LogicalNot:
+        case TOKEN_Xor:
+        case TOKEN_BitwiseNot:
+        case TOKEN_Assignment:
+        case TOKEN_Semicolon:
+        case TOKEN_Comma:
         case TOKEN_Bracket: {
             Color = 0xff809fb0;
         } break; 
@@ -312,7 +320,8 @@ draw_panel(framebuffer_t *Fb, panel_t *Panel, font_t *Font, irect_t PanelRect) {
                 
                 case MODE_Select: {
                     mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Select:"));
-                    mem_buf_append_range(&ModeString, mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm));
+                    range_t r = mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm);
+                    mem_buf_append_range(&ModeString, r);
                 } break;
                 
                 default: {

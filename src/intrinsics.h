@@ -44,6 +44,11 @@ typedef double f64;
 #define CLAMP(Low, High, x) MAX(MIN(x, High), Low)
 #define ABS(x) ((x < 0) ? -(x) : (x))
 
+#ifdef _WIN32
+#define intrinsic_count_leading_zero_64bit(x) __lzcnt64(x)
+#endif
+
+
 // Takes a pointer to a string of utf-8 encoded characters
 // Returns a pointer to the next character in the string
 inline u8 *
