@@ -8,6 +8,7 @@
 #include "event.h"
 #include "platform.h"
 #include "util.h"
+#include "ui.h"
 
 #include "kalam.h"
 #include "custom.h"
@@ -107,7 +108,6 @@ k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
     Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
     
     panel_create(&Ctx.PanelCtx);
-    
 }
 
 void

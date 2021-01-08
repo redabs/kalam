@@ -14,6 +14,13 @@ typedef struct {
     s32 h;
 } irect_t;
 
+typedef union {
+    struct {
+        u8 r,g,b,a;
+    };
+    u8 e[4];
+} color_t;
+
 typedef enum {
     UP    = 1,
     DOWN  = 1 << 1,
