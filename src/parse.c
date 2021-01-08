@@ -760,10 +760,13 @@ do_declaration_stuff(buffer_t *Buffer) {
         }
     }
     
+#if 0    
     for(s64 i = 0; i < sb_count(Declarations); ++i) {
         declaration_t d = Declarations[i];
         int a = 3;
     }
+#endif
     
     sb_free(Tokens);
+    sb_free(Declarations);
 }
