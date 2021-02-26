@@ -140,7 +140,7 @@ panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
 }
 
 void
-panel_move_selection(panel_ctx_t *PanelCtx, dir_t Dir) {
+panel_move_selection(panel_ctx_t *PanelCtx, direction_t Dir) {
     // Panel->Children[0] is always left or above 
     panel_t *Panel = PanelCtx->Selected;
     if(PanelCtx->Root == Panel) {
@@ -154,6 +154,8 @@ panel_move_selection(panel_ctx_t *PanelCtx, dir_t Dir) {
     u8 n = (Dir == LEFT || Dir == UP) ? 1 : 0;
     while(p != PanelCtx->Root) {
         Idx = panel_child_index(p);
+        // If we move horizontally then we want to find a node parent with a vertical split
+        // and vice versa for vertical movement
         if(Idx == n && p->Parent->Split == SplitMode) {
             p = p->Parent->Children[n ^ 1];
             p->Parent->LastSelected = n ^ 1;

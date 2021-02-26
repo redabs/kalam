@@ -112,7 +112,7 @@ clear_selections(panel_t *Panel) {
 }
 
 void
-move_selection(buffer_t *Buf, selection_t *Selection, dir_t Dir, b32 CarryAnchor) {
+move_selection(buffer_t *Buf, selection_t *Selection, direction_t Dir, b32 CarryAnchor) {
     switch(Dir) {
         case LEFT: {
             if(Selection->Cursor > 0) {
@@ -220,7 +220,7 @@ merge_overlapping_selections(panel_t *Panel) {
 }
 
 void
-move_all_selections_in_panel(panel_t *Panel, dir_t Dir) {
+move_all_selections_in_panel(panel_t *Panel, direction_t Dir) {
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         move_selection(Panel->Buffer, &SelGrp->Selections[i], Dir, true);
@@ -230,7 +230,7 @@ move_all_selections_in_panel(panel_t *Panel, dir_t Dir) {
 }
 
 void
-extend_selection(panel_t *Panel, dir_t Dir) {
+extend_selection(panel_t *Panel, direction_t Dir) {
     selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         move_selection(Panel->Buffer, &SelGrp->Selections[i], Dir, false);
@@ -392,7 +392,7 @@ insert_char(panel_t *Panel, u8 *Char) {
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         selection_t *Sel = &SelGrp->Selections[i];
         Sel->Cursor += i * n; // Advances for inserts at previous selections
-        mem_buf_insert(&Panel->Buffer->Text, Sel->Cursor, n, Char);
+        mem_buf_insert(&Panel->Buffer->Text, Sel->Cursor, Char, n);
         
         insertion_t Insertion = {.Size = n, .Offset = Sel->Cursor};
         sb_push(Insertions, Insertion);

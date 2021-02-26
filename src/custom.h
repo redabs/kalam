@@ -1,22 +1,22 @@
 #ifndef CUSTOM_H
 #define CUSTOM_H
 
-#define COLOR_BG 0xff161616
-#define COLOR_SELECTION 0xff5555aa
-#define COLOR_LINE_HIGHLIGHT 0xff101010
-#define COLOR_TEXT 0xffd1c87e
-#define COLOR_CURSOR 0xff8888aa
-#define COLOR_MAIN_CURSOR 0xffccccff
+color_t COLOR_BG = {.Argb = 0xff161616};
+color_t COLOR_SELECTION = {.Argb = 0xff5555aa};
+color_t COLOR_LINE_HIGHLIGHT = {.Argb = 0xff101010};
+color_t COLOR_TEXT = {.Argb = 0xffd1c87e};
+color_t COLOR_CURSOR = {.Argb = 0xff8888aa};
+color_t COLOR_MAIN_CURSOR = {.Argb = 0xffccccff};
 
-#define COLOR_LINE_NUMBER 0xff505050
-#define COLOR_LINE_NUMBER_CURRENT 0xfff0f050
+color_t COLOR_LINE_NUMBER = {.Argb = 0xff505050};
+color_t COLOR_LINE_NUMBER_CURRENT = {.Argb = 0xfff0f050};
 
-#define COLOR_STATUS_BAR 0xff262626
-#define COLOR_STATUS_NORMAL 0xffa8df65
-#define COLOR_STATUS_INSERT 0xffe43f5a
+color_t COLOR_STATUS_BAR = {.Argb = 0xff262626};
+color_t COLOR_STATUS_NORMAL = {.Argb = 0xffa8df65};
+color_t COLOR_STATUS_INSERT = {.Argb = 0xffe43f5a};
 
-#define COLOR_PANEL_SELECTED 0xffdddddd
-#define COLOR_PANEL_LAST_SELECTED 0xff888888
+color_t COLOR_PANEL_SELECTED = {.Argb = 0xffdddddd};
+color_t COLOR_PANEL_LAST_SELECTED = {.Argb = 0xff888888};
 
 #define STATUS_BAR_HEIGHT 20
 #define BORDER_SIZE 2
@@ -56,15 +56,15 @@ typedef struct {
     operation_type_t Type;
     union {
         struct {
-            dir_t Dir;
+            direction_t Dir;
         } ExtendSelection;
         
         struct {
-            dir_t Dir;
+            direction_t Dir;
         } MoveSelection;
         
         struct {
-            dir_t Dir;
+            direction_t Dir;
         } MovePanelSelection;
         
         struct {
@@ -72,7 +72,7 @@ typedef struct {
         } DoChar;
         
         struct {
-            dir_t Dir;
+            direction_t Dir;
         } DropSelectionAndMove;
         
         struct {

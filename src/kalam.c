@@ -12,6 +12,8 @@
 #include "kalam.h"
 #include "custom.h"
 
+b8 handle_panel_input(input_event_t Event);
+
 #include "parse.c"
 #include "selection.c"
 #include "panel.c"
@@ -19,8 +21,10 @@
 #include "render.c"
 #include "draw.c"
 #include "ui.c"
+#include "widgets.c"
 
-ctx_t Ctx = {0};
+ctx_t gCtx = {0};
+ui_ctx_t *gUiCtx = &gCtx.UiCtx;
 
 font_t
 load_ttf(range_t Path, f32 Size) {
@@ -36,6 +40,7 @@ load_ttf(range_t Path, f32 Size) {
     Font.Ascent = (s32)(Font.Ascent * Scale + 0.5);
     Font.Descent = (s32)(Font.Descent * Scale + 0.5);
     Font.LineGap = (s32)(Font.LineGap * Scale + 0.5);
+    Font.LineHeight = Font.Ascent - Font.Descent + Font.LineGap; 
     
     stbtt_bakedchar *g = get_stbtt_bakedchar(&Font, 'M');
     if(g) {
@@ -50,7 +55,7 @@ load_ttf(range_t Path, f32 Size) {
 
 buffer_t *
 add_buffer() {
-    buffer_t *Buf = sb_add(Ctx.Buffers, 1);
+    buffer_t *Buf = sb_add(gCtx.Buffers, 1);
     mem_zero_struct(Buf);
     make_lines(Buf);
     
@@ -63,13 +68,13 @@ load_file(range_t Path) {
     b32 FileReadSuccess = platform_read_file(Path, &File);
     if(FileReadSuccess) {
         // TODO: Detect file encoding, we assume utf-8 for now
-        buffer_t *OldBase = Ctx.Buffers;
+        buffer_t *OldBase = gCtx.Buffers;
         buffer_t *Buf = add_buffer();
-        if(Ctx.Buffers != OldBase) {
+        if(gCtx.Buffers != OldBase) {
             for(u32 i = 0; i < PANEL_MAX; ++i) {
-                panel_t *p = &Ctx.PanelCtx.Panels[i];
+                panel_t *p = &gCtx.PanelCtx.Panels[i];
                 if(p->IsLeaf) {
-                    p->Buffer = &Ctx.Buffers[p->Buffer - OldBase];
+                    p->Buffer = &gCtx.Buffers[p->Buffer - OldBase];
                 }
             }
         }
@@ -90,24 +95,23 @@ load_file(range_t Path) {
 }
 
 void
-
-k_init(platform_shared_t *Shared, range_t WorkingDirectory) {
-    Ctx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
-    if(!load_file(C_STR_AS_RANGE("test.c"))) {
+k_init(platform_shared_t *Shared, range_t CurrentDirectory) {
+    gCtx.Font = load_ttf(C_STR_AS_RANGE("fonts/consola.ttf"), 14);
+    if(!load_file(C_STR_AS_RANGE("../kalam.c"))) {
         add_buffer();
     }
     
-    mem_buf_append_range(&Ctx.WorkingDirectory, WorkingDirectory);
-    mem_buf_append_range(&Ctx.SearchDirectory, WorkingDirectory);
+    platform_get_files_in_directory(CurrentDirectory, &gCtx.CurrentDirectory);
     
-    u32 n = ARRAY_COUNT(Ctx.PanelCtx.Panels);
+    u32 n = ARRAY_COUNT(gCtx.PanelCtx.Panels);
     for(u32 i = 0; i < n - 1; ++i) {
-        Ctx.PanelCtx.Panels[i].Next = &Ctx.PanelCtx.Panels[i + 1];
+        gCtx.PanelCtx.Panels[i].Next = &gCtx.PanelCtx.Panels[i + 1];
     }
-    Ctx.PanelCtx.Panels[n - 1].Next = 0;
-    Ctx.PanelCtx.FreeList = &Ctx.PanelCtx.Panels[0];
+    gCtx.PanelCtx.Panels[n - 1].Next = 0;
+    gCtx.PanelCtx.FreeList = &gCtx.PanelCtx.Panels[0];
     
-    panel_create(&Ctx);
+    panel_create(&gCtx);
+    ui_init(gUiCtx, &gCtx.Font);
 }
 
 void
@@ -126,46 +130,18 @@ set_mode(panel_t *Panel, mode_t Mode) {
     Panel->Mode = Mode;
 }
 
-void
-update_current_directory_files() {
-    Ctx.SelectedFileIndex = 0;
-    // Get the files and populate the options list.
-    files_in_directory_t Dir = platform_get_files_in_directory(mem_buf_as_range(Ctx.SearchDirectory));
-    
-    mem_buf_clear(&Ctx.FileNames);
-    sb_set_count(Ctx.FileNameInfo, 0);
-    
-    for(s64 i = 0; i < sb_count(Dir.Files); ++i) {
-        file_info_t *Fi = &Dir.Files[i];
-        if((Fi->FileName.Used == 1 && Fi->FileName.Data[0] == '.') || 
-           (Fi->FileName.Used == 2 && (Fi->FileName.Data[0] == '.' && Fi->FileName.Data[1] == '.'))) {
-            continue;
-        }
-        // Store the file name
-        u64 Offset;
-        void *d = mem_buf_add_idx(&Ctx.FileNames, Fi->FileName.Used, 1, &Offset);
-        mem_copy(d, Fi->FileName.Data, Fi->FileName.Used);
-        
-        // Push file info
-        file_name_info_t Info = {.Size = Fi->FileName.Used, .Offset = Offset, .Flags = Fi->Flags};
-        sb_push(Ctx.FileNameInfo, Info);
-    }
-    
-    free_files_in_directory(&Dir);
-}
-
-b32
+b8
 do_operation(operation_t Op) {
-    b32 WasHandled = true;
+    b8 WasHandled = true;
     
     switch(Op.Type) {
         case OP_SetMode: {
-            set_mode(Ctx.PanelCtx.Selected, Op.SetMode.Mode);
+            set_mode(gCtx.PanelCtx.Selected, Op.SetMode.Mode);
         } break;
         
         // Normal
         case OP_Normal_Home: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
@@ -178,7 +154,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_Normal_End: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
@@ -191,15 +167,15 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_DeleteSelection: {
-            delete_selection(Ctx.PanelCtx.Selected);
+            delete_selection(gCtx.PanelCtx.Selected);
         } break;
         
         case OP_ExtendSelection: {
-            extend_selection(Ctx.PanelCtx.Selected, Op.ExtendSelection.Dir);
+            extend_selection(gCtx.PanelCtx.Selected, Op.ExtendSelection.Dir);
         } break;
         
         case OP_DropSelectionAndMove: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             selection_t Sel = get_selection_max_idx(SelGrp);
@@ -211,17 +187,14 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_ClearSelections: {
-            clear_selections(Ctx.PanelCtx.Selected);
+            clear_selections(gCtx.PanelCtx.Selected);
         } break;
         
         case OP_OpenFileSelection: {
-            mem_buf_replace(&Ctx.SearchDirectory, &Ctx.WorkingDirectory);
-            update_current_directory_files();
-            Ctx.WidgetFocused = WIDGET_FileSelect;
         } break;
         
         case OP_SelectEntireBuffer: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             SelGrp->Selections[0].Anchor = 0;
             SelGrp->Selections[0].Cursor = Panel->Buffer->Text.Used;
@@ -231,7 +204,7 @@ do_operation(operation_t Op) {
         
         // Insert
         case OP_Insert_Home: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
@@ -243,7 +216,7 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_Insert_End: {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
@@ -255,36 +228,36 @@ do_operation(operation_t Op) {
         } break;
         
         case OP_EscapeToNormal: {
-            Ctx.PanelCtx.Selected->Mode = MODE_Normal;
+            gCtx.PanelCtx.Selected->Mode = MODE_Normal;
         } break;
         
         case OP_Delete: {
-            delete_selection(Ctx.PanelCtx.Selected);
+            delete_selection(gCtx.PanelCtx.Selected);
         } break;
         
         case OP_DoChar: {
-            do_char(Ctx.PanelCtx.Selected, Op.DoChar.Character);
+            do_char(gCtx.PanelCtx.Selected, Op.DoChar.Character);
         } break;
         
         // Global
         case OP_ToggleSplitMode: {
-            Ctx.PanelCtx.Selected->Split ^= 1;
+            gCtx.PanelCtx.Selected->Split ^= 1;
         } break;
         
         case OP_NewPanel: {
-            panel_create(&Ctx);
+            panel_create(&gCtx);
         } break;
         
         case OP_KillPanel: {
-            panel_kill(&Ctx.PanelCtx, Ctx.PanelCtx.Selected);
+            panel_kill(&gCtx.PanelCtx, gCtx.PanelCtx.Selected);
         } break;
         
         case OP_MovePanelSelection: {
-            panel_move_selection(&Ctx.PanelCtx, Op.MovePanelSelection.Dir); 
+            panel_move_selection(&gCtx.PanelCtx, Op.MovePanelSelection.Dir); 
         } break;
         
         case OP_MoveSelection: {
-            move_all_selections_in_panel(Ctx.PanelCtx.Selected, Op.MoveSelection.Dir);
+            move_all_selections_in_panel(gCtx.PanelCtx.Selected, Op.MoveSelection.Dir);
         } break;
         
         default: {
@@ -321,15 +294,6 @@ find_mapping_match(key_mapping_t *Mappings, u64 MappingCount, input_event_t *e) 
     }
     
     return 0;
-}
-
-b32 
-event_is_control_sequence(input_event_t *Event) {
-    if(Event->Device == INPUT_DEVICE_Keyboard && Event->Type == INPUT_EVENT_Text && 
-       (Event->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
-        return false;
-    }
-    return true;
 }
 
 b32 
@@ -383,13 +347,13 @@ update_select_state(panel_t *Panel) {
     }
 }
 
-void
+b8
 handle_panel_input(input_event_t Event) {
+    b8 EventHandled = false;
     if(Event.Device == INPUT_DEVICE_Keyboard) {
         if(Event.Type == INPUT_EVENT_Press || Event.Type == INPUT_EVENT_Text) {
-            panel_t *Panel = Ctx.PanelCtx.Selected;
+            panel_t *Panel = gCtx.PanelCtx.Selected;
             if(Panel) {
-                b32 EventHandled = false;
                 switch(Panel->Mode) {
                     case MODE_Normal: {
                         key_mapping_t *m = find_mapping_match(NormalMappings, ARRAY_COUNT(NormalMappings), &Event);
@@ -467,6 +431,8 @@ handle_panel_input(input_event_t Event) {
             }
         }
     }
+    
+    return EventHandled;
 }
 
 #define IS_DIRECTORY_DELMITER(Character) (Character == '\\' || Character == '/')
@@ -496,17 +462,18 @@ truncate_path_to_nearest_directory(mem_buffer_t *Path) {
 
 void
 handle_file_select_input(input_event_t Event) {
+#if 0
     if(Event.Type == INPUT_EVENT_Text && !event_is_control_sequence(&Event)) {
         u8 *Char = Event.Text.Character;
         if(*Char < 0x20) {
             switch(*Char) {
                 case '\r':
                 case '\n': {
-                    if(sb_count(Ctx.FileNameInfo) > 0) {
-                        file_name_info_t *Fi = &Ctx.FileNameInfo[Ctx.SelectedFileIndex];
+                    if(sb_count(gCtx.FileNameInfo) > 0) {
+                        file_name_info_t *Fi = &gCtx.FileNameInfo[gCtx.SelectedFileIndex];
                         if(Fi->Flags & FILE_FLAGS_Directory) {
-                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
-                            mem_buf_append(&Ctx.SearchDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
+                            truncate_path_to_nearest_directory(&gCtx.SearchDirectory);
+                            mem_buf_append(&gCtx.SearchDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
                             mem_buf_append_range(&Ctx.SearchDirectory, C_STR_AS_RANGE("/"));
                             
                             mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
@@ -521,8 +488,6 @@ handle_file_select_input(input_event_t Event) {
                             
                             Ctx.WidgetFocused = WIDGET_Panels;
                         }
-                    } else {
-                        // TODO: Strip file name from Ctx.SearchDirectory and ask the user if a file with that name should be created.
                     }
                 } break;
                 
@@ -545,8 +510,8 @@ handle_file_select_input(input_event_t Event) {
                 } break;
             }
         } else {
-            // TODO: Right now we're filtering using wildcards on that platform side. We just get all the files in the current directory 
-            // and do the filtering in the editor instead so it's consistent across platforms. Additionally, we only need to call out 
+            // TODO: Right now we're filtering using wildcards on the platform side. We should get all the files in the current directory 
+            // and do the filtering in the editor instead, so it's consistent across platforms. Additionally, we would only need to call out 
             // to the platform when the search directory changes. 
             mem_buf_append(&Ctx.SearchDirectory, Char, utf8_char_width(Char));
             update_current_directory_files();
@@ -566,31 +531,177 @@ handle_file_select_input(input_event_t Event) {
             } break;
         }
     }
+#endif
+}
+
+b8
+is_event_key_press(input_event_t *Event, input_key_t Key) {
+    if(Event->Type == INPUT_EVENT_Press && Event->Key.KeyCode == Key) {
+        return true;
+    }
+    
+    return false;
+}
+
+void
+push_directory_or_open_file(file_info_t *FileInfo) {
+    directory_t *Dir = &gCtx.CurrentDirectory;
+    // Make full path of the file or directory to open
+    mem_buffer_t Path = {0};
+    mem_buf_replace(&Path, Dir->Path);
+    mem_buf_append_range(&Path, (range_t){.Data = Dir->FileNameBuffer.Data + FileInfo->Name.Offset, .Size = FileInfo->Name.Size});
+    
+    if(FileInfo->Flags & FILE_FLAGS_Directory) {
+        // Push directory
+        mem_buf_append_range(&Path, C_STR_AS_RANGE("/"));
+        platform_get_files_in_directory(mem_buf_as_range(Path), Dir);
+    } else {
+        // Open file
+        load_file(mem_buf_as_range(Path));
+        panel_show_buffer(gCtx.PanelCtx.Selected, &gCtx.Buffers[sb_count(gCtx.Buffers) - 1]);
+    }
+    
+    mem_buf_free(&Path);
+}
+
+void
+draw_ui(framebuffer_t *Fb) {
+    ui_cmd_t *Cmd = 0;
+    for(u64 Offset = 0; Offset < gUiCtx->CmdBuf.Used; Offset += Cmd->Size) {
+        Cmd = (ui_cmd_t *)(gUiCtx->CmdBuf.Data + Offset);
+        switch(Cmd->Type) {
+            case UI_CMD_Rect: {
+                draw_rect(Fb, Cmd->Rect.Rect, Cmd->Rect.Color);
+            } break;
+            
+            case UI_CMD_Text: {
+                draw_text_line(Fb, &gCtx.Font, Cmd->Text.Baseline.x, Cmd->Text.Baseline.y, Cmd->Text.Color, (range_t){.Data = Cmd->Text.Text, .Size = Cmd->Text.Size});
+            } break;
+            
+            case UI_CMD_Clip: {
+                Fb->Clip = Cmd->Clip.Rect;
+            } break;
+        }
+    }
+}
+
+b8
+filter_pass(range_t Filter, range_t Input) {
+    if(Input.Size == 0) { 
+        return true;
+    }
+    u64 Sf = Filter.Size;
+    u64 Si = Input.Size;
+    for(u64 i = 0; i < Sf; ++i) {
+        if(Filter.Data[i] == Input.Data[0]) {
+            u64 j = i + 1, k = 1;
+            for(; (j < Sf && k < Si); ++j, ++k) {
+                if(Filter.Data[j] != Input.Data[k]) {
+                    break;
+                }
+            }
+            if(k == Si) {
+                return true;
+            }
+            
+            i += k;
+        }
+    }
+    return false;
 }
 
 void
 k_do_editor(platform_shared_t *Shared) {
     input_event_buffer_t *Events = &Shared->EventBuffer;
-    for(s32 EventIndex = 0; EventIndex < Events->Count; ++EventIndex) {
-        switch(Ctx.WidgetFocused) {
-            case WIDGET_Panels: {
-                handle_panel_input(Events->Events[EventIndex]);
-            } break;
-            
-            case WIDGET_FileSelect: {
-                handle_file_select_input(Events->Events[EventIndex]);
-            } break;
+    for(u64 i = 0; i < Events->Count; ++i) {
+        input_event_t *e = &Events->Events[i];
+        if(e->Device == INPUT_DEVICE_Mouse) {
+            ui_mouse_t Btn;
+            switch(e->Mouse.Button) {
+                case INPUT_MOUSE_Left:     { Btn = UI_MOUSE_Left; } break;
+                case INPUT_MOUSE_Right:    { Btn = UI_MOUSE_Right; } break;
+                case INPUT_MOUSE_Middle:   { Btn = UI_MOUSE_Middle; } break;
+                case INPUT_MOUSE_Forward:  { Btn = UI_MOUSE_Forward; } break;
+                case INPUT_MOUSE_Backward: { Btn = UI_MOUSE_Backward; } break;
+                default: { continue; }
+            }
+            if(e->Type == INPUT_EVENT_Press) {
+                ui_mouse_down(gUiCtx, Btn);
+            } else if(e->Type == INPUT_EVENT_Release) {
+                ui_mouse_up(gUiCtx, Btn);
+            }
+        } else if(e->Device == INPUT_DEVICE_Keyboard) {
+            if(e->Type == INPUT_EVENT_Text) {
+                ui_text_input(gUiCtx, e->Text.Character);
+            } else if(e->Type == INPUT_EVENT_Press || e->Type == INPUT_EVENT_Release) {
+                ui_key_t Key;
+                switch(e->Key.KeyCode) {
+                    case KEY_Tab:      { Key = UI_KEY_Tab; } break;
+                    case KEY_Shift:    { Key = UI_KEY_Shift; } break;
+                    case KEY_Ctrl:     { Key = UI_KEY_Ctrl; } break;
+                    case KEY_Alt:      { Key = UI_KEY_Alt; } break;
+                    case KEY_Escape:   { Key = UI_KEY_Escape; } break;
+                    case KEY_PageUp:   { Key = UI_KEY_PageUp; } break;
+                    case KEY_PageDown: { Key = UI_KEY_PageDown; } break;
+                    case KEY_End:      { Key = UI_KEY_End; } break;
+                    case KEY_Home:     { Key = UI_KEY_Home; } break;
+                    case KEY_Left:     { Key = UI_KEY_Left; } break;
+                    case KEY_Up:       { Key = UI_KEY_Up; } break;
+                    case KEY_Right:    { Key = UI_KEY_Right; } break;
+                    case KEY_Down:     { Key = UI_KEY_Down; } break;
+                    case KEY_Delete:   { Key = UI_KEY_Delete; } break;
+                    default: { continue; } break;
+                }
+                if(e->Type == INPUT_EVENT_Press) {
+                    ui_key_down(gUiCtx, Key);
+                } else {
+                    ui_key_up(gUiCtx, Key);
+                }
+            }
         }
-    } Events->Count = 0;
-    
-    do_declaration_stuff(&Ctx.Buffers[0]);
-    
-    clear_framebuffer(Shared->Framebuffer, COLOR_BG);
-    Shared->Framebuffer->Clip = (irect_t){0, 0, Shared->Framebuffer->Width, Shared->Framebuffer->Height};
-    
-    draw_panels(Shared->Framebuffer, &Ctx.PanelCtx, &Ctx.Font);
-    
-    if(Ctx.WidgetFocused == WIDGET_FileSelect) {
-        draw_file_menu(&Ctx, Shared->Framebuffer);
     }
+    ui_mouse_pos(gUiCtx, Shared->MousePos);
+    framebuffer_t *Fb = Shared->Framebuffer;
+    
+    clear_framebuffer(Fb, COLOR_BG);
+    Fb->Clip = (irect_t){0, 0, Fb->Width, Fb->Height};
+    
+    draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font);
+    
+    ui_begin(gUiCtx);
+    
+    ui_open_container(gUiCtx, C_STR_AS_RANGE("test"), false);
+    
+    
+    irect_t r = {.x = 100, .y = 100, .w = 600, .h = 700};
+    ui_container_t *Container = ui_begin_container(gUiCtx, r, C_STR_AS_RANGE("test"));
+    if(Container) {
+        ui_push_clip(gUiCtx, Container->Rect);
+        ui_draw_rect(gUiCtx, Container->Rect, color_u32(0xff0d1117));
+        
+        ui_row(gUiCtx, 1);
+        {
+            
+            static mem_buffer_t Buffer = {0};
+            ui_text_box(gUiCtx, &Buffer, C_STR_AS_RANGE("search box"), true);
+            directory_t *Dir = &gCtx.CurrentDirectory;
+            for(s64 i = 0; i < sb_count(Dir->Files); ++i) {
+                file_info_t *Fi = Dir->Files + i;
+                range_t FileName = {.Data = Dir->FileNameBuffer.Data + Fi->Name.Offset, .Size = Fi->Name.Size};
+                if(filter_pass(FileName, mem_buf_as_range(Buffer))) {
+                    if(ui_selectable(gUiCtx, FileName, false)) {
+                        push_directory_or_open_file(Fi);
+                        mem_buf_clear(&Buffer);
+                    }
+                }
+            }
+        }
+        ui_pop_clip(gUiCtx);
+        ui_end_container(gUiCtx);
+    }
+    
+    ui_end(gUiCtx);
+    draw_ui(Fb);
+    
+    Events->Count = 0;
 }

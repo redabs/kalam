@@ -35,6 +35,57 @@ win32_get_file_size(HANDLE FileHandle, s64 *Out) {
     return false;
 }
 
+inline u8
+utf16_to_utf8(u32 Utf16, u8 *Utf8) {
+    if(Utf16 <= 0x7f) {
+        Utf8[0] = Utf16 & 0x7f; 
+        return 1;
+        
+    } else if(Utf16 <= 0x7ff) {
+        Utf8[0] = 0xc0 | ((Utf16 >> 6) & 0x1f);
+        Utf8[1] = 0x80 | (Utf16        & 0x3f);
+        return 2;
+        
+    } else if(Utf16 >= 0xe000 && Utf16 <= 0xffff) {
+        Utf8[0] = 0xe0 | ((Utf16 >> 12) & 0xf);
+        Utf8[1] = 0x80 | ((Utf16 >> 6)  & 0x3f);
+        Utf8[2] = 0x80 | ( Utf16        & 0x3f);
+        return 3;
+        
+    } else {
+        u32 High = Utf16 >> 16;
+        u32 Low = Utf16 & 0xffff;
+        // Surrogate pairs
+        if((High >= 0xd800 && High <= 0xdfff)  && (Low >= 0xd800 && Low <= 0xdfff)) {
+            High = (High - 0xd800) << 10;
+            Low = Low - 0xdc00;
+            u32 Codepoint = High + Low + 0x10000;
+            
+            Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
+            Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
+            Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
+            Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
+        } 
+        
+        return 4;
+    }
+}
+
+
+inline u32
+codepoint_to_utf16(u32 Codepoint) {
+    if(Codepoint <= 0xffff) {
+        // Utf-16 encodes code points in this range as single 16-bit code units that are numerically equal to the corresponding code points.
+        return Codepoint;
+    } else {
+        Codepoint -= 0x10000;
+        u32 Result = 0;
+        Result = ((Codepoint >> 10) + 0xd800) << 16; // High surrogate
+        Result |= (Codepoint & 0x3ff) + 0xdc00; // Low surrogate
+        return Codepoint;
+    }
+}
+
 void
 utf8_str_to_utf16_str(range_t U8, mem_buffer_t *U16) {
     for(u64 i = 0; i < U8.Size; ++i) {
@@ -55,8 +106,9 @@ utf8_str_to_utf16_str(range_t U8, mem_buffer_t *U16) {
     mem_buf_null_bytes(U16, 2);
 }
 
-void
+u64
 utf16_c_str_to_utf8_str(u16 *U16Str, mem_buffer_t *U8) {
+    u64 SizeWritten = 0;
     u16 *c = U16Str;
     while(*c) {
         b32 IsSurrogatePair = (*c >= 0xdc00);
@@ -68,15 +120,22 @@ utf16_c_str_to_utf8_str(u16 *U16Str, mem_buffer_t *U8) {
         mem_buf_append(U8, Utf8, n);
         
         c += Utf16Size >> 1;
+        SizeWritten += n;
     }
+    
+    return SizeWritten;
 }
 
-files_in_directory_t
-platform_get_files_in_directory(range_t Path) {
-    files_in_directory_t Result = {0};
+b8
+platform_get_files_in_directory(range_t Path, directory_t *Directory) {
     if(Path.Size == 0) {
-        return Result; 
+        return false; 
     }
+    mem_buf_clear(&Directory->Path);
+    mem_buf_clear(&Directory->FileNameBuffer);
+    sb_set_count(Directory->Files, 0);
+    
+    mem_buf_append_range(&Directory->Path, Path);
     
     WIN32_FIND_DATAW FoundFile;
     
@@ -89,9 +148,14 @@ platform_get_files_in_directory(range_t Path) {
     HANDLE FileHandle = FindFirstFileW((u16 *)WidePath.Data, &FoundFile);
     if(FileHandle != INVALID_HANDLE_VALUE) {
         for(b32 Go = true; Go; Go = FindNextFileW(FileHandle, &FoundFile)) {
-            file_info_t *Fi = sb_add(Result.Files, 1);
+            if((FoundFile.cFileName[0] == L'.' && FoundFile.cFileName[1] == 0) || 
+               (FoundFile.cFileName[0] == L'.' && FoundFile.cFileName[1] == L'.' && FoundFile.cFileName[2] == 0)) {
+                continue;
+            }
+            file_info_t *Fi = sb_add(Directory->Files, 1);
             mem_zero_struct(Fi);
-            utf16_c_str_to_utf8_str(FoundFile.cFileName, &Fi->FileName);
+            Fi->Name.Offset = Directory->FileNameBuffer.Used;
+            Fi->Name.Size = utf16_c_str_to_utf8_str(FoundFile.cFileName, &Directory->FileNameBuffer);
             
             Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? FILE_FLAGS_Directory : 0;
             Fi->Flags |= (FoundFile.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) ? FILE_FLAGS_Hidden : 0;
@@ -99,12 +163,12 @@ platform_get_files_in_directory(range_t Path) {
     }
     
     mem_buf_free(&WidePath);
-    return Result;
+    return true;
 }
 
-b32 
+b8 
 platform_read_file(range_t Path, platform_file_data_t *FileData) {
-    b32 Success = true;
+    b8 Success = true;
     
     HANDLE FileHandle;
     {
@@ -210,6 +274,9 @@ handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *Ev
             // TODO: Surrogate pairs don't come packed into wParam as two 16-bit values, they are separated into two different WM_CHARs.
             Event.Type = INPUT_EVENT_Text;
             utf16_to_utf8((u32)Message->wParam, Event.Text.Character);
+            if(Event.Text.Character[0] == '\r') {
+                Event.Text.Character[0] = '\n';
+            }
         } goto process_key;
         
         case WM_SYSKEYDOWN:
@@ -315,7 +382,7 @@ get_current_directory() {
 }
 
 // Writes new path to CurrentPath
-b32
+b8
 platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory) {
     mem_buf_append_range(CurrentPath, SubDirectory);
     
@@ -323,7 +390,7 @@ platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory) {
     mem_buffer_t Utf16Dest = {0};
     utf8_str_to_utf16_str(mem_buf_as_range(*CurrentPath), &Utf16Dest);
     
-    b32 Success = PathFileExistsW((wchar_t *)Utf16Dest.Data);
+    b8 Success = (PathFileExistsW((wchar_t *)Utf16Dest.Data)) ? true : false; // BOOL -> b8
     if(!Success) {
         mem_buf_pop_size(CurrentPath, SubDirectory.Size);
     }
@@ -368,6 +435,19 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             mem_buf_free(&Path);
         }
         
+        LARGE_INTEGER CounterStart;
+        QueryPerformanceCounter(&CounterStart);
+        LARGE_INTEGER End;
+        
+        s64 Frequency;
+        {
+            LARGE_INTEGER F;
+            QueryPerformanceFrequency(&F);
+            Frequency = F.QuadPart;
+        }
+        f64 FrameTimer = 0;
+        f64 SecondsElapsed = 0;
+        
         b8 Running = true;
         while(Running && !WmClose) {
             
@@ -378,11 +458,32 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 DispatchMessageW(&Message);
             }
             
+            POINT CursorPoint;
+            GetCursorPos(&CursorPoint);
+            ScreenToClient(WindowHandle, &CursorPoint);
+            Shared.MousePos = (iv2_t){.x = CursorPoint.x, .y = CursorPoint.y};
             k_do_editor(&Shared);
             
             HDC Dc = GetDC(WindowHandle);
             StretchDIBits(Dc, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, 0, 0, FramebufferInfo.Fb.Width, FramebufferInfo.Fb.Height, FramebufferInfo.Fb.Data, &FramebufferInfo.BitmapInfo, DIB_RGB_COLORS, SRCCOPY);
             ReleaseDC(WindowHandle, Dc);
+            
+            
+            QueryPerformanceCounter(&End);
+            s64 CounterElapsed = End.QuadPart - CounterStart.QuadPart;
+            CounterStart = End;
+            
+            SecondsElapsed = (f64)CounterElapsed / Frequency;
+            f64 MilliSecondsElapsed = 1000. * SecondsElapsed;
+            FrameTimer += MilliSecondsElapsed;
+            
+            f64 Ms = (1000. / 30);
+            if(FrameTimer < Ms) {
+                DWORD SleepTime = (DWORD)(Ms - FrameTimer);
+                Sleep(SleepTime);
+            }
+            
+            FrameTimer = 0;
         }
     } else {
         // TODO Diagnostics!

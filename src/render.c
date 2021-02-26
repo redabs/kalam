@@ -39,37 +39,33 @@ get_glyph_set(font_t *Font, u32 Codepoint, glyph_set_t **GlyphSet) {
 }
 
 void
-clear_framebuffer(framebuffer_t *Fb, u32 Color) {
+clear_framebuffer(framebuffer_t *Fb, color_t Color) {
     u64 Size = Fb->Width * Fb->Height;
     u32 *Dest = (u32 *)Fb->Data;
     for(u64 i = 0; i < Size; ++i) {
-        Dest[i] = Color;
+        Dest[i] = Color.Argb;
     }
 }
 
 void 
-draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
+draw_rect(framebuffer_t *Fb, irect_t Rect, color_t Color) {
     s32 MinX = CLAMP(0, Fb->Width, MAX(Rect.x, Fb->Clip.x));
     s32 MaxX = CLAMP(0, Fb->Width, MIN(MinX + Rect.w, Fb->Clip.x + Fb->Clip.w));
     
     s32 MinY = CLAMP(0, Fb->Height, MAX(Rect.y, Fb->Clip.y));
     s32 MaxY = CLAMP(0, Fb->Height, MIN(MinY + Rect.h, Fb->Clip.y + Fb->Clip.h));
     
-    if((Color >> 24) == 0xff) {
+    if(Color.a == 0xff) {
         u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
         for(s32 y = MinY; y < MaxY; ++y) {
             u32 *Pixel = Row + MinX;
             for(s32 x = MinX; x < MaxX; ++x, ++Pixel) {
-                *Pixel = Color;
+                *Pixel = *(u32*)&Color;
             }
             Row += Fb->Width;
         }
     } else {
-        f32 a = (f32)((Color >> 24) & 0xff) / 255.f;
-        
-        f32 sr = (f32)((Color >> 16) & 0xff);
-        f32 sg = (f32)((Color >> 8) & 0xff);
-        f32 sb = (f32)((Color) & 0xff);
+        f32 a = (f32)(Color.a & 0xff) / 255.f;
         
         u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 
         for(s32 y = MinY; y < MaxY; ++y) {
@@ -79,9 +75,9 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
                 f32 dg = (f32)((*Pixel >> 8) & 0xff);
                 f32 db = (f32)((*Pixel) & 0xff);
                 
-                u8 r = (u8)((1. - a) * dr + a * sr);
-                u8 g = (u8)((1. - a) * dg + a * sg);
-                u8 b = (u8)((1. - a) * db + a * sb);
+                u8 r = (u8)((1. - a) * dr + a * Color.r);
+                u8 g = (u8)((1. - a) * dg + a * Color.g);
+                u8 b = (u8)((1. - a) * db + a * Color.b);
                 
                 *Pixel = 0xff000000 | r << 16 | g << 8 | b;
             }
@@ -91,7 +87,7 @@ draw_rect(framebuffer_t *Fb, irect_t Rect, u32 Color) {
 }
 
 void
-draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect, bitmap_t *Bitmap) {
+draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, color_t Color, irect_t Rect, bitmap_t *Bitmap) {
     s32 BoxMinX = CLAMP(0, Fb->Width, MAX(xPos, Fb->Clip.x));
     s32 BoxMaxX = CLAMP(0, Fb->Width, MIN(MAX(xPos + Rect.w, 0), Fb->Clip.x + Fb->Clip.w));
     s32 xOff = MIN(BoxMinX - xPos, Rect.w); 
@@ -104,10 +100,6 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect
     
     s32 w = BoxMaxX - BoxMinX;
     s32 h = BoxMaxY - BoxMinY;
-    
-    u8 sr = (Color >> 16 & 0xff);
-    u8 sg = (Color >> 8) & 0xff; 
-    u8 sb = Color & 0xff;
     
     u32 *DestRow = (u32 *)Fb->Data + BoxMinY * Fb->Width;
     u8 *SrcRow = Bitmap->Data + (Rect.y + yOff) * Bitmap->Stride;
@@ -122,9 +114,9 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect
             
             f32 a = (f32)(*SrcPixel) / 255.f;
             
-            u8 r = (u8)((1. - a) * dr + a * sr);
-            u8 g = (u8)((1. - a) * dg + a * sg);
-            u8 b = (u8)((1. - a) * db + a * sb);
+            u8 r = (u8)((1. - a) * dr + a * Color.r);
+            u8 g = (u8)((1. - a) * dg + a * Color.g);
+            u8 b = (u8)((1. - a) * db + a * Color.b);
             
             *DestPixel = 0xff000000 | r << 16 | g << 8 | b;
             ++DestPixel;
@@ -137,7 +129,7 @@ draw_glyph_bitmap(framebuffer_t *Fb, s32 xPos, s32 yPos, u32 Color, irect_t Rect
 
 // Text is null-terminated if End is 0
 void
-draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, u32 Color, range_t String) {
+draw_text_line(framebuffer_t *Fb, font_t *Font, s32 x, s32 Baseline, color_t Color, range_t String) {
     u8 *End = String.Data + String.Size;
     u8 *c = String.Data;
     s32 CursorX = x;

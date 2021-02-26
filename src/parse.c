@@ -645,7 +645,7 @@ typedef struct {
     declaration_type_t Type;
 } declaration_t;
 
-void
+declaration_t *
 do_declaration_stuff(buffer_t *Buffer) {
     token_t *Tokens = 0;
     for(token_t Token = {0}; next_token(Buffer, Token, &Token); ) {
@@ -760,13 +760,6 @@ do_declaration_stuff(buffer_t *Buffer) {
         }
     }
     
-#if 0    
-    for(s64 i = 0; i < sb_count(Declarations); ++i) {
-        declaration_t d = Declarations[i];
-        int a = 3;
-    }
-#endif
-    
     sb_free(Tokens);
-    sb_free(Declarations);
+    return Declarations;
 }

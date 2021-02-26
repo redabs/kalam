@@ -7,12 +7,6 @@ get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
     return 0;
 }
 
-s32 
-line_height(font_t *Font) {
-    s32 LineHeight = Font->Ascent - Font->Descent + Font->LineGap; 
-    return LineHeight;
-}
-
 s32
 get_x_advance(font_t *Font, u32 Codepoint) {
     s32 Result = Font->MWidth;
@@ -65,7 +59,7 @@ split_panel_rect(panel_t *Panel, irect_t Rect, irect_t *r0, irect_t *r1) {
 }
 
 void
-draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 LineNum) {
+draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, color_t Color, u64 LineNum) {
     u8 NumStr[64];
     u64 n = 0;
     u8 *c = NumStr + sizeof(NumStr);
@@ -79,9 +73,9 @@ draw_line_number(framebuffer_t *Fb, font_t *Font, irect_t Rect, u32 Color, u64 L
 }
 
 void
-draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion, u32 Color) {
+draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *Font, irect_t TextRegion, color_t Color) {
     s64 LineIndex = offset_to_line_index(Panel->Buffer, Selection->Cursor);
-    s32 LineHeight = line_height(Font);
+    s32 LineHeight = Font->LineHeight;
     
     s32 Width = Font->MWidth;
     if(Selection->Cursor < Panel->Buffer->Text.Used) {
@@ -108,7 +102,7 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
     u64 LineIndexStart = offset_to_line_index(Panel->Buffer, SelectionStart);
     u64 LineIndexEnd = offset_to_line_index(Panel->Buffer, SelectionEnd);
     
-    s32 LineHeight = line_height(Font);
+    s32 LineHeight = Font->LineHeight;
     for(u64 i = LineIndexStart; i <= LineIndexEnd; ++i) {
         s32 y = TextRegion.y + (s32)i * LineHeight;
         line_t *Line = &Buf->Lines[i];
@@ -146,17 +140,17 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
 }
 
 // For now
-u32
+color_t
 token_color(token_t Token) {
-    u32 Color = COLOR_TEXT;
+    u32 Color = COLOR_TEXT.Argb;
     switch(Token.Type) { 
         case TOKEN_CharLiteral:
         case TOKEN_StringLiteral: {
-            return 0xffffff00;
+            Color = 0xffffff00;
         } break; 
         
         case TOKEN_IncludePath: {
-            return 0xff8455ff;
+            Color = 0xff8455ff;
         } break;
         
         case TOKEN_Keyword: {
@@ -197,7 +191,7 @@ token_color(token_t Token) {
         } break;
         
     }
-    return Color;
+    return color_u32(Color);
 }
 
 void
@@ -209,7 +203,7 @@ draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Fon
         
         buffer_t *Buf = Panel->Buffer;
         if(Buf) {
-            s32 LineHeight = line_height(Font);
+            s32 LineHeight = Font->LineHeight;
             
             selection_group_t *SelGrp;
             // If we're in Select mode and there is a search term and there are selections in the working set then
@@ -244,7 +238,7 @@ draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Fon
             for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
                 selection_t *s = &SelGrp->Selections[i];
                 draw_selection(Fb, Panel, s, Font, TextRegion);
-                draw_cursor(Fb, Panel, s, Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? 0xffbbbbbb : 0xff333333);
+                draw_cursor(Fb, Panel, s, Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? color_u32(0xffbbbbbb) : color_u32(0xff333333));
             }
             
             {
@@ -273,7 +267,7 @@ draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Fon
                                 u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size); // Don't write past this line if token spans multiple lines
                                 range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
                                 
-                                u32 Color = token_color(Token);
+                                color_t Color = token_color(Token);
                                 s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Offset - Line->Offset});
                                 
                                 draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, Text);
@@ -294,7 +288,7 @@ draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Fon
             irect_t r0, r1, r2, r3;
             panel_border_rects(PanelRect, &r0, &r1, &r2, &r3);
             
-            u32 BorderColor = COLOR_BG;
+            color_t BorderColor = COLOR_BG;
             if(PanelCtx->Selected == Panel) {
                 BorderColor = COLOR_PANEL_SELECTED;
             } else if(Panel != PanelCtx->Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
@@ -305,7 +299,7 @@ draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Fon
             draw_rect(Fb, r2, BorderColor);
             draw_rect(Fb, r3, BorderColor);
             
-            u32 ModeStrColor = 0xffffffff;
+            color_t ModeStrColor = color_u32(0xffffffff);
             mem_buffer_t ModeString = {0};
             switch(Panel->Mode) {
                 case MODE_Normal: {
@@ -354,50 +348,5 @@ draw_panels(framebuffer_t *Fb, panel_ctx_t *PanelCtx, font_t *Font) {
         irect_t Rect = workspace_rect(Fb);
         draw_panel(Fb, PanelCtx, PanelCtx->Root, Font, Rect);
     }
-    Fb->Clip = ClipSave;
-}
-
-void
-draw_file_menu(ctx_t *Ctx, framebuffer_t *Fb) {
-    irect_t ClipSave = Fb->Clip;
-    
-    s32 LineHeight = line_height(&Ctx->Font);
-    
-    irect_t SearchPathBox = {.x = BORDER_SIZE, .y = BORDER_SIZE, .w = Fb->Width - BORDER_SIZE * 2, .h = STATUS_BAR_HEIGHT};
-    draw_rect(Fb, SearchPathBox, 0xff000000);
-    
-    s32 HalfLineHeight = LineHeight >> 1;
-    s32 HalfMHeight = (Ctx->Font.MHeight >> 1);
-    
-    range_t SearchPathText = mem_buf_as_range(Ctx->SearchDirectory);
-    iv2_t SearchPathTextPos = center_text_in_rect(&Ctx->Font, SearchPathBox, SearchPathText);
-    draw_text_line(Fb, &Ctx->Font, BORDER_SIZE + 5, SearchPathTextPos.y, 0xffffffff, SearchPathText);
-    
-    irect_t Box = {.x = BORDER_SIZE, .y = SearchPathBox.y + SearchPathBox.h, .w = Fb->Width - BORDER_SIZE * 2, .h = MIN((s32)sb_count(Ctx->FileNameInfo) * LineHeight, 250)};
-    draw_rect(Fb, Box, 0xdd2c302d);
-    Fb->Clip = Box;
-    s32 y = Box.y;
-    
-    // Calculate vertical scroll
-    
-    s32 OffsetY = (s32)Ctx->SelectedFileIndex * LineHeight;
-    if(OffsetY >= (Ctx->FileSelectScrollY + Box.h - LineHeight)) {
-        Ctx->FileSelectScrollY = OffsetY - Box.h + LineHeight;
-    } else if(OffsetY < Ctx->FileSelectScrollY) {
-        Ctx->FileSelectScrollY = OffsetY;
-    }
-    
-    for(s64 i = 0; i < sb_count(Ctx->FileNameInfo); ++i) {
-        range_t Path = { .Data = &Ctx->FileNames.Data[Ctx->FileNameInfo[i].Offset], .Size = Ctx->FileNameInfo[i].Size };
-        
-        if(i == Ctx->SelectedFileIndex) {
-            draw_rect(Fb, (irect_t){.x = Box.x, .y = Box.y += LineHeight * (s32)i - Ctx->FileSelectScrollY, .w = Box.w, .h = LineHeight}, 0xff8a8a8a);
-        }
-        
-        s32 BaseLine = y + HalfLineHeight + HalfMHeight - Ctx->FileSelectScrollY;
-        draw_text_line(Fb, &Ctx->Font, Box.x + 5, BaseLine, 0xffffffff, Path);
-        y += LineHeight;
-    }
-    
     Fb->Clip = ClipSave;
 }

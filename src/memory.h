@@ -3,6 +3,10 @@
 
 #include <stdlib.h> // malloc, realloc, free
 
+#define MEM_STACK(Type, Capacity) struct {u64 Count; Type Items[Capacity];}
+#define MEM_STACK_PUSH(Stack, Item) do { ASSERT((Stack.Count + 1) < ARRAY_COUNT(Stack.Items)); Stack.Items[Stack.Count++] = Item; } while(0)
+#define MEM_STACK_POP(Stack) (ASSERT(Stack.Count > 0), Stack.Items[--Stack.Count])
+
 inline void *
 mem_copy(void *Dest, void *Src, u64 Size) {
     u8 *D = (u8 *)Dest;
@@ -116,7 +120,7 @@ mem_buf_add_idx(mem_buffer_t *Buffer, u64 Count, u64 ElementSize, u64 *IndexOut)
 }
 
 inline void
-mem_buf_insert(mem_buffer_t *Buffer, u64 Offset, u64 Size, u8 *Data) {
+mem_buf_insert(mem_buffer_t *Buffer, u64 Offset, u8 *Data, u64 Size) {
     ASSERT(Size > 0);
     ASSERT(Offset <= Buffer->Used);
     
@@ -155,9 +159,9 @@ mem_buf_clear(mem_buffer_t *Buffer) {
 }
 
 inline void
-mem_buf_replace(mem_buffer_t *Dest, mem_buffer_t *Src) {
+mem_buf_replace(mem_buffer_t *Dest, mem_buffer_t Src) {
     mem_buf_clear(Dest);
-    mem_buf_append_range(Dest, mem_buf_as_range(*Src));
+    mem_buf_append(Dest, Src.Data, Src.Used);
 }
 
 #endif //MEMORY_H

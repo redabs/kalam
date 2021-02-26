@@ -101,11 +101,13 @@ typedef enum {
     
     KEY_MAX,
 } input_key_t;
+
 typedef struct {
     input_event_type_t Type;
     input_device_t Device;
     input_modifier_t Modifiers;
     input_toggles_t Toggles;
+    b8 Handled;
     union {
         struct {
             input_key_t KeyCode;
@@ -127,6 +129,15 @@ typedef struct {
         } Scroll;
     };
 } input_event_t;
+
+inline b32 
+event_is_control_sequence(input_event_t *Event) {
+    if(Event->Device == INPUT_DEVICE_Keyboard && Event->Type == INPUT_EVENT_Text && 
+       (Event->Modifiers & (INPUT_MOD_Ctrl | INPUT_MOD_Shift | INPUT_MOD_Alt)) != INPUT_MOD_Ctrl) {
+        return false;
+    }
+    return true;
+}
 
 #define INPUT_EVENT_MAX 32
 typedef struct {

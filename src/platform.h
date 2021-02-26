@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
     framebuffer_t *Framebuffer;
     input_event_buffer_t EventBuffer;
+    iv2_t MousePos;
 } platform_shared_t;
 
 typedef enum {
@@ -25,32 +26,28 @@ typedef enum {
     FILE_FLAGS_Hidden     = 1 << 2,
 } file_flags_t; 
 
-// TODO: File names are dynamically allocated individually, they should all have the same storage for faster deallocation.
 typedef struct {
-    mem_buffer_t FileName;
+    struct { u64 Offset; u64 Size; } Name; // Stored in FileNameBuffer in directory_t to avoid allocating each file name string individually.
     file_flags_t Flags;
 } file_info_t;
 
 typedef struct {
+    mem_buffer_t Path; // Always ends with a directory delimiter
+    mem_buffer_t FileNameBuffer;
     file_info_t *Files; // stb
-} files_in_directory_t;
-
-inline void
-free_files_in_directory(files_in_directory_t *Dir) {
-    for(s64 i = 0; i < sb_count(Dir->Files); ++i) {
-        mem_buf_free(&Dir->Files[i].FileName);
-    }
-    sb_free(Dir->Files);
-}
+} directory_t;
 
 // From the platform to editor
-b32 platform_read_file(range_t Path, platform_file_data_t *FileData);
+b8 platform_read_file(range_t Path, platform_file_data_t *FileData);
 void platform_free_file(platform_file_data_t *FileData);
-files_in_directory_t platform_get_files_in_directory(range_t Path);
-b32 platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory);
+
+// platform_get_files_in_directory should not include current path (".") or parent path ("..") in the result written to Directory.
+b8 platform_get_files_in_directory(range_t Path, directory_t *Directory);
+
+b8 platform_push_subdirectory(mem_buffer_t *CurrentPath, range_t SubDirectory);
 
 // From the editor to the platform
 void k_do_editor(platform_shared_t *Shared);
-void k_init(platform_shared_t *Shared, range_t WorkingDirectory);
+void k_init(platform_shared_t *Shared, range_t CurrentDirectory);
 
 #endif //PLATFORM_H

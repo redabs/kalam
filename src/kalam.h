@@ -101,7 +101,7 @@ typedef struct {
 
 #define GLYPH_SET_MAX 32
 
-typedef struct {
+typedef struct font_t {
     stbtt_fontinfo StbInfo;
     platform_file_data_t File;
     
@@ -110,6 +110,7 @@ typedef struct {
     s32 Ascent;
     s32 Descent;
     s32 LineGap;
+    s32 LineHeight;
     
     s32 MHeight; // The height in pixels of 'M'
     s32 MWidth; // The width in pixels of 'M'. This is used under the presumption of a monospace font.
@@ -121,7 +122,6 @@ typedef struct {
         // Set contains glyphs in the range [FirstCodepoint, FirstCodePoint + 255]
         glyph_set_t *Set;
     } GlyphSets[GLYPH_SET_MAX];
-    
 } font_t;
 
 typedef struct {
@@ -130,29 +130,14 @@ typedef struct {
     file_flags_t Flags;
 } file_name_info_t;
 
-typedef enum {
-    WIDGET_Panels = 0,
-    WIDGET_FileSelect,
-    
-    // WIDGET_FileTree,
-} widget_type_t;
-
 typedef struct {
-    mem_buffer_t FileNames; 
-    file_name_info_t *FileNameInfo;
-    s64 SelectedFileIndex; 
-    
-    widget_type_t WidgetFocused;
-    s32 FileSelectScrollY;
+    directory_t CurrentDirectory;
     
     font_t Font;
     buffer_t *Buffers; // stb, TODO: Stbs forces us to update live pointer whenever there's a reallocation, maybe store these in batches instead?
     
     panel_ctx_t PanelCtx;
     ui_ctx_t UiCtx;
-    
-    mem_buffer_t WorkingDirectory; // IMPORTANT: ALWAYS ends with a directory delimiter, forward- or backslash
-    mem_buffer_t SearchDirectory; // Holds the path that the user is entering during file selection
 } ctx_t;
 
 u64 offset_to_line_index(buffer_t *Buf, u64 Offset);

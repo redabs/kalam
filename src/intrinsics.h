@@ -27,7 +27,7 @@ typedef double f64;
 
 #define ARRAY_COUNT(A) (sizeof(A) / sizeof(A[0]))
 
-#define ASSERT(C) if(!(C)) { *(int *)0 = 0; } 
+#define ASSERT(C) ((!(C)) ? (__debugbreak(), 0) : 0)
 
 #define OFFSET_OF(Type, Member) ((size_t) &(((Type *)0)->Member))
 #define REBASE(MemberInstance, StructName, MemberName) (StructName *)((u8 *)MemberInstance - OFFSET_OF(StructName, MemberName))
@@ -84,58 +84,6 @@ utf8_to_codepoint(u8 *Utf8, u32 *Codepoint) {
     *Codepoint = Cp;
     return Utf8 + 1;
 }
-
-inline u8
-utf16_to_utf8(u32 Utf16, u8 *Utf8) {
-    if(Utf16 <= 0x7f) {
-        Utf8[0] = Utf16 & 0x7f; 
-        return 1;
-        
-    } else if(Utf16 <= 0x7ff) {
-        Utf8[0] = 0xc0 | ((Utf16 >> 6) & 0x1f);
-        Utf8[1] = 0x80 | (Utf16        & 0x3f);
-        return 2;
-        
-    } else if(Utf16 >= 0xe000 && Utf16 <= 0xffff) {
-        Utf8[0] = 0xe0 | ((Utf16 >> 12) & 0xf);
-        Utf8[1] = 0x80 | ((Utf16 >> 6)  & 0x3f);
-        Utf8[2] = 0x80 | ( Utf16        & 0x3f);
-        return 3;
-        
-    } else {
-        u32 High = Utf16 >> 16;
-        u32 Low = Utf16 & 0xffff;
-        // Surrogate pairs
-        if((High >= 0xd800 && High <= 0xdfff)  && (Low >= 0xd800 && Low <= 0xdfff)) {
-            High = (High - 0xd800) << 10;
-            Low = Low - 0xdc00;
-            u32 Codepoint = High + Low + 0x10000;
-            
-            Utf8[0] = 0xf0 | ((Codepoint >> 18) & 0x7);
-            Utf8[1] = 0x80 | ((Codepoint >> 12) & 0x3f);
-            Utf8[2] = 0x80 | ((Codepoint >> 6)  & 0x3f);
-            Utf8[3] = 0x80 | ( Codepoint        & 0x3f);
-        } 
-        
-        return 4;
-    }
-}
-
-
-inline u32
-codepoint_to_utf16(u32 Codepoint) {
-    if(Codepoint <= 0xffff) {
-        // Utf-16 encodes code points in this range as single 16-bit code units that are numerically equal to the corresponding code points.
-        return Codepoint;
-    } else {
-        Codepoint -= 0x10000;
-        u32 Result = 0;
-        Result = ((Codepoint >> 10) + 0xd800) << 16; // High surrogate
-        Result |= (Codepoint & 0x3ff) + 0xdc00; // Low surrogate
-        return Codepoint;
-    }
-}
-
 
 inline u8
 utf8_char_width(u8 *Char) {

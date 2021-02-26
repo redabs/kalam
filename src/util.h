@@ -3,14 +3,36 @@
 
 #include <stdlib.h> // malloc, realloc, free
 
+typedef struct {
+    u8 Char[4];
+} table_test_value;
+
 inline u64
-fnv1a_64(range_t Data) {
-    u64 Hash = 0xcbf29ce484222325;
+fnv1a_64_ex(u64 Hash, range_t Data) {
     for(u64 i = 0; i < Data.Size; ++i) {
         Hash ^= Data.Data[i];
         Hash *= 0x100000001b3;
     }
     return Hash;
+}
+
+inline u64
+fnv1a_64(range_t Data) {
+    return fnv1a_64_ex(0xcbf29ce484222325, Data);
+}
+
+inline u32
+fnv1a_32_ex(u32 Hash, range_t Data) {
+    for(u64 i = 0; i < Data.Size; ++i) {
+        Hash ^= Data.Data[i];
+        Hash *= 0x01000193;
+    }
+    return Hash;
+}
+
+inline u32
+fnv1a_32(range_t Range) {
+    return fnv1a_32_ex(0x811c9dc5, Range);
 }
 
 u64
@@ -30,6 +52,7 @@ typedef struct {
     u64 SlotsAllocated;
     u64 SlotsUsed;
     u64 Collisions;
+    u64 ValueSize;
     table_slot_t *Slots;
 } table_t;
 
@@ -112,7 +135,7 @@ table_get_idx(table_t *Table, range_t Key, u64 Hash) {
 
 inline u64
 table_next_table_size(u64 Size) {
-    // next_pow_2((Size * (Size + 1)) / 2)
+    // next_pow_2(Size * (Size + 1) / 2)
     Size = (Size * (Size + 1)) >> 1;
     u64 LeadingZeroes = intrinsic_count_leading_zero_64bit(Size);
     Size = 1LL << (64 - LeadingZeroes);
@@ -175,7 +198,6 @@ table_remove(table_t *Table, range_t Key) {
     }
 }
 
-// *Value is undefined if return value is false.
 inline b8
 table_get(table_t *Table, range_t Key, u64 *Value) {
     u64 Hash = table_make_hash(Key);
