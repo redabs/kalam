@@ -3,7 +3,7 @@
 
 #define UI_CONTAINER_MAX 8
 #define UI_LAYOUT_MAX 32
-#define UI_COMMAND_BUFFER_SIZE 1024 * 32
+#define UI_COMMAND_BUFFER_SIZE 1024 * 512
 #define UI_NOODLE_SIZE 64
 #define UI_NOODLE_MAX 512 
 
@@ -16,31 +16,6 @@ typedef enum {
     UI_INTERACTION_PressAndRelease, // Widget was active and is not longer.
     UI_INTERACTION_Hover, // Widget is hot
 } ui_interaction_type_t;
-
-typedef enum {
-    UI_KEY_Tab       = (1 << 0),
-    UI_KEY_Shift     = (1 << 1),
-    UI_KEY_Ctrl      = (1 << 2),
-    UI_KEY_Alt       = (1 << 3),
-    UI_KEY_Escape    = (1 << 4),
-    UI_KEY_PageUp    = (1 << 5),
-    UI_KEY_PageDown  = (1 << 6),
-    UI_KEY_End       = (1 << 7),
-    UI_KEY_Home      = (1 << 8),
-    UI_KEY_Left      = (1 << 9),
-    UI_KEY_Up        = (1 << 10),
-    UI_KEY_Right     = (1 << 11),
-    UI_KEY_Down      = (1 << 12),
-    UI_KEY_Delete    = (1 << 13),
-} ui_key_t;
-
-typedef enum {
-    UI_MOUSE_Left     = (1 << 0),
-    UI_MOUSE_Right    = (1 << 1),
-    UI_MOUSE_Backward = (1 << 2),
-    UI_MOUSE_Forward  = (1 << 3),
-    UI_MOUSE_Middle   = (1 << 4)
-} ui_mouse_t;
 
 typedef enum {
     UI_CNT_Open  = (1 << 0),
@@ -67,7 +42,7 @@ typedef struct {
     u64 Size;
     iv2_t Baseline; 
     color_t Color;
-    u8 Text[];  
+    u8 *Text;
 } ui_cmd_text_t;
 
 typedef struct {
@@ -117,16 +92,6 @@ typedef struct ui_container_t {
 } ui_container_t;
 
 typedef struct {
-    b8 IsText;
-    b8 Handled;
-    ui_key_t KeyDown;
-    union {
-        ui_key_t Key;
-        u8 Text[4];
-    };
-} ui_key_input_t;
-
-typedef struct {
     struct font_t *Font;
     u64 Frame;
     
@@ -136,13 +101,7 @@ typedef struct {
     ui_id_t Focus;
     ui_id_t TextEditFocus;
     
-    iv2_t MousePos, LastMousePos;
-    ui_mouse_t MousePress, MouseDown;
-    s32 Scroll;
-    
-    ui_key_t KeyDown;
-    ui_key_input_t KeyInput[32];
-    u32 KeyInputCount;
+    input_state_t *Input;
     
     ui_cmd_clip_t *LastClip;
     

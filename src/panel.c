@@ -13,6 +13,7 @@ void
 panel_free(panel_ctx_t *PanelCtx, panel_t *Panel) {
     if(!Panel) { return; }
     Panel->Next = PanelCtx->FreeList;
+    Panel->State = PANEL_STATE_Free;
     PanelCtx->FreeList = Panel;
 }
 
@@ -52,7 +53,7 @@ panel_create(ctx_t *Ctx) {
         panel_t *p = panel_alloc(PanelCtx);
         
         panel_show_buffer(p, &Ctx->Buffers[0]);
-        p->IsLeaf = true;
+        p->State = PANEL_STATE_Leaf;
         
         PanelCtx->Root = p;
         PanelCtx->Selected = p;
@@ -75,7 +76,7 @@ panel_create(ctx_t *Ctx) {
         Parent->Split = Selected->Split;
         Parent->Children[0] = Selected;
         Parent->Children[1] = Sibling;
-        Parent->IsLeaf = false;
+        Parent->State = PANEL_STATE_Parent;
         
         if(Selected->Parent) {
             Selected->Parent->Children[panel_child_index(Selected)] = Parent;
@@ -86,22 +87,22 @@ panel_create(ctx_t *Ctx) {
         
         Sibling->Split = Selected->Split;
         Sibling->Mode = MODE_Normal;
-        Sibling->ScrollX = Selected->ScrollX;
-        Sibling->ScrollY = Selected->ScrollY;
+        Sibling->Scroll.x = Selected->Scroll.x;
+        Sibling->Scroll.y = Selected->Scroll.y;
         
         panel_show_buffer(Sibling, Selected->Buffer);
         
         PanelCtx->Selected = Sibling;
-        Sibling->Parent->LastSelected = panel_child_index(Sibling);
+        Sibling->Parent->LastSelectedChild = panel_child_index(Sibling);
         
-        Selected->IsLeaf = Sibling->IsLeaf = true;
+        Selected->State = Sibling->State = PANEL_STATE_Leaf;
     }
 }
 
 void
 panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
     // Don't kill the root panel or any non-leaf node panel.
-    if(Panel == PanelCtx->Root || !Panel->IsLeaf) {
+    if(Panel == PanelCtx->Root || (Panel->State != PANEL_STATE_Leaf)) {
         return;
     }
     
@@ -120,14 +121,16 @@ panel_kill(panel_ctx_t *PanelCtx, panel_t *Panel) {
         Sibling->Parent = Parent->Parent;
     }
     
-    // The panel selection is now transferred over to either the sibling if it is a leaf node, or one of its descendants.
-    // We decide which one of the decendants to transfer selection to by traversing the tree downwards following the node which was last selected.
-    if(Sibling->IsLeaf) {
+    // The panel selection is now transferred over to either the sibling 
+    // if it is a leaf node, or one of its descendants. We decide which one
+    // of the decendants to transfer selection to by traversing the tree 
+    // downwards following the node which was last selected.
+    if(Sibling->State == PANEL_STATE_Leaf) {
         PanelCtx->Selected = Sibling;
     } else {
         panel_t *p = Sibling;
-        while(!p->IsLeaf) {
-            p = p->Children[p->LastSelected];
+        while((p->State != PANEL_STATE_Leaf)) {
+            p = p->Children[p->LastSelectedChild];
         }
         PanelCtx->Selected = p;
     }
@@ -158,7 +161,7 @@ panel_move_selection(panel_ctx_t *PanelCtx, direction_t Dir) {
         // and vice versa for vertical movement
         if(Idx == n && p->Parent->Split == SplitMode) {
             p = p->Parent->Children[n ^ 1];
-            p->Parent->LastSelected = n ^ 1;
+            p->Parent->LastSelectedChild = n ^ 1;
             Found = true;
             break;
         }
@@ -167,16 +170,16 @@ panel_move_selection(panel_ctx_t *PanelCtx, direction_t Dir) {
     
     if(Found) {
         while(!p->Buffer) {
-            p = p->Children[p->LastSelected];
+            p = p->Children[p->LastSelectedChild];
         }
         
         panel_t *Par = p->Parent;
         // Only move to the last selected node if both children are leaves (i.e. they have buffers attached)
         if(Par != Panel->Parent && Par->Children[0]->Buffer && Par->Children[1]->Buffer) {
-            PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelected];
+            PanelCtx->Selected = p->Parent->Children[p->Parent->LastSelectedChild];
         } else {
             PanelCtx->Selected = p;
-            p->Parent->LastSelected = (u8)panel_child_index(p);
+            p->Parent->LastSelectedChild = (u8)panel_child_index(p);
         }
     }
 }

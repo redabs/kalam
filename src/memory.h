@@ -6,6 +6,7 @@
 #define MEM_STACK(Type, Capacity) struct {u64 Count; Type Items[Capacity];}
 #define MEM_STACK_PUSH(Stack, Item) do { ASSERT((Stack.Count + 1) < ARRAY_COUNT(Stack.Items)); Stack.Items[Stack.Count++] = Item; } while(0)
 #define MEM_STACK_POP(Stack) (ASSERT(Stack.Count > 0), Stack.Items[--Stack.Count])
+#define MEM_STACK_CLEAR(Stack) (Stack.Count = 0)
 
 inline void *
 mem_copy(void *Dest, void *Src, u64 Size) {

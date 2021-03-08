@@ -12,6 +12,7 @@ ui_init(ui_ctx_t *Ctx, font_t *Font) {
 }
 
 ui_cmd_t *
+
 ui_push_draw_cmd(ui_ctx_t *Ctx, ui_cmd_t Cmd) {
     ASSERT((Ctx->CmdBuf.Used + Cmd.Size) < UI_COMMAND_BUFFER_SIZE);
     mem_copy(Ctx->CmdBuf.Data + Ctx->CmdBuf.Used, &Cmd, Cmd.Size);
@@ -58,13 +59,27 @@ ui_draw_rect(ui_ctx_t *Ctx, irect_t Rect, color_t Color) {
     ui_push_draw_cmd(Ctx, Cmd);
 }
 
+// Internal text commands store a copy of the text that is to be draw in the command itself.
+// External text commands (Internal == false) stores a copy of the Text.Data pointer. Meaning
+// the pointer has to still point to valid memory when drawing!
 void
-ui_draw_text(ui_ctx_t *Ctx, range_t Text, iv2_t Baseline, color_t Color) {
-    ui_cmd_t *Cmd = ui_push_draw_cmd(Ctx, (ui_cmd_t){.Size = sizeof(ui_cmd_t) + Text.Size, .Type = UI_CMD_Text});
+ui_draw_text_ex(ui_ctx_t *Ctx, range_t Text, iv2_t Baseline, color_t Color, b32 Internal) {
+    u64 CmdSize = sizeof(ui_cmd_t) + (Internal ? Text.Size : 0);
+    ui_cmd_t *Cmd = ui_push_draw_cmd(Ctx, (ui_cmd_t){.Size = CmdSize, .Type = UI_CMD_Text});
     Cmd->Text.Size = Text.Size;
     Cmd->Text.Baseline = Baseline;
     Cmd->Text.Color = Color;
+    if(Internal) {
+        Cmd->Text.Text = (u8 *)&Cmd->Text.Text + sizeof(Cmd->Text.Text); 
+    } else {
+        Cmd->Text.Text = Text.Data;
+    }
     mem_copy(Cmd->Text.Text, Text.Data, Text.Size);
+}
+
+void
+ui_draw_text(ui_ctx_t *Ctx, range_t Text, iv2_t Baseline, color_t Color) {
+    ui_draw_text_ex(Ctx, Text, Baseline, Color, false);
 }
 
 void
@@ -91,12 +106,12 @@ ui_end(ui_ctx_t *Ctx) {
     ASSERT(Ctx->LastClip == 0);
     Ctx->Frame += 1;
     
-    if(!(Ctx->MouseDown & UI_MOUSE_Left)) {
+    if(!(Ctx->Input->MouseDown & MOUSE_Left)) {
         Ctx->Active = 0;
     }
     
-    Ctx->MousePress = 0;
-    Ctx->KeyInputCount = 0;
+    Ctx->Input->MousePress = 0;
+    Ctx->Input->Scroll = 0;
 }
 
 ui_id_t
@@ -221,51 +236,6 @@ ui_close_container(ui_ctx_t *Ctx, ui_container_t *Container) {
     }
 }
 
-void
-ui_key_down(ui_ctx_t *Ctx, ui_key_t Key) {
-    if(Ctx->KeyInputCount < ARRAY_COUNT(Ctx->KeyInput)) {
-        Ctx->KeyInput[Ctx->KeyInputCount++] = (ui_key_input_t){.IsText = false, .KeyDown = Ctx->KeyDown, .Key = Key};
-        Ctx->KeyDown |= Key;
-    }
-}
-
-void
-ui_key_up(ui_ctx_t *Ctx, ui_key_t Key) {
-    Ctx->KeyDown &= ~Key;
-}
-
-void
-ui_text_input(ui_ctx_t *Ctx, u8 Char[4]) {
-    if(Ctx->KeyInputCount < ARRAY_COUNT(Ctx->KeyInput)) {
-        ui_key_input_t Input = {.IsText = true, .KeyDown = Ctx->KeyDown};
-        u8 n = utf8_char_width(Char);
-        for(int i = 0; i < n; ++i) { Input.Text[i] = Char[i]; }
-        Ctx->KeyInput[Ctx->KeyInputCount++] = Input;
-    }
-}
-
-void
-ui_mouse_pos(ui_ctx_t *Ctx, iv2_t Pos) {
-    Ctx->LastMousePos = Ctx->MousePos;
-    Ctx->MousePos = Pos;
-}
-
-void
-ui_mouse_down(ui_ctx_t *Ctx, ui_mouse_t Button) {
-    Ctx->MousePress |= Button;
-    Ctx->MouseDown |= Button;
-}
-
-void
-ui_mouse_up(ui_ctx_t *Ctx, ui_mouse_t Button) {
-    Ctx->MouseDown &= ~Button;
-}
-
-void
-ui_mouse_scroll(ui_ctx_t *Ctx, s32 Delta) {
-    Ctx->Scroll = Delta;
-}
-
 ui_interaction_type_t
 ui_update_input_state(ui_ctx_t *Ctx, irect_t Rect, ui_id_t Id) {
     ui_interaction_type_t Result = UI_INTERACTION_None;
@@ -282,8 +252,8 @@ ui_update_input_state(ui_ctx_t *Ctx, irect_t Rect, ui_id_t Id) {
     MEM_STACK_PUSH(Container->ControlStack, Ctrl);
     
     if(!Ctx->Active) {
-        ui_container_t *CntUnderMouse = ui_container_under_point(Ctx, Ctx->MousePos);
-        if(CntUnderMouse == Container && is_point_inside_rect(Rect, Ctx->MousePos)) {
+        ui_container_t *CntUnderMouse = ui_container_under_point(Ctx, Ctx->Input->MousePos);
+        if(CntUnderMouse == Container && is_point_inside_rect(Rect, Ctx->Input->MousePos)) {
             Ctx->Hot = Id;
             Result = UI_INTERACTION_Hover;
         }
@@ -291,24 +261,24 @@ ui_update_input_state(ui_ctx_t *Ctx, irect_t Rect, ui_id_t Id) {
     
     if(Ctx->Selected == Id) {
         Result = UI_INTERACTION_Hover;
-        for(u32 i = 0; i < Ctx->KeyInputCount; ++i) {
-            ui_key_input_t *Ki = Ctx->KeyInput + i;
-            if(!Ki->Handled && Ki->IsText && Ki->Text[0] == '\n') {
+        for(u32 i = 0; i < Ctx->Input->Keys.Count; ++i) {
+            key_input_t *Ki = Ctx->Input->Keys.Items + i;
+            if(!Ki->Handled && Ki->IsText && Ki->Char[0] == '\n') {
                 Result = UI_INTERACTION_PressAndRelease;
             }
         }
     }
     
     if(Ctx->Active == Id) {
-        if(!(Ctx->MouseDown & UI_MOUSE_Left)) {
-            if(is_point_inside_rect(Rect, Ctx->MousePos)) {
+        if(!(Ctx->Input->MouseDown & MOUSE_Left)) {
+            if(is_point_inside_rect(Rect, Ctx->Input->MousePos)) {
                 Result = UI_INTERACTION_PressAndRelease;
             }
             Ctx->Active = 0;
         } 
     } else if(Ctx->Hot == Id) {
-        if(Ctx->MousePress & UI_MOUSE_Left) {
-            if(is_point_inside_rect(Rect, Ctx->MousePos)) {
+        if(Ctx->Input->MousePress & MOUSE_Left) {
+            if(is_point_inside_rect(Rect, Ctx->Input->MousePos)) {
                 Ctx->Hot = 0;
                 Ctx->Selected = 0;
                 Ctx->Active = Id;
@@ -334,16 +304,29 @@ ui_next_row(ui_layout_t *Layout) {
     Layout->RowHeight = 0;
 }
 
+// if Width|Height <= 0 then Rect.w|h = (parent's layout width|height) + (Width|height)
 irect_t
 ui_push_rect(ui_ctx_t *Ctx, s32 Width, s32 Height) {
     ui_container_t *Container = Ctx->ActiveContainer;
     ui_layout_t *Layout = ui_get_layout(Ctx);
-    if(Width == -1) {
-        s32 Remaining = Layout->Rect.w - (Layout->Cursor.x - Layout->Rect.x + Layout->Indent.x);
-        s32 n = (Layout->ItemsPerRow - Layout->ItemCount);
-        Width = Remaining / (n ? n : 1);
+    if(Width <= 0) {
+        s32 RemainingWidth = Layout->Rect.w - (Layout->Cursor.x - Layout->Rect.x + Layout->Indent.x);
+        s32 RemainingSlots = Layout->ItemsPerRow - Layout->ItemCount;
+        s32 W = RemainingWidth / MAX(RemainingSlots, 1);
+        Width = MAX(W + Width, 0);
     }
     
+    if(Height <= 0) {
+        // Layouts are expanded vertically to fit their content. 
+        s32 H;
+        // Use parent's height
+        if(Ctx->LayoutStack.Count > 1) {
+            H = Ctx->LayoutStack.Items[Ctx->LayoutStack.Count - 2].Rect.h;
+        } else {
+            H = Container->Rect.h;
+        }
+        Height = H + Height;
+    }
     // The cursor does not move in Y until we move to the next row.
     // Therefore we need to keep track of the tallest control rect 
     // on the current row such that we can advance in Y appropriately.
@@ -366,9 +349,9 @@ ui_push_rect(ui_ctx_t *Ctx, s32 Width, s32 Height) {
 }
 
 void
-ui_push_layout(ui_ctx_t *Ctx) {
+ui_push_layout(ui_ctx_t *Ctx, s32 Width) {
     ui_layout_t ActiveLayout = *ui_get_layout(Ctx);
-    irect_t Rect = ui_push_rect(Ctx, -1, 0);
+    irect_t Rect = ui_push_rect(Ctx, Width, 0);
     Rect.x -= Ctx->ActiveContainer->Rect.x;
     Rect.y -= Ctx->ActiveContainer->Rect.y;
     *ui_get_layout(Ctx) = ActiveLayout;
@@ -394,8 +377,8 @@ ui_begin_container(ui_ctx_t *Ctx, irect_t Rect, range_t Name) {
     ASSERT(!Ctx->ActiveContainer); 
     
     if(Container->Flags & UI_CNT_PopUp) {
-        if(Ctx->MousePress & UI_MOUSE_Left) {
-            ui_container_t *PressedContainer = ui_container_under_point(Ctx, Ctx->MousePos);
+        if(Ctx->Input->MousePress & MOUSE_Left) {
+            ui_container_t *PressedContainer = ui_container_under_point(Ctx, Ctx->Input->MousePos);
             if(PressedContainer != Container) {
                 ui_close_container(Ctx, Container);
                 return 0;
@@ -404,9 +387,7 @@ ui_begin_container(ui_ctx_t *Ctx, irect_t Rect, range_t Name) {
     }
     
     Container->Rect = Rect;
-    Rect.w -= 10;
-    Rect.h -= 10;
-    ui_layout_t Layout = {.Rect.w = Rect.w, .ItemsPerRow = 1, .Indent = {.x = 10, .y = 10}};
+    ui_layout_t Layout = {.Rect.w = Rect.w, .Rect.h = Rect.h, .ItemsPerRow = 1};
     MEM_STACK_PUSH(Ctx->LayoutStack, Layout);
     
     Container->Prev = Ctx->ActiveContainer;
@@ -427,7 +408,7 @@ ui_row(ui_ctx_t *Ctx, u32 Count) {
 
 void
 ui_begin_column(ui_ctx_t *Ctx, s32 Width) {
-    ui_push_layout(Ctx);
+    ui_push_layout(Ctx, Width);
     ui_layout_t *Layout = ui_get_layout(Ctx);
     ui_container_t *Cnt = Ctx->ActiveContainer;
     ui_push_clip(Ctx, (irect_t){Cnt->Rect.x + Layout->Rect.x, Cnt->Rect.y + Layout->Rect.y, Layout->Rect.w, Cnt->Rect.h});
@@ -446,10 +427,10 @@ ui_end_container(ui_ctx_t *Ctx) {
     ASSERT(Container);
     
     if(Ctx->Focus == Container->Id && Container->ControlStack.Count > 0) {
-        for(u32 i = 0; i < Ctx->KeyInputCount; ++i) {
-            ui_key_input_t *Ki = &Ctx->KeyInput[i];
-            b8 Forward = (Ki->Key == UI_KEY_Tab || Ki->Key == UI_KEY_Down);
-            b8 Backward = (Ki->Key == UI_KEY_Tab && (Ki->KeyDown & UI_KEY_Shift)) || (Ki->Key == UI_KEY_Up);
+        for(u32 i = 0; i < Ctx->Input->Keys.Count; ++i) {
+            key_input_t *Ki = &Ctx->Input->Keys.Items[i];
+            b8 Forward = (Ki->Key == KEY_Tab || Ki->Key == KEY_Down);
+            b8 Backward = (Ki->Key == KEY_Tab && Ki->Mods == MOD_Shift) || (Ki->Key == KEY_Up);
             if(!Ki->Handled && !Ki->IsText && (Backward || Forward)) {
                 if(!Ctx->Selected) {
                     Ctx->Selected = Container->ControlStack.Items[0].Id;

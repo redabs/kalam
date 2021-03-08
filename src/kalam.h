@@ -56,35 +56,33 @@ typedef struct {
     selection_group_t SelectionGroup; // Used as the working set when panel is in MODE_Select
 } mode_select_ctx_t;
 
-// Only the leaf nodes are actually regions where text is drawn.
+typedef enum {
+    PANEL_STATE_Free = 0,
+    PANEL_STATE_Parent,
+    PANEL_STATE_Leaf,
+} panel_state_t;
+
 struct panel_t {
-    panel_t *Next; // Next free panel, or next leaf node
-    
+    panel_state_t State;
     panel_t *Parent;
-    split_mode_t Split; 
+    split_mode_t Split;
+    panel_t *Next; // When free
+    
+    panel_t *Children[2];
+    u8 LastSelectedChild;
+    
+    iv2_t Scroll;
     buffer_t *Buffer;
-    
-    b32 IsLeaf;
-    
-    // Used when leaf node
     mode_t Mode;
-    union {
-        mode_select_ctx_t Select;
-    } ModeCtx;
-    
-    s32 ScrollX, ScrollY;
-    
-    // Used when non-leaf node
-    panel_t *Children[2]; 
-    u8 LastSelected;
+    mode_select_ctx_t Select;
 };
 
 #define PANEL_MAX 16
 typedef struct {
     panel_t *Root; // In the binary tree of panels
     panel_t *Selected; // The currently selected leaf node that the user has selected
-    panel_t Panels[PANEL_MAX]; // Storage of all panels
     panel_t *FreeList;
+    panel_t Panels[PANEL_MAX]; // Storage of all panels
 } panel_ctx_t; 
 
 typedef struct {
@@ -135,6 +133,7 @@ typedef struct {
     
     font_t Font;
     buffer_t *Buffers; // stb, TODO: Stbs forces us to update live pointer whenever there's a reallocation, maybe store these in batches instead?
+    
     
     panel_ctx_t PanelCtx;
     ui_ctx_t UiCtx;

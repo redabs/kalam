@@ -12,7 +12,6 @@
 #include "intrinsics.h"
 #include "types.h"
 #include "memory.h"
-#include "event.h"
 #include "platform.h" 
 
 b8 WmClose = false;
@@ -257,97 +256,75 @@ window_callback(HWND Window, UINT Message, WPARAM WParameter, LPARAM LParameter)
     return Result;
 }
 
-void
-push_input_event(input_event_buffer_t *Buffer, input_event_t *Event) {
-    ASSERT(Buffer->Count + 1 < INPUT_EVENT_MAX);
-    Buffer->Events[Buffer->Count] = *Event;
-    ++Buffer->Count;
+modifier_t 
+win32_get_modifiers() {
+    modifier_t Mods = 0;
+    if(GetKeyState(VK_CONTROL) & 0x8000) { Mods |= MOD_Ctrl; }
+    if(GetKeyState(VK_MENU) & 0x8000) { Mods |= MOD_Alt; }
+    if(GetKeyState(VK_SHIFT) & 0x8000) { Mods |= MOD_Shift; }
+    return Mods;
 }
 
 void
-handle_window_message(MSG *Message, HWND *WindowHandle, input_event_buffer_t *EventBuffer) {
-    local_persist input_modifier_t Modifiers; 
-    local_persist input_toggles_t Toggles; 
-    input_event_t Event = {0};
+handle_window_message(MSG *Message, HWND *WindowHandle, input_state_t *InputState) {
     switch(Message->message) {
         case WM_CHAR: {
             // TODO: Surrogate pairs don't come packed into wParam as two 16-bit values, they are separated into two different WM_CHARs.
-            Event.Type = INPUT_EVENT_Text;
-            utf16_to_utf8((u32)Message->wParam, Event.Text.Character);
-            if(Event.Text.Character[0] == '\r') {
-                Event.Text.Character[0] = '\n';
+            key_input_t Key = { .IsText = true, .Mods = win32_get_modifiers() };
+            utf16_to_utf8((u32)Message->wParam, Key.Char);
+            if(Key.Char[0] == '\r') {
+                Key.Char[0] = '\n';
             }
-        } goto process_key;
-        
-        case WM_SYSKEYDOWN:
-        case WM_SYSKEYUP:
-        case WM_KEYDOWN: 
-        case WM_KEYUP: {
-            b32 WasDown = (b32)(Message->lParam >> 30);
-            b32 IsDown = !(Message->lParam >> 31);
-            Event.Type = IsDown ? INPUT_EVENT_Press : INPUT_EVENT_Release;
-            
-            Event.Device = INPUT_DEVICE_Keyboard;
-            Event.Key.IsRepeatKey = WasDown && IsDown;
-            Event.Key.KeyCode = Message->wParam == VK_DELETE ? KEY_Delete : Message->wParam; 
-        } 
-        process_key: {
-            Modifiers = GetKeyState(VK_CONTROL) & 0x8000 ? Modifiers | INPUT_MOD_Ctrl : Modifiers & ~(INPUT_MOD_Ctrl);
-            Modifiers = GetKeyState(VK_MENU) & 0x8000 ? Modifiers | INPUT_MOD_Alt : Modifiers & ~(INPUT_MOD_Alt);
-            Modifiers = GetKeyState(VK_SHIFT) & 0x8000 ? Modifiers | INPUT_MOD_Shift : Modifiers & ~(INPUT_MOD_Shift);
-            
-            Toggles = (GetKeyState(VK_CAPITAL) & 1) ? Toggles | INPUT_TOGGLES_CapsLock : Toggles & ~(INPUT_TOGGLES_CapsLock);
-            Toggles = (GetKeyState(VK_NUMLOCK) & 1) ? Toggles | INPUT_TOGGLES_NumLock : Toggles & ~(INPUT_TOGGLES_NumLock);
-            
-            Event.Modifiers = Modifiers;
-            Event.Toggles = Toggles;
-            
-            push_input_event(EventBuffer, &Event);
+            MEM_STACK_PUSH(InputState->Keys, Key);
         } break;
         
-        case WM_RBUTTONDOWN: 
-        Event.Type = INPUT_EVENT_Press; 
-        Event.Mouse.Button = INPUT_MOUSE_Right;
-        goto process_mouse;
-        
-        case WM_RBUTTONUP:
-        Event.Type = INPUT_EVENT_Release;
-        Event.Mouse.Button = INPUT_MOUSE_Right;
-        goto process_mouse;
-        
-        case WM_LBUTTONDOWN:
-        Event.Type = INPUT_EVENT_Press;
-        Event.Mouse.Button = INPUT_MOUSE_Left;
-        goto process_mouse;
-        
-        case WM_LBUTTONUP: 
-        Event.Type = INPUT_EVENT_Release;
-        Event.Mouse.Button = INPUT_MOUSE_Left;
-        process_mouse: {
-            Event.Device = INPUT_DEVICE_Mouse;
-            Event.Modifiers = Modifiers;
-            Event.Toggles = Toggles;
-            Event.Mouse.Position.x = (s32)GET_X_LPARAM(Message->lParam);
-            Event.Mouse.Position.y = (s32)GET_Y_LPARAM(Message->lParam);
+#if 0        
+        case WM_SYSKEYUP:
+        case WM_KEYUP: {
             
-            push_input_event(EventBuffer, &Event);
+        } break;
+#endif
+        
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN: {
+            key_input_t Key = {0};
+            Key.Key = Message->wParam;
+            if(Message->wParam == VK_DELETE) {
+                Key.Key = KEY_Delete;
+            }
+            modifier_t Mods = win32_get_modifiers();
+            InputState->Mods = Mods;
+            Key.Mods = Mods;
+            
+            MEM_STACK_PUSH(InputState->Keys, Key);
+        } break;
+        
+        
+        case WM_RBUTTONDOWN: { InputState->MousePress |= MOUSE_Right; } break;
+        case WM_LBUTTONDOWN: { InputState->MousePress |= MOUSE_Left; } break;
+        
+        case WM_RBUTTONUP: { InputState->MouseDown &= ~MOUSE_Right; } break;
+        case WM_LBUTTONUP: { InputState->MouseDown &= ~MOUSE_Left; } break;
+        
+        case WM_XBUTTONDOWN: { 
+            if(GET_XBUTTON_WPARAM(Message->wParam) == 1) {
+                InputState->MousePress |= MOUSE_Forward;
+            } else {
+                InputState->MousePress |= MOUSE_Backward;
+            }
+        } break;
+        
+        case WM_XBUTTONUP: { 
+            if(GET_XBUTTON_WPARAM(Message->wParam) == 1) {
+                InputState->MouseDown &= ~MOUSE_Forward;
+            } else {
+                InputState->MouseDown &= ~MOUSE_Backward;
+            }
         } break;
         
         case WM_MOUSEWHEEL: {
-            Event.Device = INPUT_DEVICE_Mouse;
-            Event.Type = INPUT_EVENT_Scroll;
-            Event.Modifiers = Modifiers;
-            Event.Toggles = Toggles;
             s32 Delta = GET_WHEEL_DELTA_WPARAM(Message->wParam);
-            Event.Scroll.Delta = (Delta < 0) ? -1 : 1;
-            
-            POINT Point;
-            GetCursorPos(&Point);
-            ScreenToClient(*WindowHandle, &Point);
-            Event.Scroll.Position.x = Point.x;
-            Event.Scroll.Position.y = Point.y;
-            
-            push_input_event(EventBuffer, &Event);
+            InputState->Scroll += Delta / WHEEL_DELTA;
         } break;
     }
 }
@@ -453,7 +430,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             
             MSG Message = {0};
             while(PeekMessageW(&Message, WindowHandle, 0, 0, PM_REMOVE)) {
-                handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
+                //handle_window_message(&Message, &WindowHandle, &Shared.EventBuffer);
+                handle_window_message(&Message, &WindowHandle, &Shared.InputState);
                 TranslateMessage(&Message);
                 DispatchMessageW(&Message);
             }
@@ -461,7 +439,8 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
             POINT CursorPoint;
             GetCursorPos(&CursorPoint);
             ScreenToClient(WindowHandle, &CursorPoint);
-            Shared.MousePos = (iv2_t){.x = CursorPoint.x, .y = CursorPoint.y};
+            Shared.InputState.LastMousePos = Shared.InputState.MousePos;
+            Shared.InputState.MousePos = (iv2_t){.x = CursorPoint.x, .y = CursorPoint.y};
             k_do_editor(&Shared);
             
             HDC Dc = GetDC(WindowHandle);

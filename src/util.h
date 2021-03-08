@@ -3,9 +3,11 @@
 
 #include <stdlib.h> // malloc, realloc, free
 
-typedef struct {
-    u8 Char[4];
-} table_test_value;
+s32
+round_f32(f32 v) {
+    s32 s = (s32)(v + 0.5f);
+    return s;
+}
 
 inline u64
 fnv1a_64_ex(u64 Hash, range_t Data) {

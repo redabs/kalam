@@ -50,10 +50,10 @@ clear_framebuffer(framebuffer_t *Fb, color_t Color) {
 void 
 draw_rect(framebuffer_t *Fb, irect_t Rect, color_t Color) {
     s32 MinX = CLAMP(0, Fb->Width, MAX(Rect.x, Fb->Clip.x));
-    s32 MaxX = CLAMP(0, Fb->Width, MIN(MinX + Rect.w, Fb->Clip.x + Fb->Clip.w));
+    s32 MaxX = CLAMP(0, Fb->Width, MIN(MinX + Rect.w - (MinX - Rect.x), Fb->Clip.x + Fb->Clip.w));
     
     s32 MinY = CLAMP(0, Fb->Height, MAX(Rect.y, Fb->Clip.y));
-    s32 MaxY = CLAMP(0, Fb->Height, MIN(MinY + Rect.h, Fb->Clip.y + Fb->Clip.h));
+    s32 MaxY = CLAMP(0, Fb->Height, MIN(MinY + Rect.h - (MinY - Rect.y), Fb->Clip.y + Fb->Clip.h));
     
     if(Color.a == 0xff) {
         u32 *Row = (u32 *)Fb->Data + MinY * Fb->Width; 

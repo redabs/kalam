@@ -5,14 +5,11 @@
 #include "intrinsics.h"
 #include "types.h"
 #include "memory.h"
-#include "event.h"
 #include "platform.h"
 #include "util.h"
 #include "ui.h"
 #include "kalam.h"
 #include "custom.h"
-
-b8 handle_panel_input(input_event_t Event);
 
 #include "parse.c"
 #include "selection.c"
@@ -37,9 +34,9 @@ load_ttf(range_t Path, f32 Size) {
     
     stbtt_GetFontVMetrics(&Font.StbInfo, &Font.Ascent, &Font.Descent, &Font.LineGap);
     f32 Scale = stbtt_ScaleForMappingEmToPixels(&Font.StbInfo, Size);
-    Font.Ascent = (s32)(Font.Ascent * Scale + 0.5);
-    Font.Descent = (s32)(Font.Descent * Scale + 0.5);
-    Font.LineGap = (s32)(Font.LineGap * Scale + 0.5);
+    Font.Ascent = round_f32(Font.Ascent * Scale);
+    Font.Descent = round_f32(Font.Descent * Scale);
+    Font.LineGap = round_f32(Font.LineGap * Scale);
     Font.LineHeight = Font.Ascent - Font.Descent + Font.LineGap; 
     
     stbtt_bakedchar *g = get_stbtt_bakedchar(&Font, 'M');
@@ -73,7 +70,7 @@ load_file(range_t Path) {
         if(gCtx.Buffers != OldBase) {
             for(u32 i = 0; i < PANEL_MAX; ++i) {
                 panel_t *p = &gCtx.PanelCtx.Panels[i];
-                if(p->IsLeaf) {
+                if(p->State == PANEL_STATE_Leaf) {
                     p->Buffer = &gCtx.Buffers[p->Buffer - OldBase];
                 }
             }
@@ -112,13 +109,14 @@ k_init(platform_shared_t *Shared, range_t CurrentDirectory) {
     
     panel_create(&gCtx);
     ui_init(gUiCtx, &gCtx.Font);
+    gUiCtx->Input = &Shared->InputState;
 }
 
 void
 set_mode(panel_t *Panel, mode_t Mode) {
     switch(Mode) {
         case MODE_Select: {
-            mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
+            mode_select_ctx_t *SelectCtx = &Panel->Select;
             mem_buf_clear(&SelectCtx->SearchTerm);
             SelectCtx->SelectionGroup.Owner = Panel;
             SelectCtx->SelectionGroup.SelectionIdxTop = 0;
@@ -128,172 +126,6 @@ set_mode(panel_t *Panel, mode_t Mode) {
         } break;
     }
     Panel->Mode = Mode;
-}
-
-b8
-do_operation(operation_t Op) {
-    b8 WasHandled = true;
-    
-    switch(Op.Type) {
-        case OP_SetMode: {
-            set_mode(gCtx.PanelCtx.Selected, Op.SetMode.Mode);
-        } break;
-        
-        // Normal
-        case OP_Normal_Home: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *s = &SelGrp->Selections[i];
-                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
-                s->Anchor = s->Cursor;
-                s->Cursor = Line->Offset;
-                s->ColumnIs = s->ColumnWas = 0;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_Normal_End: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *s = &SelGrp->Selections[i];
-                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
-                s->Anchor = s->Cursor;
-                s->Cursor = Line->Offset + Line->Size - Line->NewlineSize;
-                s->ColumnWas = s->ColumnIs = Line->Length;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_DeleteSelection: {
-            delete_selection(gCtx.PanelCtx.Selected);
-        } break;
-        
-        case OP_ExtendSelection: {
-            extend_selection(gCtx.PanelCtx.Selected, Op.ExtendSelection.Dir);
-        } break;
-        
-        case OP_DropSelectionAndMove: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            selection_t Sel = get_selection_max_idx(SelGrp);
-            Sel.Idx = SelGrp->SelectionIdxTop++;
-            move_selection(Panel->Buffer, &Sel, Op.DropSelectionAndMove.Dir, true);
-            sb_push(SelGrp->Selections, Sel);
-            
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_ClearSelections: {
-            clear_selections(gCtx.PanelCtx.Selected);
-        } break;
-        
-        case OP_OpenFileSelection: {
-        } break;
-        
-        case OP_SelectEntireBuffer: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            SelGrp->Selections[0].Anchor = 0;
-            SelGrp->Selections[0].Cursor = Panel->Buffer->Text.Used;
-            SelGrp->Selections[0].Idx = SelGrp->SelectionIdxTop++;
-            sb_set_count(SelGrp->Selections, 1);
-        } break;
-        
-        // Insert
-        case OP_Insert_Home: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *s = &SelGrp->Selections[i];
-                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
-                s->Cursor = s->Anchor = Line->Offset;
-                s->ColumnWas = s->ColumnIs = 0;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_Insert_End: {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *s = &SelGrp->Selections[i];
-                line_t *Line = &Panel->Buffer->Lines[offset_to_line_index(Panel->Buffer, s->Cursor)];
-                s->Cursor = s->Anchor = Line->Offset + Line->Size - Line->NewlineSize;
-                s->ColumnWas = s->ColumnIs = Line->Length;
-            }
-            merge_overlapping_selections(Panel);
-        } break;
-        
-        case OP_EscapeToNormal: {
-            gCtx.PanelCtx.Selected->Mode = MODE_Normal;
-        } break;
-        
-        case OP_Delete: {
-            delete_selection(gCtx.PanelCtx.Selected);
-        } break;
-        
-        case OP_DoChar: {
-            do_char(gCtx.PanelCtx.Selected, Op.DoChar.Character);
-        } break;
-        
-        // Global
-        case OP_ToggleSplitMode: {
-            gCtx.PanelCtx.Selected->Split ^= 1;
-        } break;
-        
-        case OP_NewPanel: {
-            panel_create(&gCtx);
-        } break;
-        
-        case OP_KillPanel: {
-            panel_kill(&gCtx.PanelCtx, gCtx.PanelCtx.Selected);
-        } break;
-        
-        case OP_MovePanelSelection: {
-            panel_move_selection(&gCtx.PanelCtx, Op.MovePanelSelection.Dir); 
-        } break;
-        
-        case OP_MoveSelection: {
-            move_all_selections_in_panel(gCtx.PanelCtx.Selected, Op.MoveSelection.Dir);
-        } break;
-        
-        default: {
-            WasHandled = false;
-        } break;
-    }
-    
-    return WasHandled;
-}
-
-b32
-event_mapping_match(key_mapping_t *Map, input_event_t *Event) {
-    if(Map->IsKey && Event->Type == INPUT_EVENT_Press) {
-        if(Map->Key == Event->Key.KeyCode) {
-            if(Map->Modifiers == Event->Modifiers) {
-                return true;
-            }
-        }
-        
-    } else if(!Map->IsKey && Event->Type == INPUT_EVENT_Text) {
-        return (*((u32 *)Map->Character) == *((u32 *)Event->Text.Character));
-    }
-    
-    return false;
-}
-
-key_mapping_t *
-find_mapping_match(key_mapping_t *Mappings, u64 MappingCount, input_event_t *e) {
-    for(u64 i = 0; i < MappingCount; ++i) {
-        key_mapping_t *m = &Mappings[i];
-        if(event_mapping_match(m, e)) {
-            return m;
-        }
-    }
-    
-    return 0;
 }
 
 b32 
@@ -326,8 +158,8 @@ update_select_state(panel_t *Panel) {
     // the set in the selection group. As a matter of interactivity, the working is the one that should be
     // rendered. I suppose we can in draw_panel check if the panel is in MODE_Select and then draw the 
     // working set instead of the in the selection group for the buffer. As such the working set should be in the mode context in the panel struct.
-    mem_buffer_t *SearchTerm = &Panel->ModeCtx.Select.SearchTerm;
-    mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
+    mem_buffer_t *SearchTerm = &Panel->Select.SearchTerm;
+    mode_select_ctx_t *SelectCtx = &Panel->Select;
     for(s64 GrpIdx = 0; GrpIdx < sb_count(Panel->Buffer->SelectionGroups); ++GrpIdx) {
         selection_group_t *SelGroup = &Panel->Buffer->SelectionGroups[GrpIdx];
         if(SelGroup->Owner == Panel) {
@@ -345,94 +177,6 @@ update_select_state(panel_t *Panel) {
             return;
         }
     }
-}
-
-b8
-handle_panel_input(input_event_t Event) {
-    b8 EventHandled = false;
-    if(Event.Device == INPUT_DEVICE_Keyboard) {
-        if(Event.Type == INPUT_EVENT_Press || Event.Type == INPUT_EVENT_Text) {
-            panel_t *Panel = gCtx.PanelCtx.Selected;
-            if(Panel) {
-                switch(Panel->Mode) {
-                    case MODE_Normal: {
-                        key_mapping_t *m = find_mapping_match(NormalMappings, ARRAY_COUNT(NormalMappings), &Event);
-                        if(m) {
-                            EventHandled = do_operation(m->Operation);
-                        }
-                    } break;
-                    
-                    case MODE_Insert: {
-                        key_mapping_t *m = find_mapping_match(InsertMappings, ARRAY_COUNT(InsertMappings), &Event);
-                        if(m) {
-                            EventHandled = do_operation(m->Operation);
-                        } else if(Event.Type == INPUT_EVENT_Text) {
-                            // Ignore characters that were sent with the only modifier down being Ctrl (except for Caps Lock and Num Lock). I.Event. ignore control sequences.
-                            if(!event_is_control_sequence(&Event)) {
-                                operation_t o = {
-                                    .Type = OP_DoChar, 
-                                    .DoChar.Character[0] = Event.Text.Character[0],
-                                    .DoChar.Character[1] = Event.Text.Character[1],
-                                    .DoChar.Character[2] = Event.Text.Character[2],
-                                    .DoChar.Character[3] = Event.Text.Character[3],
-                                };
-                                do_operation(o);
-                            }
-                            EventHandled = true;
-                        }
-                    } break;
-                    
-                    case MODE_Select: {
-                        key_mapping_t *m = find_mapping_match(SelectMappings, ARRAY_COUNT(SelectMappings), &Event);
-                        if(m) {
-                            EventHandled = do_operation(m->Operation);
-                        } else if(Event.Type == INPUT_EVENT_Text && !event_is_control_sequence(&Event)) {
-                            // Append text to search term 
-                            u8 *Char = Event.Text.Character;
-                            mode_select_ctx_t *SelectCtx = &Panel->ModeCtx.Select;
-                            mem_buffer_t *SearchTerm = &Panel->ModeCtx.Select.SearchTerm;
-                            if(*Char < 0x20) {
-                                switch(*Char) {
-                                    case '\n':
-                                    case '\r': {
-                                        // Commit selections
-                                        if(SearchTerm->Used > 0) {
-                                            selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-                                            free_selections_and_reset_group(SelGrp);
-                                            *SelGrp = SelectCtx->SelectionGroup;
-                                            mem_zero_struct(&SelectCtx->SelectionGroup);
-                                        }
-                                        Panel->Mode = MODE_Normal;
-                                    } break;
-                                    
-                                    case '\t': {
-                                        
-                                        //mem_buf_append(SearchTerm, "\t", 1);
-                                    } break;
-                                    
-                                    case '\b': {
-                                        if(SearchTerm->Used > 0) {
-                                            u8 *End = SearchTerm->Data + SearchTerm->Used;
-                                            u8 *Begin = utf8_move_back_one(End);
-                                            mem_buf_pop_size(SearchTerm, (u64)(End - Begin));
-                                            sb_set_count(Panel->ModeCtx.Select.SelectionGroup.Selections, 0);
-                                            update_select_state(Panel);
-                                        }
-                                    } break;
-                                }
-                            } else {
-                                sb_set_count(Panel->ModeCtx.Select.SelectionGroup.Selections, 0);
-                                mem_buf_append(SearchTerm, Char, utf8_char_width(Char));
-                                update_select_state(Panel);
-                            }
-                        }
-                    } break;
-                }
-            }
-        }
-    }
-    
-    return EventHandled;
 }
 
 #define IS_DIRECTORY_DELMITER(Character) (Character == '\\' || Character == '/')
@@ -458,89 +202,6 @@ truncate_path_to_nearest_directory(mem_buffer_t *Path) {
             }
         }
     }
-}
-
-void
-handle_file_select_input(input_event_t Event) {
-#if 0
-    if(Event.Type == INPUT_EVENT_Text && !event_is_control_sequence(&Event)) {
-        u8 *Char = Event.Text.Character;
-        if(*Char < 0x20) {
-            switch(*Char) {
-                case '\r':
-                case '\n': {
-                    if(sb_count(gCtx.FileNameInfo) > 0) {
-                        file_name_info_t *Fi = &gCtx.FileNameInfo[gCtx.SelectedFileIndex];
-                        if(Fi->Flags & FILE_FLAGS_Directory) {
-                            truncate_path_to_nearest_directory(&gCtx.SearchDirectory);
-                            mem_buf_append(&gCtx.SearchDirectory, &Ctx.FileNames.Data[Fi->Offset], Fi->Size);
-                            mem_buf_append_range(&Ctx.SearchDirectory, C_STR_AS_RANGE("/"));
-                            
-                            mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
-                            update_current_directory_files();
-                        } else {
-                            
-                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
-                            mem_buf_append_range(&Ctx.SearchDirectory, (range_t){.Data = Ctx.FileNames.Data + Fi->Offset, .Size = Fi->Size});
-                            
-                            load_file(mem_buf_as_range(Ctx.SearchDirectory));
-                            panel_show_buffer(Ctx.PanelCtx.Selected, &Ctx.Buffers[sb_count(Ctx.Buffers) - 1]);
-                            
-                            Ctx.WidgetFocused = WIDGET_Panels;
-                        }
-                    }
-                } break;
-                
-                case '\b': {
-                    if(Ctx.SearchDirectory.Used > 0) {
-                        u8 *c = utf8_move_back_one(Ctx.SearchDirectory.Data + Ctx.SearchDirectory.Used);
-                        Ctx.SearchDirectory.Used -= utf8_char_width(c);
-                        // If a directory delimiter is deleted then truncate the search path down to the nearest folder.
-                        // This allows popping the last directory off by hitting backspace once. E.g. hitting backspace on
-                        // the directory "/path/to/foo/" jumps to "/path/to/".
-                        if(IS_DIRECTORY_DELMITER(*c)) {
-                            truncate_path_to_nearest_directory(&Ctx.SearchDirectory);
-                            mem_buf_replace(&Ctx.WorkingDirectory, &Ctx.SearchDirectory);
-                        }
-                        
-                        if(Ctx.SearchDirectory.Used > 0) {
-                            update_current_directory_files();
-                        }
-                    }
-                } break;
-            }
-        } else {
-            // TODO: Right now we're filtering using wildcards on the platform side. We should get all the files in the current directory 
-            // and do the filtering in the editor instead, so it's consistent across platforms. Additionally, we would only need to call out 
-            // to the platform when the search directory changes. 
-            mem_buf_append(&Ctx.SearchDirectory, Char, utf8_char_width(Char));
-            update_current_directory_files();
-        }
-    } else if(Event.Type == INPUT_EVENT_Press) {
-        switch(Event.Key.KeyCode) {
-            case KEY_Up: {
-                Ctx.SelectedFileIndex = MAX(Ctx.SelectedFileIndex - 1, 0);
-            } break;
-            
-            case KEY_Down: {
-                Ctx.SelectedFileIndex = MIN(Ctx.SelectedFileIndex + 1, sb_count(Ctx.FileNameInfo) - 1);
-            } break;
-            
-            case KEY_Escape: {
-                Ctx.WidgetFocused = WIDGET_Panels;
-            } break;
-        }
-    }
-#endif
-}
-
-b8
-is_event_key_press(input_event_t *Event, input_key_t Key) {
-    if(Event->Type == INPUT_EVENT_Press && Event->Key.KeyCode == Key) {
-        return true;
-    }
-    
-    return false;
 }
 
 void
@@ -612,90 +273,68 @@ filter_pass(range_t Filter, range_t Input) {
 
 void
 k_do_editor(platform_shared_t *Shared) {
-    input_event_buffer_t *Events = &Shared->EventBuffer;
-    for(u64 i = 0; i < Events->Count; ++i) {
-        input_event_t *e = &Events->Events[i];
-        if(e->Device == INPUT_DEVICE_Mouse) {
-            ui_mouse_t Btn;
-            switch(e->Mouse.Button) {
-                case INPUT_MOUSE_Left:     { Btn = UI_MOUSE_Left; } break;
-                case INPUT_MOUSE_Right:    { Btn = UI_MOUSE_Right; } break;
-                case INPUT_MOUSE_Middle:   { Btn = UI_MOUSE_Middle; } break;
-                case INPUT_MOUSE_Forward:  { Btn = UI_MOUSE_Forward; } break;
-                case INPUT_MOUSE_Backward: { Btn = UI_MOUSE_Backward; } break;
-                default: { continue; }
-            }
-            if(e->Type == INPUT_EVENT_Press) {
-                ui_mouse_down(gUiCtx, Btn);
-            } else if(e->Type == INPUT_EVENT_Release) {
-                ui_mouse_up(gUiCtx, Btn);
-            }
-        } else if(e->Device == INPUT_DEVICE_Keyboard) {
-            if(e->Type == INPUT_EVENT_Text) {
-                ui_text_input(gUiCtx, e->Text.Character);
-            } else if(e->Type == INPUT_EVENT_Press || e->Type == INPUT_EVENT_Release) {
-                ui_key_t Key;
-                switch(e->Key.KeyCode) {
-                    case KEY_Tab:      { Key = UI_KEY_Tab; } break;
-                    case KEY_Shift:    { Key = UI_KEY_Shift; } break;
-                    case KEY_Ctrl:     { Key = UI_KEY_Ctrl; } break;
-                    case KEY_Alt:      { Key = UI_KEY_Alt; } break;
-                    case KEY_Escape:   { Key = UI_KEY_Escape; } break;
-                    case KEY_PageUp:   { Key = UI_KEY_PageUp; } break;
-                    case KEY_PageDown: { Key = UI_KEY_PageDown; } break;
-                    case KEY_End:      { Key = UI_KEY_End; } break;
-                    case KEY_Home:     { Key = UI_KEY_Home; } break;
-                    case KEY_Left:     { Key = UI_KEY_Left; } break;
-                    case KEY_Up:       { Key = UI_KEY_Up; } break;
-                    case KEY_Right:    { Key = UI_KEY_Right; } break;
-                    case KEY_Down:     { Key = UI_KEY_Down; } break;
-                    case KEY_Delete:   { Key = UI_KEY_Delete; } break;
-                    default: { continue; } break;
-                }
-                if(e->Type == INPUT_EVENT_Press) {
-                    ui_key_down(gUiCtx, Key);
-                } else {
-                    ui_key_up(gUiCtx, Key);
-                }
-            }
-        }
-    }
-    ui_mouse_pos(gUiCtx, Shared->MousePos);
     framebuffer_t *Fb = Shared->Framebuffer;
     
     clear_framebuffer(Fb, COLOR_BG);
     Fb->Clip = (irect_t){0, 0, Fb->Width, Fb->Height};
     
-    draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font);
+    //draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font);
     
     ui_begin(gUiCtx);
     
     ui_open_container(gUiCtx, C_STR_AS_RANGE("test"), false);
     
+    irect_t Rect; 
+    ui_id_t Id;
     
-    irect_t r = {.x = 100, .y = 100, .w = 600, .h = 700};
+    irect_t r = {.w = Fb->Width, .h = Fb->Height};
     ui_container_t *Container = ui_begin_container(gUiCtx, r, C_STR_AS_RANGE("test"));
     if(Container) {
         ui_push_clip(gUiCtx, Container->Rect);
         ui_draw_rect(gUiCtx, Container->Rect, color_u32(0xff0d1117));
         
-        ui_row(gUiCtx, 1);
-        {
-            
-            static mem_buffer_t Buffer = {0};
-            ui_text_box(gUiCtx, &Buffer, C_STR_AS_RANGE("search box"), true);
-            directory_t *Dir = &gCtx.CurrentDirectory;
-            for(s64 i = 0; i < sb_count(Dir->Files); ++i) {
-                file_info_t *Fi = Dir->Files + i;
-                range_t FileName = {.Data = Dir->FileNameBuffer.Data + Fi->Name.Offset, .Size = Fi->Name.Size};
-                if(filter_pass(FileName, mem_buf_as_range(Buffer))) {
-                    if(ui_selectable(gUiCtx, FileName, false)) {
-                        push_directory_or_open_file(Fi);
-                        mem_buf_clear(&Buffer);
-                    }
+        ui_row(gUiCtx, 2);
+        
+        ui_begin_column(gUiCtx, 200);
+        static mem_buffer_t Buffer = {0};
+        
+        ui_text_box(gUiCtx, &Buffer, C_STR_AS_RANGE("search box"), C_STR_AS_RANGE("search"), false);
+        directory_t *Dir = &gCtx.CurrentDirectory;
+        for(s64 i = 0; i < sb_count(Dir->Files); ++i) {
+            file_info_t *Fi = Dir->Files + i;
+            range_t FileName = {.Data = Dir->FileNameBuffer.Data + Fi->Name.Offset, .Size = Fi->Name.Size};
+            if(filter_pass(FileName, mem_buf_as_range(Buffer))) {
+                if(ui_selectable(gUiCtx, FileName, false)) {
+                    //push_directory_or_open_file(Fi);
+                    //mem_buf_clear(&Buffer);
                 }
             }
+            
         }
+        ui_end_column(gUiCtx);
+        
+        { // Code edit widget
+            ui_begin_column(gUiCtx, 0);
+            Id = ui_make_id(gUiCtx, C_STR_AS_RANGE("code"));
+            Rect = ui_push_rect(gUiCtx, 0, 0);
+            ui_update_input_state(gUiCtx, Rect, Id);
+            if(gUiCtx->Active == Id || gUiCtx->Selected == Id) {
+                gUiCtx->TextEditFocus = Id;
+            }
+            
+            if(gUiCtx->Hot == Id) {
+                gCtx.PanelCtx.Selected->Scroll.y -= gUiCtx->Input->Scroll; 
+            }
+            
+            if(gUiCtx->TextEditFocus == Id) {
+                // TODO: Code edit input
+                
+            }
+            
+            ui_panels(gUiCtx, gCtx.PanelCtx.Root, Rect);
+            ui_end_column(gUiCtx);
+        }
+        
         ui_pop_clip(gUiCtx);
         ui_end_container(gUiCtx);
     }
@@ -703,5 +342,7 @@ k_do_editor(platform_shared_t *Shared) {
     ui_end(gUiCtx);
     draw_ui(Fb);
     
-    Events->Count = 0;
+    //draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font, Rect);
+    
+    MEM_STACK_CLEAR(Shared->InputState.Keys);
 }

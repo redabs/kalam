@@ -85,7 +85,7 @@ draw_cursor(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t *F
     line_t *Line = Panel->Buffer->Lines + LineIndex;
     s32 PixelOffsetToCursor = text_width(Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = Selection->Cursor - Line->Offset});
     
-    irect_t Cursor = {.x = TextRegion.x + PixelOffsetToCursor - Panel->ScrollX, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->ScrollY), .w = Width, .h = LineHeight};
+    irect_t Cursor = {.x = TextRegion.x + PixelOffsetToCursor - Panel->Scroll.x, .y = TextRegion.y + (s32)(LineIndex * LineHeight - Panel->Scroll.y), .w = Width, .h = LineHeight};
     
     draw_rect(Fb, Cursor, Color);
 }
@@ -129,12 +129,12 @@ draw_selection(framebuffer_t *Fb, panel_t *Panel, selection_t *Selection, font_t
         // There is one exception where the selection is allowed to go outside the line and it is on the last "imaginary" character on the 
         // last line in the file. The reason the cursor can go one byte outside like this is so that one can append to the end of the file.
         // Because this one-past-the-end byte could be anything we don't want to include it in the string we pass to text_width, so to handle
-        // this we check if the cursor is past the end of the line and we're on the last line and then increase the size my the width of 'M'.
+        // this we check if the cursor is past the end of the line and we're on the last line and then increase the size by the width of 'M'.
         if(i == (u64)(sb_count(Buf->Lines) - 1) && SelectionEnd > Line->Offset + Line->Size) {
             Width += Font->MWidth;
         } 
         s32 PixelOffsetToSelectionStart = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Start - Line->Offset});
-        irect_t LineRect = {.x = TextRegion.x + PixelOffsetToSelectionStart - Panel->ScrollX, .y = y - Panel->ScrollY, .w = Width, .h = LineHeight};
+        irect_t LineRect = {.x = TextRegion.x + PixelOffsetToSelectionStart - Panel->Scroll.x, .y = y - Panel->Scroll.y, .w = Width, .h = LineHeight};
         draw_rect(Fb, LineRect, COLOR_SELECTION);
     }
 }
@@ -148,6 +148,10 @@ token_color(token_t Token) {
         case TOKEN_StringLiteral: {
             Color = 0xffffff00;
         } break; 
+        
+        case TOKEN_CppDirective: {
+            Color = 0xff56845e;
+        } break;
         
         case TOKEN_IncludePath: {
             Color = 0xff8455ff;
@@ -196,137 +200,135 @@ token_color(token_t Token) {
 
 void
 draw_panel(framebuffer_t *Fb, panel_ctx_t *PanelCtx, panel_t *Panel, font_t *Font, irect_t PanelRect) {
-    if(Panel->Buffer) {
+    if(Panel->State == PANEL_STATE_Leaf) {
         irect_t TextRegion = text_buffer_rect(Panel, Font, PanelRect);
         
         Fb->Clip = PanelRect;
         
         buffer_t *Buf = Panel->Buffer;
-        if(Buf) {
-            s32 LineHeight = Font->LineHeight;
-            
-            selection_group_t *SelGrp;
-            // If we're in Select mode and there is a search term and there are selections in the working set then
-            // we get the working set selection group instead of the one active in the buffer.
-            if(Panel->Mode == MODE_Select && Panel->ModeCtx.Select.SearchTerm.Used != 0 && sb_count(Panel->ModeCtx.Select.SelectionGroup.Selections) != 0) {
-                SelGrp = &Panel->ModeCtx.Select.SelectionGroup;
-            } else {
-                SelGrp = get_selection_group(Panel->Buffer, Panel);
+        s32 LineHeight = Font->LineHeight;
+        
+        selection_group_t *SelGrp;
+        // If we're in Select mode and there is a search term and there are selections in the working set then
+        // we get the working set selection group instead of the one active in the buffer.
+        if(Panel->Mode == MODE_Select && Panel->Select.SearchTerm.Used != 0 && sb_count(Panel->Select.SelectionGroup.Selections) != 0) {
+            SelGrp = &Panel->Select.SelectionGroup;
+        } else {
+            SelGrp = get_selection_group(Panel->Buffer, Panel);
+        }
+        
+        selection_t SelectionMaxIdx = get_selection_max_idx(SelGrp);
+        
+        // Compute Scroll
+        if(sb_count(Panel->Buffer->Lines) > 0) {
+            u64 Li = offset_to_line_index(Panel->Buffer, SelectionMaxIdx.Cursor);
+            s32 OffsetY = (s32) Li * LineHeight;
+            if(OffsetY >= (Panel->Scroll.y + TextRegion.h - LineHeight)) {
+                Panel->Scroll.y = OffsetY - TextRegion.h + LineHeight;
+            } else if(OffsetY < Panel->Scroll.y) {
+                Panel->Scroll.y = OffsetY;
             }
             
-            selection_t SelectionMaxIdx = get_selection_max_idx(SelGrp);
+            line_t *Line = &Panel->Buffer->Lines[Li];
+            s32 OffsetX = text_width(Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = SelectionMaxIdx.Cursor - Line->Offset});
+            if(OffsetX >= (TextRegion.w + Panel->Scroll.x)) {
+                Panel->Scroll.x = OffsetX - TextRegion.w + Font->MWidth;
+            } else if(OffsetX < Panel->Scroll.x) {
+                Panel->Scroll.x = OffsetX;
+            }
+        }
+        
+        for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
+            selection_t *s = &SelGrp->Selections[i];
+            draw_selection(Fb, Panel, s, Font, TextRegion);
+            draw_cursor(Fb, Panel, s, Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? color_u32(0xffbbbbbb) : color_u32(0xff333333));
+        }
+        
+        {
+            token_t Token = {0};
+            b8 HasTokens = next_token(Buf, Token, &Token);
             
-            // Compute ScrollX and ScrollY
-            if(sb_count(Panel->Buffer->Lines) > 0) {
-                u64 Li = offset_to_line_index(Panel->Buffer, SelectionMaxIdx.Cursor);
-                s32 OffsetY = (s32) Li * LineHeight;
-                if(OffsetY >= (Panel->ScrollY + TextRegion.h - LineHeight)) {
-                    Panel->ScrollY = OffsetY - TextRegion.h + LineHeight;
-                } else if(OffsetY < Panel->ScrollY) {
-                    Panel->ScrollY = OffsetY;
-                }
+            // Draw lines
+            irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
+            for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
+                s32 LineY = TextRegion.y + (s32)i * LineHeight;
+                s32 Center = LineY + (LineHeight >> 1);
+                s32 Baseline = Center + (Font->MHeight >> 1) - Panel->Scroll.y;
+                line_t *Line = &Buf->Lines[i];
                 
-                line_t *Line = &Panel->Buffer->Lines[Li];
-                s32 OffsetX = text_width(Font, (range_t){.Data = Panel->Buffer->Text.Data + Line->Offset, .Size = SelectionMaxIdx.Cursor - Line->Offset});
-                if(OffsetX >= (TextRegion.w + Panel->ScrollX)) {
-                    Panel->ScrollX = OffsetX - TextRegion.w + Font->MWidth;
-                } else if(OffsetX < Panel->ScrollX) {
-                    Panel->ScrollX = OffsetX;
-                }
-            }
-            
-            for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-                selection_t *s = &SelGrp->Selections[i];
-                draw_selection(Fb, Panel, s, Font, TextRegion);
-                draw_cursor(Fb, Panel, s, Font, TextRegion, (s->Idx == SelGrp->SelectionIdxTop - 1) ? color_u32(0xffbbbbbb) : color_u32(0xff333333));
-            }
-            
-            {
-                token_t Token = {0};
-                b8 HasTokens = next_token(Buf, Token, &Token);
-                
-                // Draw lines
-                irect_t LineNumberRect = line_number_rect(Panel, Font, PanelRect);
-                for(s64 i = 0; i < sb_count(Buf->Lines); ++i) {
-                    s32 LineY = TextRegion.y + (s32)i * LineHeight;
-                    s32 Center = LineY + (LineHeight >> 1);
-                    s32 Baseline = Center + (Font->MHeight >> 1) - Panel->ScrollY;
-                    line_t *Line = &Buf->Lines[i];
-                    
-                    Fb->Clip = TextRegion;
-                    if(HasTokens) {
-                        u64 Offset = Line->Offset;
-                        while(HasTokens && Offset < (Line->Offset + Line->Size)) {
-                            // Do we need a new token?
-                            if(Offset >= (Token.Offset + Token.Size)) {
-                                HasTokens = next_token(Buf, Token, &Token);
-                                // TODO: Now we're skipping characters that aren't tokenized and fall between tokens. This is fine if we don't want
-                                // to draw blank characters but simply advance the cursor, but it's a problem if the tokenizer incorrectly skips characters.
-                                Offset = Token.Offset;
-                            } else {
-                                u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size); // Don't write past this line if token spans multiple lines
-                                range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
-                                
-                                color_t Color = token_color(Token);
-                                s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Offset - Line->Offset});
-                                
-                                draw_text_line(Fb, Font, TextRegion.x - Panel->ScrollX + StartX, Baseline, Color, Text);
-                                Offset = End;
-                            }
+                Fb->Clip = TextRegion;
+                if(HasTokens) {
+                    u64 Offset = Line->Offset;
+                    while(HasTokens && Offset < (Line->Offset + Line->Size)) {
+                        // Do we need a new token?
+                        if(Offset >= (Token.Offset + Token.Size)) {
+                            HasTokens = next_token(Buf, Token, &Token);
+                            // TODO: Now we're skipping characters that aren't tokenized and fall between tokens. This is fine if we don't want
+                            // to draw blank characters but simply advance the cursor, but it's a problem if the tokenizer incorrectly skips characters.
+                            Offset = Token.Offset;
+                        } else {
+                            u64 End = MIN(Token.Offset + Token.Size, Line->Offset + Line->Size); // Don't write past this line if token spans multiple lines
+                            range_t Text = {.Data = Buf->Text.Data + Offset, .Size = End - Offset};
+                            
+                            color_t Color = token_color(Token);
+                            s32 StartX = text_width(Font, (range_t){.Data = Buf->Text.Data + Line->Offset, .Size = Offset - Line->Offset});
+                            
+                            draw_text_line(Fb, Font, TextRegion.x - Panel->Scroll.x + StartX, Baseline, Color, Text);
+                            Offset = End;
                         }
                     }
-                    
-                    Fb->Clip = PanelRect;
-                    s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
-                    draw_line_number(Fb, Font, (irect_t){.x = LineNumberRect.x, .y = Baseline, .w = LineNumberRect.w, .h = LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
                 }
+                
+                Fb->Clip = PanelRect;
+                s64 n = ABS(i - (s64)offset_to_line_index(Buf, SelectionMaxIdx.Cursor));
+                draw_line_number(Fb, Font, (irect_t){.x = LineNumberRect.x, .y = Baseline, .w = LineNumberRect.w, .h = LineHeight}, n == 0 ? COLOR_LINE_NUMBER_CURRENT : COLOR_LINE_NUMBER, n == 0 ? i + 1 : n);
             }
-            
-            irect_t StatusBar = status_bar_rect(PanelRect);
-            draw_rect(Fb, StatusBar, COLOR_STATUS_BAR);
-            
-            irect_t r0, r1, r2, r3;
-            panel_border_rects(PanelRect, &r0, &r1, &r2, &r3);
-            
-            color_t BorderColor = COLOR_BG;
-            if(PanelCtx->Selected == Panel) {
-                BorderColor = COLOR_PANEL_SELECTED;
-            } else if(Panel != PanelCtx->Root && Panel->Parent->LastSelected == panel_child_index(Panel)) {
-                BorderColor = COLOR_PANEL_LAST_SELECTED;
-            } 
-            draw_rect(Fb, r0, BorderColor);
-            draw_rect(Fb, r1, BorderColor);
-            draw_rect(Fb, r2, BorderColor);
-            draw_rect(Fb, r3, BorderColor);
-            
-            color_t ModeStrColor = color_u32(0xffffffff);
-            mem_buffer_t ModeString = {0};
-            switch(Panel->Mode) {
-                case MODE_Normal: {
-                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("NORMAL"));
-                    ModeStrColor = COLOR_STATUS_NORMAL;
-                } break;
-                
-                case MODE_Insert: {
-                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("INSERT"));
-                    ModeStrColor = COLOR_STATUS_INSERT;
-                } break;
-                
-                case MODE_Select: {
-                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Select:"));
-                    range_t r = mem_buf_as_range(Panel->ModeCtx.Select.SearchTerm);
-                    mem_buf_append_range(&ModeString, r);
-                } break;
-                
-                default: {
-                    mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Invalid mode"));
-                } break;
-            }
-            
-            iv2_t TextPos = center_text_in_rect(Font, StatusBar, mem_buf_as_range(ModeString));
-            draw_text_line(Fb, Font, TextPos.x, TextPos.y, ModeStrColor, mem_buf_as_range(ModeString));
-            draw_text_line(Fb, Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
         }
+        
+        irect_t StatusBar = status_bar_rect(PanelRect);
+        draw_rect(Fb, StatusBar, COLOR_STATUS_BAR);
+        
+        irect_t r0, r1, r2, r3;
+        panel_border_rects(PanelRect, &r0, &r1, &r2, &r3);
+        
+        color_t BorderColor = COLOR_BG;
+        if(PanelCtx->Selected == Panel) {
+            BorderColor = COLOR_PANEL_SELECTED;
+        } else if(Panel != PanelCtx->Root && Panel->Parent->LastSelectedChild == panel_child_index(Panel)) {
+            BorderColor = COLOR_PANEL_LAST_SELECTED;
+        } 
+        draw_rect(Fb, r0, BorderColor);
+        draw_rect(Fb, r1, BorderColor);
+        draw_rect(Fb, r2, BorderColor);
+        draw_rect(Fb, r3, BorderColor);
+        
+        color_t ModeStrColor = color_u32(0xffffffff);
+        mem_buffer_t ModeString = {0};
+        switch(Panel->Mode) {
+            case MODE_Normal: {
+                mem_buf_append_range(&ModeString, C_STR_AS_RANGE("NORMAL"));
+                ModeStrColor = COLOR_STATUS_NORMAL;
+            } break;
+            
+            case MODE_Insert: {
+                mem_buf_append_range(&ModeString, C_STR_AS_RANGE("INSERT"));
+                ModeStrColor = COLOR_STATUS_INSERT;
+            } break;
+            
+            case MODE_Select: {
+                mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Select:"));
+                range_t r = mem_buf_as_range(Panel->Select.SearchTerm);
+                mem_buf_append_range(&ModeString, r);
+            } break;
+            
+            default: {
+                mem_buf_append_range(&ModeString, C_STR_AS_RANGE("Invalid mode"));
+            } break;
+        }
+        
+        iv2_t TextPos = center_text_in_rect(Font, StatusBar, mem_buf_as_range(ModeString));
+        draw_text_line(Fb, Font, TextPos.x, TextPos.y, ModeStrColor, mem_buf_as_range(ModeString));
+        draw_text_line(Fb, Font, StatusBar.x, TextPos.y, ModeStrColor, (Panel->Split == SPLIT_Vertical) ? C_STR_AS_RANGE("|") : C_STR_AS_RANGE("_"));
     } else {
         irect_t r0, r1;
         split_panel_rect(Panel, PanelRect, &r0, &r1);
@@ -342,10 +344,9 @@ workspace_rect(framebuffer_t *Fb) {
 }
 
 void
-draw_panels(framebuffer_t *Fb, panel_ctx_t *PanelCtx, font_t *Font) {
+draw_panels(framebuffer_t *Fb, panel_ctx_t *PanelCtx, font_t *Font, irect_t Rect) {
     irect_t ClipSave = Fb->Clip;
     if(PanelCtx->Root) {
-        irect_t Rect = workspace_rect(Fb);
         draw_panel(Fb, PanelCtx, PanelCtx->Root, Font, Rect);
     }
     Fb->Clip = ClipSave;
