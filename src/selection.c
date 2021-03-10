@@ -341,47 +341,6 @@ delete_selection(panel_t *Panel) {
     sb_free(Deletions);
 }
 
-// If non-block cursors are ever supported then do_delete might be needed, until then delete_selection should behave the save
-// for single character selection with a block cursor.
-#if 0
-void
-do_delete(panel_t *Panel) {
-    deletion_t *Deletions = 0;
-    
-    u64 BytesDeleted = 0;
-    selection_group_t *SelGrp = get_selection_group(Panel->Buffer, Panel);
-    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-        selection_t *Sel = &SelGrp->Selections[i];
-        if(Sel->Cursor < Panel->Buffer->Text.Used) {
-            // Deletions at previous cursor shifts the buffer back so this cursor has to be moved by the number of bytes deleted.
-            Sel->Cursor -= BytesDeleted;
-            
-            // Compute size of character before the cursor.
-            s32 CharacterSize = utf8_char_width(Panel->Buffer->Text.Data + Sel->Cursor);
-            mem_buf_delete(&Panel->Buffer->Text, Sel->Cursor, CharacterSize);
-            
-            deletion_t d = {.Offset = Sel->Cursor, .Size = CharacterSize};
-            sb_push(Deletions, d);
-            
-            BytesDeleted += CharacterSize;
-        }
-    }
-    
-    make_lines(Panel->Buffer);
-    
-    for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
-        selection_t *Sel = &SelGrp->Selections[i];
-        Sel->ColumnWas = Sel->ColumnIs = global_offset_to_column(Panel->Buffer, Sel->Cursor);
-    }
-    
-    merge_overlapping_selections(Panel);
-    
-    update_all_selections_after_deletions(Panel, Deletions, sb_count(Deletions));
-    sb_free(Deletions);
-}
-#endif
-
-
 void
 insert_char(panel_t *Panel, u8 *Char) {
     insertion_t *Insertions = 0;

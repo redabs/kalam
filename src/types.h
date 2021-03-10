@@ -8,8 +8,13 @@ typedef struct {
 
 typedef struct {
     // Top left
-    s32 x;
-    s32 y;
+    union {
+        iv2_t p;
+        struct {
+            s32 x;
+            s32 y;
+        };
+    };
     s32 w;
     s32 h;
 } irect_t;

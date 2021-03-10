@@ -9,14 +9,11 @@
 #include "util.h"
 #include "ui.h"
 #include "kalam.h"
-#include "custom.h"
 
 #include "parse.c"
 #include "selection.c"
 #include "panel.c"
-#include "layout.c"
 #include "render.c"
-#include "draw.c"
 #include "ui.c"
 #include "widgets.c"
 
@@ -278,8 +275,6 @@ k_do_editor(platform_shared_t *Shared) {
     clear_framebuffer(Fb, COLOR_BG);
     Fb->Clip = (irect_t){0, 0, Fb->Width, Fb->Height};
     
-    //draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font);
-    
     ui_begin(gUiCtx);
     
     ui_open_container(gUiCtx, C_STR_AS_RANGE("test"), false);
@@ -323,7 +318,7 @@ k_do_editor(platform_shared_t *Shared) {
             }
             
             if(gUiCtx->Hot == Id) {
-                gCtx.PanelCtx.Selected->Scroll.y -= gUiCtx->Input->Scroll; 
+                gCtx.PanelCtx.Selected->Scroll.y -= gUiCtx->Input->Scroll * 40; 
             }
             
             if(gUiCtx->TextEditFocus == Id) {
@@ -341,8 +336,6 @@ k_do_editor(platform_shared_t *Shared) {
     
     ui_end(gUiCtx);
     draw_ui(Fb);
-    
-    //draw_panels(Fb, &gCtx.PanelCtx, &gCtx.Font, Rect);
     
     MEM_STACK_CLEAR(Shared->InputState.Keys);
 }

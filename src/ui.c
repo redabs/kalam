@@ -79,7 +79,7 @@ ui_draw_text_ex(ui_ctx_t *Ctx, range_t Text, iv2_t Baseline, color_t Color, b32 
 
 void
 ui_draw_text(ui_ctx_t *Ctx, range_t Text, iv2_t Baseline, color_t Color) {
-    ui_draw_text_ex(Ctx, Text, Baseline, Color, false);
+    ui_draw_text_ex(Ctx, Text, Baseline, Color, true);
 }
 
 void

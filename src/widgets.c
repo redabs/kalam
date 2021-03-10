@@ -1,3 +1,20 @@
+color_t COLOR_BG = {.Argb = 0xff161616};
+color_t COLOR_SELECTION = {.Argb = 0xff5555aa};
+color_t COLOR_LINE_HIGHLIGHT = {.Argb = 0xff101010};
+color_t COLOR_TEXT = {.Argb = 0xffd1c87e};
+color_t COLOR_CURSOR = {.Argb = 0xff8888aa};
+color_t COLOR_MAIN_CURSOR = {.Argb = 0xffccccff};
+
+color_t COLOR_LINE_NUMBER = {.Argb = 0xff505050};
+color_t COLOR_LINE_NUMBER_CURRENT = {.Argb = 0xfff0f050};
+
+color_t COLOR_STATUS_BAR = {.Argb = 0xff262626};
+color_t COLOR_STATUS_NORMAL = {.Argb = 0xffa8df65};
+color_t COLOR_STATUS_INSERT = {.Argb = 0xffe43f5a};
+
+color_t COLOR_PANEL_SELECTED = {.Argb = 0xffdddddd};
+color_t COLOR_PANEL_LAST_SELECTED = {.Argb = 0xff888888};
+
 b8
 ui_begin_tree_node(ui_ctx_t *Ctx, range_t Name) {
     ui_id_t Id = ui_make_id(Ctx, Name);
@@ -162,6 +179,7 @@ ui_text_box(ui_ctx_t *Ctx, mem_buffer_t *TextBuffer, range_t Name, range_t Hint,
 
 void
 ui_draw_cursor(ui_ctx_t *Ctx, panel_t *Panel, irect_t TextRegion, selection_group_t *SelGrp, selection_t *Selection) {
+    // TODO: We're not properly skipping cursors that outside the view, fix that.
     s64 LineIdx = offset_to_line_index(Panel->Buffer, Selection->Cursor);
     s32 YPosRelative = (s32)LineIdx * Ctx->Font->LineHeight - Panel->Scroll.y;
     // Skip drawing cursors that are not in view.
@@ -243,6 +261,52 @@ ui_draw_selection(ui_ctx_t *Ctx, panel_t *Panel, irect_t TextRegion, selection_t
     }
 }
 
+irect_t
+line_number_rect(panel_t *Panel, font_t *Font, irect_t PanelRect) {
+    s64 LineCount = sb_count(Panel->Buffer->Lines);
+    s32 n = 0;
+    while(LineCount > 0) {
+        n += 1;
+        LineCount /= 10;
+    }
+    
+    irect_t Result = {
+        .x = PanelRect.x, .y = PanelRect.y,
+        .w = Font->MWidth * n, .h = PanelRect.h
+    };
+    
+    return Result;
+}
+
+#define LINE_NUMBER_PADDING_RIGHT 5
+
+irect_t
+text_buffer_rect(panel_t *Panel, font_t *Font, irect_t PanelRect) {
+    irect_t l = line_number_rect(Panel, Font, PanelRect);
+    
+    irect_t Rect = {
+        .x = PanelRect.x + l.w + LINE_NUMBER_PADDING_RIGHT,
+        .y = PanelRect.y,
+        .w = PanelRect.w - l.w - LINE_NUMBER_PADDING_RIGHT,
+        .h = PanelRect.h,
+    };
+    return Rect;
+}
+
+void
+ui_draw_line_number(ui_ctx_t *Ctx, s64 LineNum, iv2_t Baseline, s32 GutterWidth) {
+    u8 NumStr[64];
+    u64 n = 0;
+    u8 *c = NumStr + sizeof(NumStr);
+    for(u64 i = LineNum; i > 0; i /= 10, n++) {
+        --c;
+        *c = '0' + (i % 10);
+    }
+    range_t r = {.Data = c, .Size = n};
+    iv2_t p = {.x = Baseline.x + GutterWidth - text_width(Ctx->Font, r), .y = Baseline.y};
+    ui_draw_text(Ctx, r, p, COLOR_TEXT);
+}
+
 void
 ui_draw_panel(ui_ctx_t *Ctx, panel_t *Panel, irect_t Rect) {
     ASSERT(Panel->State == PANEL_STATE_Leaf);
@@ -251,37 +315,42 @@ ui_draw_panel(ui_ctx_t *Ctx, panel_t *Panel, irect_t Rect) {
     
     ui_push_clip(Ctx, Rect);
     ui_draw_rect(Ctx, Rect, COLOR_BG);
-    irect_t TextRegion = Rect;
+    
+    irect_t TextBufferRect = text_buffer_rect(Panel, Ctx->Font, Rect);
+    irect_t LineNumberRect = line_number_rect(Panel, Ctx->Font, Rect);
     
     selection_group_t *SelGrp;
     if(Panel->Mode == MODE_Select && Panel->Select.SearchTerm.Used > 0 && sb_count(Panel->Select.SelectionGroup.Selections) > 0) {
         SelGrp = &Panel->Select.SelectionGroup;
     } else {
-        SelGrp = get_selection_group(Panel->Buffer, Panel);
+        SelGrp = get_selection_group(Buf, Panel);
         ASSERT(SelGrp);
     }
     
     for(s64 i = 0; i < sb_count(SelGrp->Selections); ++i) {
         selection_t *Selection = SelGrp->Selections + i;
-        ui_draw_selection(Ctx, Panel, TextRegion, Selection);
-        ui_draw_cursor(Ctx, Panel, TextRegion, SelGrp, Selection);
+        ui_draw_selection(Ctx, Panel, TextBufferRect, Selection);
+        ui_draw_cursor(Ctx, Panel, TextBufferRect, SelGrp, Selection);
     }
     
-    // TODO: Can we fast forward to the lines that are in view?
-    for(s64 LineIdx = 0; LineIdx < sb_count(Buf->Lines); ++LineIdx) {
+    s32 LineHeight = MAX(Ctx->Font->LineHeight, 1);
+    
+    s32 OffsetToCenterText = (LineHeight + Ctx->Font->MHeight) / 2;
+    s64 LineStart = MAX(Panel->Scroll.y, 0) / LineHeight;
+    
+    for(s64 LineIdx = LineStart; LineIdx < sb_count(Buf->Lines); ++LineIdx) {
         line_t *Line = Buf->Lines + LineIdx;
-        iv2_t Baseline = {.x = TextRegion.x, .y = 0};
-        s32 LineY = TextRegion.y + (s32)LineIdx * Ctx->Font->LineHeight;
-        s32 LineCenter = LineY + Ctx->Font->LineHeight / 2;
-        Baseline.y = LineCenter + (Ctx->Font->MHeight / 2) - Panel->Scroll.y;
         
-        if((Baseline.y + Ctx->Font->LineHeight) < TextRegion.y) {
-            continue;
-        }
+        s32 TextY = LineHeight * (s32)LineIdx + OffsetToCenterText - Panel->Scroll.y;
         
-        if(Baseline.y > (TextRegion.y + TextRegion.h)) {
+        // TODO: We could probably compute the last line that would fit in the window instead
+        // of checking like this.
+        if((TextY - LineHeight) > TextBufferRect.h) {
             break;
         }
+        
+        iv2_t Baseline = {.x = TextBufferRect.x, .y = TextBufferRect.y + TextY};
+        ui_draw_line_number(Ctx, LineIdx + 1, (iv2_t){.x = LineNumberRect.x, .y = Baseline.y}, LineNumberRect.w);
         
         range_t Text = {.Data = Buf->Text.Data + Line->Offset, .Size = Line->Size};
         ui_draw_text_ex(Ctx, Text, Baseline, COLOR_TEXT, false);
@@ -295,7 +364,17 @@ ui_panels(ui_ctx_t *Ctx, panel_t *Panel, irect_t Rect) {
     switch(Panel->State) {
         case PANEL_STATE_Parent: {
             irect_t r0, r1;
-            split_panel_rect(Panel, Rect, &r0, &r1);
+            if(Panel->Split == SPLIT_Vertical) {
+                s32 Hw = Rect.w / 2;
+                s32 RoundedHw = (s32)((f32)Rect.w / 2 + 0.5);
+                r0 = (irect_t){Rect.x, Rect.y, Hw, Rect.h};
+                r1 = (irect_t){Rect.x + Hw, Rect.y, RoundedHw, Rect.h};
+            } else {
+                s32 Hh = Rect.h / 2;
+                s32 RoundedHh = (s32)((f32)Rect.h / 2 + 0.5);
+                r0 = (irect_t){Rect.x, Rect.y, Rect.w, Hh};
+                r1 = (irect_t){Rect.x, Rect.y + Hh, Rect.w, RoundedHh};
+            }
             ui_panels(Ctx, Panel->Children[0], r0);
             ui_panels(Ctx, Panel->Children[1], r1);
         } break;

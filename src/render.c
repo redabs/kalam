@@ -38,6 +38,51 @@ get_glyph_set(font_t *Font, u32 Codepoint, glyph_set_t **GlyphSet) {
     return (*GlyphSet) != 0;
 }
 
+stbtt_bakedchar *
+get_stbtt_bakedchar(font_t *Font, u32 Codepoint) {
+    glyph_set_t *Set;
+    if(get_glyph_set(Font, Codepoint, &Set)) {
+        return &Set->Glyphs[Codepoint % 256];
+    }
+    return 0;
+}
+
+s32
+get_x_advance(font_t *Font, u32 Codepoint) {
+    s32 Result = Font->MWidth;
+    if(Codepoint == '\t') {
+        Result = Font->SpaceWidth * TAB_WIDTH;
+    } else {
+        stbtt_bakedchar *g = get_stbtt_bakedchar(Font, Codepoint);
+        if(g) {
+            Result = (s32)(g->xadvance + 0.5);
+        }
+    }
+    return Result;
+}
+
+s32
+text_width(font_t *Font, range_t Text) {
+    s32 Result = 0;
+    u8 *c = Text.Data;
+    u8 *End = Text.Data + Text.Size;
+    u32 Codepoint;
+    while(c < End) {
+        c = utf8_to_codepoint(c, &Codepoint);
+        Result += get_x_advance(Font, Codepoint);
+    }
+    
+    return Result;
+}
+
+// Returns {x, baseline}
+iv2_t 
+center_text_in_rect(font_t *Font, irect_t Rect, range_t Text) {
+    s32 TextWidth = text_width(Font, Text);
+    iv2_t Result = {.x = Rect.x + (Rect.w - TextWidth) / 2, .y = Rect.y + (Rect.h + Font->MHeight) / 2};
+    return Result;
+}
+
 void
 clear_framebuffer(framebuffer_t *Fb, color_t Color) {
     u64 Size = Fb->Width * Fb->Height;
