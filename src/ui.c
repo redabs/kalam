@@ -304,17 +304,40 @@ ui_next_row(ui_layout_t *Layout) {
     Layout->RowHeight = 0;
 }
 
-// if Width|Height <= 0 then Rect.w|h = (parent's layout width|height) + (Width|height)
+// Returns the cursor position for Ctx->ActiveContainer.
+iv2_t
+ui_peek_cursor_position(ui_ctx_t *Ctx) {
+    ui_layout_t *Layout = ui_get_layout(Ctx);
+    ui_container_t *Container = Ctx->ActiveContainer;
+    ASSERT(Layout && Container);
+    
+    iv2_t Result = {
+        .x = Layout->Cursor.x + Container->Rect.x + Container->Scroll.x + Layout->Indent.x,
+        .y = Layout->Cursor.y + Container->Rect.y + Container->Scroll.y + Layout->Indent.y,
+    };
+    
+    return Result;
+}
+
+s32
+ui_calculate_real_control_rect_width(ui_layout_t *Layout, s32 Width) {
+    if(Width <= 0) {
+        s32 RemainingWidth = Layout->Rect.w - (Layout->Cursor.x - Layout->Rect.x + Layout->Indent.x);
+        s32 RemainingSlots = Layout->ItemsPerRow - Layout->ItemCount;
+        s32 WidthPerItem = RemainingWidth / MAX(RemainingSlots, 1);
+        Width = MAX(WidthPerItem + Width, 0);
+    }
+    
+    return Width;
+}
+
+// If Width or Height is 0 then the rect fills the parent, if it's less than 0 then
+// it fills the parent and leaves the absolute value of that much space.
 irect_t
 ui_push_rect(ui_ctx_t *Ctx, s32 Width, s32 Height) {
     ui_container_t *Container = Ctx->ActiveContainer;
     ui_layout_t *Layout = ui_get_layout(Ctx);
-    if(Width <= 0) {
-        s32 RemainingWidth = Layout->Rect.w - (Layout->Cursor.x - Layout->Rect.x + Layout->Indent.x);
-        s32 RemainingSlots = Layout->ItemsPerRow - Layout->ItemCount;
-        s32 W = RemainingWidth / MAX(RemainingSlots, 1);
-        Width = MAX(W + Width, 0);
-    }
+    Width = ui_calculate_real_control_rect_width(Layout, Width);
     
     if(Height <= 0) {
         // Layouts are expanded vertically to fit their content. 
@@ -350,13 +373,10 @@ ui_push_rect(ui_ctx_t *Ctx, s32 Width, s32 Height) {
 
 void
 ui_push_layout(ui_ctx_t *Ctx, s32 Width) {
-    ui_layout_t ActiveLayout = *ui_get_layout(Ctx);
-    irect_t Rect = ui_push_rect(Ctx, Width, 0);
-    Rect.x -= Ctx->ActiveContainer->Rect.x;
-    Rect.y -= Ctx->ActiveContainer->Rect.y;
-    *ui_get_layout(Ctx) = ActiveLayout;
+    ui_layout_t *Layout = ui_get_layout(Ctx);
+    irect_t Rect = {.p = ui_peek_cursor_position(Ctx), .w = ui_calculate_real_control_rect_width(Layout, Width), .h = 0};
     
-    ui_layout_t NewLayout = {.Rect = Rect, .Cursor = {.x = Rect.x, .y = Rect.y}, .ItemsPerRow = 1};
+    ui_layout_t NewLayout = {.Rect = Rect, .Cursor = Rect.p, .ItemsPerRow = 1};
     MEM_STACK_PUSH(Ctx->LayoutStack, NewLayout);
 }
 
