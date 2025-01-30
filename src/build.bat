@@ -23,7 +23,7 @@ REM -Zi Generate complete debug information
 REM -FC Display full path of source code passsed to cl.exe in diagnostics text
 set CFlags=-nologo -Od -Zi -FC -W4 %Warnings% /D UNICODE
 
-set LinkerFlags=-incremental:no User32.lib Gdi32.lib Shlwapi.lib
+set LinkerFlags=-incremental:no User32.lib Gdi32.lib Pathcch.lib
 
 REM if exist *.dll del *.dll > NUL 2> NUL
 REM if exist *.pdb del *.pdb > NUL 2> NUL
@@ -31,7 +31,9 @@ REM if exist *.ilk del *.ilk > NUL 2> NUL
 
 set IncludeDirs=
 
-cl %CFlags% %IncludeDirs% ../win32_kalam.c ../kalam.c /link %LinkerFlags% /OUT:kalam.exe
+set SourceFiles=../k_win32.cpp ../kalam.cpp ../stb_truetype.cpp
+
+cl %CFlags% %IncludeDirs% %SourceFiles% /link %LinkerFlags% /OUT:kalam.exe
 
 REM This is just to verify that the test case for the syntax highlighter and declaration parser is valid code
 REM cl %CFlags% ../test/test.c /link /OUT:test_binary_do_not_run.exe
