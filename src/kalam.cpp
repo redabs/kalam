@@ -807,7 +807,11 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     push(&Buffer->Selections, SelectionCopy);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
+                
+            } else if(event_key_match(Event, KEY_I, MOD_Alt)) {
+                Buffer->Mode = EDIT_MODE_SelectInner;
             }
+            
         } break;
         
         case EDIT_MODE_Select: {    
@@ -856,6 +860,111 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     }
                 }
             }
+        } break;
+        
+        case EDIT_MODE_SelectInner: {
+            if(Event.IsText) {
+                b32 Invalid = false;
+                u32 Open = 0;
+                u32 Close = 0;
+                switch(Event.Char[0]) {
+                    case '[':
+                    case ']': {
+                        Open = '[';
+                        Close = ']';
+                    } break;
+                    
+                    case '<':
+                    case '>': {
+                        Open = '<';
+                        Close = '>';
+                    } break;
+                    
+                    case '(':
+                    case ')': {
+                        Open = '(';
+                        Close = ')';
+                    } break;
+                    
+                    case '{':
+                    case '}': {
+                        Open = '{';
+                        Close = '}';
+                    } break;
+                    
+                    case '\'':
+                    case '"': {
+                        Open = Close = Event.Char[0];
+                    } break;
+                    
+                    default: { Invalid = true; }
+                } 
+                
+                if(!Invalid) {
+                    for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
+                        selection *Sel = Buffer->Selections.Ptr + i;
+                        s64 OpenOffset = -1;
+                        s64 CloseOffset = -1;
+                        s64 Closed = 0;
+                        s64 Opened = 0;
+                        
+                        // Try to find the opening and closing character and expand the selection to all characters
+                        // between the opening and close
+                        
+                        for(u64 Cursor = Sel->Cursor, PrevCursor = Sel->Cursor;
+                            Cursor > 0; 
+                            PrevCursor = Cursor,
+                            Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
+                            
+                            // Only count openings and closings 'if we're selecting inside e.g. [] {} <>, i.e. the opening and closing
+                            // characters are not the same
+                            if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
+                                Closed++;
+                                
+                            } else if(utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
+                                if(Closed > 0) {
+                                    Closed--;
+                                } else {
+                                    OpenOffset = (s64)PrevCursor;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        for(u64 Cursor = Sel->Cursor, PrevCursor = Sel->Cursor; 
+                            Cursor < Buffer->Text.Count; 
+                            PrevCursor = Cursor,
+                            Cursor += utf8_char_size(Buffer->Text.Ptr[Cursor])) {
+                            
+                            if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
+                                Opened++;
+                                
+                            } else if(utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
+                                if(Opened > 0) {
+                                    Opened--;
+                                } else {
+                                    CloseOffset = (s64)PrevCursor;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if(OpenOffset != -1 && CloseOffset != -1) {
+                            Sel->Anchor = OpenOffset;
+                            Sel->Cursor = CloseOffset;
+                            Buffer->Mode = EDIT_MODE_Command;
+                            
+                            merge_overlapping_selections(&Buffer->Selections);
+                        }
+                        
+                    }
+                } else {
+                    Buffer->Mode = EDIT_MODE_Command;
+                }
+            } else if (event_key_match(Event, KEY_Escape, MOD_None)) {
+                Buffer->Mode = EDIT_MODE_Command;
+            }
+            
         } break;
     }
 }

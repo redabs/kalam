@@ -108,6 +108,7 @@ enum edit_mode {
     EDIT_MODE_Command,
     EDIT_MODE_Insert,
     EDIT_MODE_Select, // Reduces selection to search term
+    EDIT_MODE_SelectInner,
 }; 
 
 inline view<u8>
@@ -116,6 +117,8 @@ edit_mode_string(edit_mode Mode) {
         case EDIT_MODE_Command: { return C_STR_VIEW("COMMAND"); } 
         case EDIT_MODE_Insert: { return C_STR_VIEW("INSERT"); }
         case EDIT_MODE_Select: { return C_STR_VIEW("SELECT"); }
+        case EDIT_MODE_SelectInner: { return C_STR_VIEW("SelectInner"); }
+        
     }
     ASSERT(false);
     return C_STR_VIEW("");
