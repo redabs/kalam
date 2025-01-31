@@ -503,7 +503,7 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
                 SelectionRect.x += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
             }
             
-            for(u64 i = InLineStartOffset, CharSize = 0; i < InLineEndOffset; i += CharSize) {
+            for(u64 i = InLineStartOffset, CharSize = 0; i < InLineEndOffset + line_ending_size(Line->LineEnding); i += CharSize) {
                 CharSize = utf8_to_codepoint(Buffer.Ptr + i, &GlyphKeyData.Codepoint);
                 glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
                 SelectionRect.w += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
@@ -1030,7 +1030,7 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
         irect ModeRect = {StatusBar.x, StatusBar.y, ModeStringWidth + (s32)(1229 * FontMetrics.Scale * 2), StatusBar.h};
         
         s32 Baseline = StatusBar.y + FontMetrics.Ascent;
-        u32 ModeColor = Buffer->Mode == EDIT_MODE_Command ? 0xff000066 : 0xff66ff33;
+        u32 ModeColor = Buffer->Mode == EDIT_MODE_Command ? 0xff000066 : 0xff669933;
         draw_rect(Fb, StatusBar, ModeRect, ModeColor);
         draw_text(Fb, StatusBar, make_view(Buffer->Path), {ModeRect.x + ModeRect.w + (s32)(1229 * FontMetrics.Scale), Baseline}, FontMetrics.Scale);
         iv2 ModeStringPosition = {StatusBar.x + (ModeRect.w - ModeStringWidth) / 2, Baseline};
