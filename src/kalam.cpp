@@ -503,7 +503,7 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
                 SelectionRect.x += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
             }
             
-            for(u64 i = InLineStartOffset, CharSize = 0; i < InLineEndOffset + line_ending_size(Line->LineEnding); i += CharSize) {
+            for(u64 i = InLineStartOffset, CharSize = 0; i < MAX(InLineEndOffset, Line->Offset + line_ending_size(Line->LineEnding)); i += CharSize) {
                 CharSize = utf8_to_codepoint(Buffer.Ptr + i, &GlyphKeyData.Codepoint);
                 glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
                 SelectionRect.w += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
@@ -625,7 +625,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         u64 Temp = Sel->Cursor;
                         Sel->Cursor = Sel->Anchor;
                         Sel->Anchor = MIN(Temp + utf8_char_size(*(Buffer->Text.Ptr + Temp)), Buffer->Text.Count);
-                        
                     }
                 }
                 Buffer->Mode = EDIT_MODE_Insert;
@@ -952,10 +951,12 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         if(OpenOffset != -1 && CloseOffset != -1) {
                             Sel->Anchor = OpenOffset;
                             Sel->Cursor = CloseOffset;
-                            Buffer->Mode = EDIT_MODE_Command;
                             
                             merge_overlapping_selections(&Buffer->Selections);
                         }
+                        
+                        Buffer->Mode = EDIT_MODE_Command;
+                        
                         
                     }
                 } else {
