@@ -370,7 +370,7 @@ delete_selection(file_buffer *Buffer) {
         selection *Sel = Buffer->Selections.Ptr + i;
         u64 Start = selection_start(Sel) - DeletedBytesAccumulator;
         u64 End = selection_end(Sel) - DeletedBytesAccumulator;
-        if(Sel->Cursor >= Sel->Anchor) {
+        if(Sel->Cursor == Sel->Anchor) {
             End += utf8_char_size(Buffer->Text.Ptr[End]);
         }
         u64 Count = End - Start;
@@ -490,7 +490,7 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
         for(u64 LineIdx = StartLineIdx; LineIdx < (EndLineIdx + 1); ++LineIdx) {
             line *Line = Lines.Ptr + LineIdx;
             u64 InLineStartOffset = MAX(StartOffset, Line->Offset);
-            u64 InLineEndOffset = MIN(EndOffset, Line->Offset + Line->Size);
+            u64 InLineEndOffset = MIN(EndOffset, Line->Offset + Line->Size + line_ending_size(Line->LineEnding));
             
             irect SelectionRect = {};
             SelectionRect.x = TextRect.x;
@@ -503,7 +503,7 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
                 SelectionRect.x += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
             }
             
-            for(u64 i = InLineStartOffset, CharSize = 0; i < MAX(InLineEndOffset, Line->Offset + line_ending_size(Line->LineEnding)); i += CharSize) {
+            for(u64 i = InLineStartOffset, CharSize = 0; i < InLineEndOffset; i += CharSize) {
                 CharSize = utf8_to_codepoint(Buffer.Ptr + i, &GlyphKeyData.Codepoint);
                 glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
                 SelectionRect.w += (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
@@ -537,10 +537,10 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
             Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
             CursorRect.x += (s32)(Glyph->Scale * Glyph->Advance + 0.5f);
         }
-        CursorRect.w = (s32)(Glyph->Advance * Glyph->Scale + 0.5f);
+        CursorRect.w = (s32)(300 * Glyph->Scale + 0.5f); //(s32)(Glyph->Advance * Glyph->Scale + 0.5f);
         CursorRect.h = FontMetrics.Ascent + FontMetrics.Descent;
         
-        draw_cursor(Fb, CursorRect, 0xff8b897c);
+        draw_cursor(Fb, CursorRect, 0xff74fc0c);
     }
 }
 
@@ -618,13 +618,13 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             if(event_key_match(Event, KEY_S, MOD_Ctrl)) {
                 save_buffer(Buffer);
                 
-            } else if(Event.IsText && Event.Char[0] == 'i') {
+            } else if(event_key_match(Event, KEY_Return, MOD_None)) {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     if(Sel->Cursor > Sel->Anchor) {
                         u64 Temp = Sel->Cursor;
                         Sel->Cursor = Sel->Anchor;
-                        Sel->Anchor = MIN(Temp + utf8_char_size(*(Buffer->Text.Ptr + Temp)), Buffer->Text.Count);
+                        Sel->Anchor = Temp;
                     }
                 }
                 Buffer->Mode = EDIT_MODE_Insert;
@@ -720,35 +720,35 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             }
             
             // Extend selection
-            else if(event_key_match(Event, KEY_K, MOD_Shift)) {
+            else if(Event.IsText && Event.Char[0] == 'I') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_up(Buffer, Sel);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_J, MOD_Shift)) {
+            } else if(Event.IsText && Event.Char[0] == 'K') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_down(Buffer, Sel);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_H, MOD_Shift)) {
+            } else if(Event.IsText && Event.Char[0] == 'J') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_left(Buffer, Sel);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_L, MOD_Shift)) {
+            } else if(Event.IsText && Event.Char[0] == 'L') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_right(Buffer, Sel);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_K, MOD_None)) {
+            } else if(Event.IsText && Event.Char[0] == 'i') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_up(Buffer, Sel);
@@ -756,7 +756,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_J, MOD_None)) {
+            } else if(Event.IsText && Event.Char[0] == 'k') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_down(Buffer, Sel);
@@ -764,7 +764,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_H, MOD_None)) {
+            } else if(Event.IsText && Event.Char[0] == 'j') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_left(Buffer, Sel);
@@ -772,7 +772,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_L, MOD_None)) {
+            } else if(Event.IsText && Event.Char[0] == 'l') {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     move_cursor_right(Buffer, Sel);
@@ -787,7 +787,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 delete_selection(Buffer);
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_K, MOD_Alt)) {
+            } else if(event_key_match(Event, KEY_I, MOD_Alt)) {
                 u64 Count = Buffer->Selections.Count;
                 for(u64 i = 0; i < Count; ++i) {
                     selection SelectionCopy = Buffer->Selections.Ptr[i];
@@ -797,7 +797,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_J, MOD_Alt)) {
+            } else if(event_key_match(Event, KEY_K, MOD_Alt)) {
                 u64 Count = Buffer->Selections.Count;
                 for(u64 i = 0; i < Count; ++i) {
                     selection SelectionCopy = Buffer->Selections.Ptr[i];
@@ -807,7 +807,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
-            } else if(event_key_match(Event, KEY_I, MOD_Alt)) {
+            } else if(event_key_match(Event, KEY_I, MOD_Alt | MOD_Shift)) {
                 Buffer->Mode = EDIT_MODE_SelectInner;
             }
             
@@ -845,7 +845,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         while(utf8_find_in_text(make_view(Buffer->Text.Ptr + SearchStart, End - SearchStart), make_view(Buffer->SelectTerm), &FoundOffset)) {
                             selection NewSel = {};
                             NewSel.Anchor = SearchStart + FoundOffset;
-                            NewSel.Cursor = SearchStart + FoundOffset + Buffer->SelectTerm.Count - utf8_step_back_one(Buffer->Text.Ptr + SearchStart + Buffer->SelectTerm.Count, 4);
+                            NewSel.Cursor = SearchStart + FoundOffset + Buffer->SelectTerm.Count;
                             // TODO: This is a global search through the entire file. The Search could be narrowed to be
                             // between lines where the selection starts and ends.
                             u64 LineIdx = offset_to_line_index(make_view(Buffer->Lines), NewSel.Cursor);
@@ -909,12 +909,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         
                         // Try to find the opening and closing character and expand the selection to all characters
                         // between the opening and close
-                        
-                        for(u64 Cursor = Sel->Cursor, PrevCursor = Sel->Cursor;
-                            Cursor > 0; 
-                            PrevCursor = Cursor,
-                            Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
-                            
+                        for(u64 Cursor = Sel->Cursor; Cursor > 0; Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
                             // Only count openings and closings 'if we're selecting inside e.g. [] {} <>, i.e. the opening and closing
                             // characters are not the same
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
@@ -924,17 +919,13 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 if(Closed > 0) {
                                     Closed--;
                                 } else {
-                                    OpenOffset = (s64)PrevCursor;
+                                    OpenOffset = (s64)Cursor + utf8_char_size((u8)Buffer->Text.Ptr[Cursor]);
                                     break;
                                 }
                             }
                         }
                         
-                        for(u64 Cursor = Sel->Cursor, PrevCursor = Sel->Cursor; 
-                            Cursor < Buffer->Text.Count; 
-                            PrevCursor = Cursor,
-                            Cursor += utf8_char_size(Buffer->Text.Ptr[Cursor])) {
-                            
+                        for(u64 Cursor = Sel->Cursor; Cursor < Buffer->Text.Count; Cursor += utf8_char_size(Buffer->Text.Ptr[Cursor])) {
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
                                 Opened++;
                                 
@@ -942,7 +933,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 if(Opened > 0) {
                                     Opened--;
                                 } else {
-                                    CloseOffset = (s64)PrevCursor;
+                                    CloseOffset = (s64)Cursor;
                                     break;
                                 }
                             }
