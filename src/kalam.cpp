@@ -373,6 +373,7 @@ delete_selection(file_buffer *Buffer) {
         if(Sel->Cursor == Sel->Anchor) {
             End += utf8_char_size(Buffer->Text.Ptr[End]);
         }
+        End = MIN(End, Buffer->Text.Count);
         u64 Count = End - Start;
         remove(&Buffer->Text, Start, Count);
         DeletedBytesAccumulator += Count;
@@ -646,7 +647,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 Buffer->Mode = EDIT_MODE_Insert;
                 merge_overlapping_selections(&Buffer->Selections);
                 
-            } else if(Event.IsText && Event.Char[0] == 'I') {
+            } else if(event_key_match(Event, KEY_Return, MOD_Shift)) {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
                     u64 LineIdx = offset_to_line_index(make_view(Buffer->Lines), Sel->Cursor);
@@ -668,11 +669,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     line *Line = Buffer->Lines.Ptr + offset_to_line_index(make_view(Buffer->Lines), Sel->Cursor);
                     Sel->Anchor = Line->Offset;
                     Sel->Cursor = Line->Offset + Line->Size;
-                    if(!Line->LineEnding) {
-                        u8 LastCharSize = utf8_step_back_one(Buffer->Text.Ptr + Line->Offset + Line->Size, 4);
-                        Sel->Cursor -= LastCharSize;
-                        
-                    }
                     Sel->Column = offset_to_column(make_view(Buffer->Text), Line, Sel->Cursor);
                 }
                 merge_overlapping_selections(&Buffer->Selections);
@@ -688,11 +684,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     
                     Line = Buffer->Lines.Ptr + offset_to_line_index(make_view(Buffer->Lines), Sel->Cursor);
                     Sel->Cursor = Line->Offset + Line->Size;
-                    if(!Line->LineEnding) {
-                        u8 LastCharSize = utf8_step_back_one(Buffer->Text.Ptr + Line->Offset + Line->Size, 4);
-                        Sel->Cursor -= LastCharSize;
-                        
-                    }
                     Sel->Column = offset_to_column(make_view(Buffer->Text), Line, Sel->Cursor);
                 }
                 merge_overlapping_selections(&Buffer->Selections);
