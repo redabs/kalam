@@ -574,6 +574,10 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
                 
+            } else if(event_key_match(Event, KEY_Delete, MOD_None)) {
+                delete_selection(Buffer);
+                merge_overlapping_selections(&Buffer->Selections); 
+                
             } else if(event_key_match(Event, KEY_Backspace, MOD_None)) {
                 do_backspace(Buffer);
                 
@@ -774,7 +778,8 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             } else if(event_key_match(Event, KEY_Space, MOD_None)) {
                 Buffer->Selections.Count = 1;
                 
-            } else if(Event.IsText && Event.Key == 'd') {
+            } else if(Event.IsText && Event.Key == 'd' ||
+                      event_key_match(Event, KEY_Delete, MOD_None)) {
                 delete_selection(Buffer);
                 merge_overlapping_selections(&Buffer->Selections); 
                 
@@ -966,14 +971,14 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
     static f32 FontSize = 17;
     font_metrics FontMetrics = get_font_metrics(FontSize);
     
-    if(Input->Modifiers == MOD_Ctrl) {
+    if(Input->ScrollModifiers == MOD_Ctrl) {
         FontSize += Input->Scroll;
         FontSize = MAX(0, MIN(FontSize, gCtx.GlyphCache.MaxFontPixelHeight));
         
-    } else if (Input->Modifiers == MOD_Shift) {
+    } else if (Input->ScrollModifiers == MOD_Shift) {
         gCtx.Scroll.x += Input->Scroll * ScrollSpeed;
         
-    } else if (Input->Modifiers == MOD_None) {
+    } else if (Input->ScrollModifiers == MOD_None) {
         gCtx.Scroll.y += Input->Scroll * ScrollSpeed;
     }
     

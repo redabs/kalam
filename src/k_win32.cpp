@@ -340,7 +340,7 @@ WinMain(HINSTANCE Instance, HINSTANCE PrevInstance, LPSTR CommandLine, int ShowC
                 DispatchMessageW(&Message);
             }
             
-            InputState.Modifiers = win32_get_modifiers();
+            InputState.ScrollModifiers = win32_get_modifiers();
             
             POINT CursorPoint;
             GetCursorPos(&CursorPoint);

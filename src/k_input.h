@@ -99,7 +99,7 @@ struct input_state {
     mouse MousePress, MouseDown;
     iv2 MousePos, LastMousePos;
     
-    modifier Modifiers; // Used with scroll only, not with key inputs! key_input has their own modifiers.
+    modifier ScrollModifiers;
     s32 Scroll; 
     
     u32 EventCount;

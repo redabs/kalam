@@ -140,7 +140,6 @@ struct kalam_ctx {
     iv2 Scroll;
     u64 BufferIdx;
     
-    
     buffer<file_buffer> Buffers;
     
     glyph_cache GlyphCache;
