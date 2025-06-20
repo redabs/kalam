@@ -86,7 +86,6 @@ main() {
             resize_framebuffer(&Framebuffer, Width, Height);
         }
 
-        
 
 
         kalam_init();
