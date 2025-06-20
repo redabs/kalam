@@ -65,20 +65,27 @@ maybe_grow(buffer<item_type> *Buffer, u64 Count) {
 // The allocated bytes are zeroed
 template<typename item_type>
 u64
-add(buffer<item_type> *Buffer, u64 Count) {
+add_index(buffer<item_type> *Buffer, u64 Count) {
     maybe_grow(Buffer, Count);
-    
+
     u64 Idx = Buffer->Count;
-    zero_struct(Buffer->Ptr + Idx);
+    zero(Buffer->Ptr + Idx, Count * sizeof(item_type));
     Buffer->Count += Count;
-    
+
     return Idx;
+}
+
+template<typename item_type>
+item_type *
+add_pointer(buffer<item_type> *Buffer, u64 Count) {
+    u64 Idx = add_index(Buffer, Count);
+    return Buffer->Ptr + Idx;
 }
 
 template<typename item_type>
 void
 push(buffer<item_type> *Buffer, view<item_type> Items) {
-    u64 Start = add(Buffer, Items.Count);
+    u64 Start = add_index(Buffer, Items.Count);
     for(u64 i = 0; i < Items.Count; ++i) {
         Buffer->Ptr[Start + i] = Items.Ptr[i];
     }
@@ -87,7 +94,8 @@ push(buffer<item_type> *Buffer, view<item_type> Items) {
 template<typename item_type>
 void
 push(buffer<item_type> *Buffer, item_type Item) {
-    Buffer->Ptr[add(Buffer, 1)] = Item;
+    u64 Idx = add_index(Buffer, 1);
+    Buffer->Ptr[Idx] = Item;
 }
 
 template<typename item_type>
@@ -107,14 +115,15 @@ template<typename item_type>
 void
 insert(buffer<item_type> *Buffer, item_type *Data, u64 Count, u64 Index) {
     ASSERT(Index <= Buffer->Count);
-    add(Buffer, Count);
+    maybe_grow(Buffer, Count);
     for(u64 i = Buffer->Count; i > Index; --i) {
         Buffer->Ptr[i + Count - 1] = Buffer->Ptr[i - 1];
     }
-    
+
     for(u64 i = 0; i < Count; ++i) {
         Buffer->Ptr[i + Index] = Data[i];
     }
+    Buffer->Count += Count;
 }
 
 template<typename item_type>

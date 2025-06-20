@@ -27,7 +27,7 @@ PLATFORM_READ_FILE(read_file) {
         struct stat FileStat = {};
         int StatRes = fstat(FileDes, &FileStat);
         if(StatRes == 0) {
-            u64 DestIdx = add(&Result, (u64)FileStat.st_size);
+            u64 DestIdx = add_index(&Result, (u64)FileStat.st_size);
             read(FileDes, Result.Ptr + DestIdx, Result.Capacity);
         } else {
             fprintf(stderr, "Failed to fstat file %s. errno: %d, \"%s\"\n", Path.Ptr, errno, strerror(errno));
@@ -76,13 +76,18 @@ main() {
             return -1;
         }
 
-        s32 Width = 0, Height = 0;
-        ASSERT(SDL_GetRendererOutputSize(Renderer, &Width, &Height) == 0);
-        SDL_Texture *Texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_ARGB4444, SDL_TEXTUREACCESS_STATIC, Width, Height);
-
         input_state InputState = {};
         framebuffer Framebuffer = {};
-        resize_framebuffer(&Framebuffer, Width, Height);
+        SDL_Texture *Texture;
+        {
+            s32 Width = 0, Height = 0;
+            ASSERT(SDL_GetRendererOutputSize(Renderer, &Width, &Height) == 0);
+            Texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, Width, Height);
+            resize_framebuffer(&Framebuffer, Width, Height);
+        }
+
+        
+
 
         kalam_init();
 
@@ -107,7 +112,9 @@ main() {
                             case SDL_WINDOWEVENT_RESIZED:
                             case SDL_WINDOWEVENT_SIZE_CHANGED: {
                                 resize_framebuffer(&Framebuffer, Event.window.data1, Event.window.data2);
-                                printf("Window resized: %x, %x\n", Event.window.data1, Event.window.data2);
+                                printf("Window resized: %d, %d\n", Event.window.data1, Event.window.data2);
+                                SDL_DestroyTexture(Texture);
+                                Texture = SDL_CreateTexture(Renderer, SDL_PIXELFORMAT_BGRA32, SDL_TEXTUREACCESS_STATIC, Framebuffer.Width, Framebuffer.Height);
                             } break;
                         }
                     } break;
@@ -116,12 +123,6 @@ main() {
 
             kalam_update_and_render(&InputState, &Framebuffer, 1/60.);
 
-            for(int y = 0; y < Framebuffer.Height; ++y) {
-                for(int x = 0; x < Framebuffer.Width; ++x) {
-                    Framebuffer.Pixels[y * Framebuffer.Width + x] = x % 256 | (y % 256) << 8;
-
-                }
-            }
             SDL_UpdateTexture(Texture, 0, Framebuffer.Pixels, Framebuffer.Width * 4);
 
             SDL_RenderCopy(Renderer, Texture, 0, 0);

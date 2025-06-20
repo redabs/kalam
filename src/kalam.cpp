@@ -1,3 +1,16 @@
+/* TODO
+ * Minimal single panel editing (scrolling to cursor, etc..) enough to focus on
+   core editing functionality before doing UI work.
+ * Fast text buffer editing 
+ * Undo/redo
+ * Commands and keybinding
+    * State machine command system:
+        * Each state holds has a set of keybinds
+        * Each keybind maps to a command or moves to another state
+ * Panels/Ui/Layouting
+ * Faster rendering (Cache software rendering? https://rxi.github.io/cached_software_rendering.html)
+ * 
+ */
 #define _USE_MATH_DEFINES
 #include <math.h>
 
@@ -18,7 +31,7 @@ load_file(view<u8> Path) {
     FileBuffer.Text = gPlatform.read_file(Path);
     push(&FileBuffer.Path, Path);
     FileBuffer.Mode = EDIT_MODE_Command;
-    add(&FileBuffer.Selections, 1);
+    add_index(&FileBuffer.Selections, 1);
     
     return FileBuffer;
 }
@@ -1038,7 +1051,7 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
             line Line = {};
             push(Lines, Line);
         } else {
-            line *Line = Lines->Ptr + add(Lines, 1);
+            line *Line = add_pointer(Lines, 1);
             u8 n = 0; 
             s32 x = TextRect.x;
             
@@ -1051,10 +1064,9 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
                     Line->LineEnding = LineEnding;
                     
                     // Push next line and init it
-                    Line = &Lines->Ptr[add(Lines, 1)];
+                    Line = add_pointer(Lines, 1);
                     u8 LineEndingSize = line_ending_size(LineEnding);
                     Line->Offset = Offset + LineEndingSize; // Next line
-                    
                     n = LineEndingSize;
                     x = TextRect.x;
                     continue;
@@ -1070,7 +1082,7 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
                 if(NeedWrap && IsFirstChar) {
                     // Push next line and init it but dont character at current offset. 
                     // It needs to go into the next line since it does not fit on the current one
-                    Line = &Lines->Ptr[add(Lines, 1)];
+                    Line = add_pointer(Lines, 1);
                     Line->Offset = Offset; // Next line starts on the current character which does not fit
                     Line->Wrapped = true;
                     n = 0; 

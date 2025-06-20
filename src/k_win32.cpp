@@ -43,7 +43,7 @@ codepoint_to_utf16(u32 Codepoint) {
 
 PLATFORM_READ_FILE(win32_read_file) {
     HANDLE FileHandle = INVALID_HANDLE_VALUE;
-    
+
     {
         u64 WidePathBufferLength = (u64)MultiByteToWideChar(CP_UTF8, 0, (char *)Path.Ptr, (int)Path.Count, 0, 0);
         wchar_t *WidePath = (wchar_t *) gPlatform.alloc(WidePathBufferLength * sizeof(wchar_t));
@@ -51,12 +51,12 @@ PLATFORM_READ_FILE(win32_read_file) {
         FileHandle = CreateFile(WidePath, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
         gPlatform.free(WidePath);
     }
-    
+
     buffer<u8> Data = {};
     if(FileHandle == INVALID_HANDLE_VALUE) {
         return Data;
     } 
-    
+
     {
         LARGE_INTEGER FileSize = {};
         if(GetFileSizeEx(FileHandle, &FileSize) == 0) {
@@ -66,25 +66,25 @@ PLATFORM_READ_FILE(win32_read_file) {
         }
         add(&Data, FileSize.QuadPart);
     }
-    
+
     DWORD BytesRead = 0;
-    
+
     // TODO: Handle chonkier files
-    
+
     BOOL ReadSuccess = ReadFile(FileHandle, Data.Ptr, (DWORD)Data.Count, &BytesRead, NULL);
     CloseHandle(FileHandle);
-    
+
     if(!ReadSuccess) {
         destroy(&Data);
         return Data;
     }
-    
+
     return Data;
 }
 
 PLATFORM_WRITE_FILE(win32_write_file) {
     HANDLE FileHandle = INVALID_HANDLE_VALUE;
-    
+
     {
         u64 WidePathBufferLength = (u64)MultiByteToWideChar(CP_UTF8, 0, (char *)Path.Ptr, (int)Path.Count, 0, 0);
         wchar_t *WidePath = (wchar_t *) gPlatform.alloc(WidePathBufferLength * sizeof(wchar_t));
@@ -92,13 +92,13 @@ PLATFORM_WRITE_FILE(win32_write_file) {
         FileHandle = CreateFile(WidePath, GENERIC_WRITE, 0, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
         gPlatform.free(WidePath);
     }
-    
+
     if(FileHandle != INVALID_HANDLE_VALUE) {
         DWORD Error = GetLastError();
         ASSERT(FileHandle != INVALID_HANDLE_VALUE);
     }
-    
-    
+
+
     DWORD BytesWritten = 0;
     BOOL WriteSuccess = WriteFile(FileHandle, Data.Ptr, (DWORD)Data.Count, &BytesWritten, 0);
     if(WriteSuccess) {
@@ -107,9 +107,9 @@ PLATFORM_WRITE_FILE(win32_write_file) {
         DWORD Error = GetLastError();
         ASSERT(WriteSuccess);
     }
-    
+
     ASSERT(BytesWritten == Data.Count);
-    
+
 }
 
 void
