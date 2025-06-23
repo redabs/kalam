@@ -16,18 +16,15 @@ BIT_FLAG_ENUM(mouse, u8) {
 };
 
 enum key {
-    KEY_Invalid = 0x0,
+    KEY_Unsupported = 0x0,
     KEY_Backspace = 0x8,
     KEY_Tab = 0x9,
     KEY_Return = 0x0d,
     KEY_Shift = 0x10,
     KEY_Ctrl = 0x11,
     KEY_Alt = 0x12,
-    
     KEY_CapsLock = 0x14,
-    
     KEY_Escape = 0x1b,
-    
     KEY_Space = 0x20,
     KEY_PageUp = 0x21,
     KEY_PageDown = 0x22,
@@ -37,10 +34,7 @@ enum key {
     KEY_Up = 0x26,
     KEY_Right = 0x27,
     KEY_Down = 0x28,
-    
     KEY_Insert = 0x2d,
-    
-    
     KEY_0 = 0x30,
     KEY_1 = 0x31,
     KEY_2 = 0x32,
@@ -51,7 +45,6 @@ enum key {
     KEY_7 = 0x37,
     KEY_8 = 0x38,
     KEY_9 = 0x39,
-    
     KEY_A = 0x41,
     KEY_B,
     KEY_C,
@@ -78,9 +71,7 @@ enum key {
     KEY_X,
     KEY_Y,
     KEY_Z,
-    
     KEY_Delete = 0x7f,
-    
     KEY_Max,
 };
 
@@ -98,10 +89,10 @@ struct key_event {
 struct input_state {
     mouse MousePress, MouseDown;
     iv2 MousePos, LastMousePos;
-    
+
     modifier ScrollModifiers;
-    s32 Scroll; 
-    
+    s32 Scroll;
+
     u32 EventCount;
     key_event Events[KEY_EVENT_MAX];
 };

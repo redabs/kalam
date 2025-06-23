@@ -222,13 +222,13 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_state *Input
             key_event Key = {};
             Key.IsText = true;
             Key.Modifiers = win32_get_modifiers();
-            
+
             utf16_to_utf8((u32)Message->wParam, Key.Char);
-            
+
             if(Key.Char[0] < 0x1f) {
                 return;
             }
-            
+
             if(InputState->EventCount < KEY_EVENT_MAX) {
                 InputState->Events[InputState->EventCount++] = Key;
             }
@@ -237,7 +237,7 @@ win32_handle_window_message(MSG *Message, HWND *WindowHandle, input_state *Input
         case WM_SYSKEYDOWN:
         case WM_KEYDOWN: {
             key_event Key = {0};
-            Key.Key = Message->wParam < KEY_Max ? (key)Message->wParam : KEY_Invalid;
+            Key.Key = Message->wParam < KEY_Max ? (key)Message->wParam : KEY_Unsupported;
             
             // Special case where our enum values don't match win32's virtual key-codes.
             // Mainly because our enum values are ASCII.

@@ -1,9 +1,12 @@
 set -o xtrace
 
+SCRIPT_DIR=$(dirname "$(realpath $0)")
+SOURCE_PATH=$SCRIPT_DIR/
+
 mkdir -p build
 cd build
 
 CFLAGS="-O0 -Wall -g -fsanitize=address -g"
-LIBS="-lSDL2 -lm"
+LIBS="-lSDL3 -lm"
 
-gcc ../k_sdl.cpp ../kalam.cpp ../stb_truetype.cpp $CFLAGS $LIBS -o kalam
+gcc $SOURCE_PATH/k_sdl.cpp $SOURCE_PATH/kalam.cpp $SOURCE_PATH/stb_truetype.cpp $CFLAGS $LIBS -o kalam

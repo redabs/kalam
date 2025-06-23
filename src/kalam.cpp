@@ -9,7 +9,7 @@
         * Each keybind maps to a command or moves to another state
  * Panels/Ui/Layouting
  * Faster rendering (Cache software rendering? https://rxi.github.io/cached_software_rendering.html)
- * 
+ *
  */
 #define _USE_MATH_DEFINES
 #include <math.h>
@@ -27,12 +27,12 @@ kalam_ctx gCtx;
 file_buffer
 load_file(view<u8> Path) {
     file_buffer FileBuffer = {};
-    
+
     FileBuffer.Text = gPlatform.read_file(Path);
     push(&FileBuffer.Path, Path);
     FileBuffer.Mode = EDIT_MODE_Command;
     add_index(&FileBuffer.Selections, 1);
-    
+
     return FileBuffer;
 }
 
@@ -53,15 +53,15 @@ overlap(irect Clip, irect Rect, irect *Out) {
     irect Result = {};
     Result.x = MAX(Clip.x, Rect.x);
     Result.y = MAX(Clip.y, Rect.y);
-    
+
     s32 ClippedLeft = Result.x - Rect.x;
     s32 SpareWidthInClip = Clip.x + Clip.w - Result.x;
     Result.w = MAX(0, MIN(Rect.w - ClippedLeft, SpareWidthInClip));
-    
+
     s32 ClippedTop = Result.y - Rect.y;
     s32 SpareHeightInClip = Clip.y + Clip.h - Result.y;
     Result.h = MAX(0, MIN(Rect.h - ClippedTop, SpareHeightInClip));
-    
+
     if(Out) { *Out = Result; }
     return (Result.w > 0 && Result.h > 0);
 }
@@ -72,26 +72,26 @@ draw_rect(framebuffer *Fb, irect Clip, irect Rect, u32 Color) {
     if(!overlap(Clip, Rect, &Overlap)) {
         return;
     }
-    
+
     f32 a = (f32)((Color >> 24) & 0xff) / 255.f;
     f32 r = (f32)((Color >> 16) & 0xff) * a;
     f32 g = (f32)((Color >> 8) & 0xff) * a;
     f32 b = (f32)((Color >> 0) & 0xff) * a;
-    
+
     for(s32 y = Overlap.y; y < (Overlap.y + Overlap.h); ++y) {
         for(s32 x = Overlap.x; x < (Overlap.x +  Overlap.w); ++x) {
-            
+
             u32 DestPixel = Fb->Pixels[y * Fb->Width + x];
-            
+
             f32 Dr = (f32)((DestPixel >> 16) & 0xff);
             f32 Dg = (f32)((DestPixel >> 8) & 0xff);
             f32 Db = (f32)((DestPixel >> 0) & 0xff);
-            
+
             u8 Rr = (u8)(r * a + Dr * (1 - a));
             u8 Rg = (u8)(g * a + Dg * (1 - a));
             u8 Rb = (u8)(b * a + Db * (1 - a));
-            
-            Fb->Pixels[y * Fb->Width + x] = Rr << 16 | Rg << 8 | Rb;
+
+            Fb->Pixels[y * Fb->Width + x] = 0xff << 24 | Rr << 16 | Rg << 8 | Rb;
         }
     }
 }
@@ -102,25 +102,25 @@ draw_cursor(framebuffer *Fb, irect Rect, u32 Color) {
     if(!overlap(FbClip, Rect, &Rect)) {
         return;
     }
-    
+
     f32 a = (f32)((Color >> 24) & 0xff) / 255.f;
     f32 r = (f32)((Color >> 16) & 0xff) * a;
     f32 g = (f32)((Color >> 8) & 0xff) * a;
     f32 b = (f32)((Color >> 0) & 0xff) * a;
-    
+
     for(s32 y = Rect.y; y < (Rect.y + Rect.h); ++y) {
         for(s32 x = Rect.x; x < (Rect.x +  Rect.w); ++x) {
             u32 DestPixel = Fb->Pixels[y * Fb->Width + x];
-            
+
             f32 Dr = (f32)((DestPixel >> 16) & 0xff);
             f32 Dg = (f32)((DestPixel >> 8) & 0xff);
             f32 Db = (f32)((DestPixel >> 0) & 0xff);
-            
+
             u8 Rr = (u8)(r * a + Dr * (1 - a));
             u8 Rg = (u8)(g * a + Dg * (1 - a));
             u8 Rb = (u8)(b * a + Db * (1 - a));
-            
-            Fb->Pixels[y * Fb->Width + x] = Rr << 16 | Rg << 8 | Rb;
+
+            Fb->Pixels[y * Fb->Width + x] = 0xff << 24 | Rr << 16 | Rg << 8 | Rb;
         }
     }
 }
@@ -132,35 +132,35 @@ draw_glyph(framebuffer *Fb, irect Clip, s32 Top, s32 Left, u8 *Glyph, s32 Stride
     if(!overlap(Clip, GlyphRect, &ClippedGlyphRect)) {
         return;
     }
-    
+
     f32 a = (f32)((Color >> 24) & 0xff) / 255.f;
     f32 r = (f32)((Color >> 16) & 0xff) * a;
     f32 g = (f32)((Color >> 8) & 0xff) * a;
     f32 b = (f32)((Color >> 0) & 0xff) * a;
-    
+
     s32 SrcStartX = ClippedGlyphRect.x - GlyphRect.x;
     s32 SrcStartY = ClippedGlyphRect.y - GlyphRect.y;
     for(s32 y = 0; y < ClippedGlyphRect.h; ++y) {
         s32 DestY = y + ClippedGlyphRect.y;
         s32 SrcY = y + SrcStartY;
-        
+
         for(s32 x = 0; x < ClippedGlyphRect.w; ++x) {
             s32 DestX = x + ClippedGlyphRect.x;
             s32 SrcX = x + SrcStartX;
-            
+
             f32 Alpha = (f32)Glyph[SrcY * Stride + SrcX] / 255.f;
-            
+
             u32 DestPixel = Fb->Pixels[DestY * Fb->Width + DestX];
-            
+
             f32 Dr = (f32)((DestPixel >> 16) & 0xff);
             f32 Dg = (f32)((DestPixel >> 8) & 0xff);
             f32 Db = (f32)((DestPixel >> 0) & 0xff);
-            
+
             u8 Rr = (u8)(r * Alpha + Dr * (1 - Alpha));
             u8 Rg = (u8)(g * Alpha + Dg * (1 - Alpha));
             u8 Rb = (u8)(b * Alpha + Db * (1 - Alpha));
-            
-            Fb->Pixels[DestY * Fb->Width + DestX] = Rr << 16 | Rg << 8 | Rb;
+
+            Fb->Pixels[DestY * Fb->Width + DestX] = 0xff << 24 | Rr << 16 | Rg << 8 | Rb;
         }
     }
 }
@@ -486,8 +486,6 @@ get_font_metrics(f32 FontSize) {
 
 void
 draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selection> Selections, irect TextRect, font_metrics FontMetrics) {
-    s32 Baseline = TextRect.y + FontMetrics.Ascent + gCtx.Scroll.y;
-    
     glyph_key_data GlyphKeyData = {};
     GlyphKeyData.Scale = FontMetrics.Scale;
     GlyphKeyData.FontId = 0;
@@ -646,7 +644,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     }
                 }
                 Buffer->Mode = EDIT_MODE_Insert;
-                
             } else if(Event.IsText && Event.Char[0] == 's') {
                 Buffer->Mode = EDIT_MODE_Select;
                 clear(&Buffer->SelectSelections);
@@ -791,8 +788,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             } else if(event_key_match(Event, KEY_Space, MOD_None)) {
                 Buffer->Selections.Count = 1;
                 
-            } else if(Event.IsText && Event.Key == 'd' ||
-                      event_key_match(Event, KEY_Delete, MOD_None)) {
+            } else if((Event.IsText && Event.Key == 'd') || event_key_match(Event, KEY_Delete, MOD_None)) {
                 delete_selection(Buffer);
                 merge_overlapping_selections(&Buffer->Selections); 
                 
@@ -805,7 +801,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     push(&Buffer->Selections, SelectionCopy);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
-                
+
             } else if(event_key_match(Event, KEY_K, MOD_Alt)) {
                 u64 Count = Buffer->Selections.Count;
                 for(u64 i = 0; i < Count; ++i) {
@@ -815,32 +811,32 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     push(&Buffer->Selections, SelectionCopy);
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
-                
+
             } else if(event_key_match(Event, KEY_I, MOD_Alt | MOD_Shift)) {
                 Buffer->Mode = EDIT_MODE_SelectInner;
             }
-            
+
         } break;
-        
-        case EDIT_MODE_Select: {    
+
+        case EDIT_MODE_Select: {
             b32 UpdateSelection = false;
             if(Event.IsText) {
                 push(&Buffer->SelectTerm, make_view(Event.Char, utf8_char_size(*Event.Char)));
                 UpdateSelection = true;
-                
+
             } else if(event_key_match(Event, KEY_Escape, MOD_None)) {
                 Buffer->Mode = EDIT_MODE_Command;
-                
+
             } else if(event_key_match(Event, KEY_Backspace, MOD_None)) {
                 Buffer->SelectTerm.Count -= utf8_step_back_one(Buffer->SelectTerm.Ptr + Buffer->SelectTerm.Count, Buffer->SelectTerm.Count);
                 UpdateSelection = true;
-                
+
             } else if(event_key_match(Event, KEY_Return, MOD_None)) {
                 clear(&Buffer->Selections);
                 push(&Buffer->Selections, make_view(Buffer->SelectSelections));
                 Buffer->Mode = EDIT_MODE_Command;
             }
-            
+
             if(UpdateSelection) {
                 clear(&Buffer->SelectSelections);
                 if(Buffer->SelectTerm.Count > 0) {
@@ -848,7 +844,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         selection *Sel = Buffer->Selections.Ptr + SelIdx;
                         u64 Start = selection_start(Sel);
                         u64 End = selection_end(Sel);
-                        
+
                         u64 SearchStart = Start;
                         u64 FoundOffset = 0;
                         while(utf8_find_in_text(make_view(Buffer->Text.Ptr + SearchStart, End - SearchStart), make_view(Buffer->SelectTerm), &FoundOffset)) {
@@ -861,7 +857,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                             NewSel.Column = offset_to_column(make_view(Buffer->Text), &Buffer->Lines.Ptr[LineIdx], NewSel.Cursor);
                             NewSel.Panel = Sel->Panel;
                             push(&Buffer->SelectSelections, NewSel);
-                            
+
                             // Continue search after found search term
                             SearchStart = SearchStart + FoundOffset + Buffer->SelectTerm.Count;
                         }
@@ -869,7 +865,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 }
             }
         } break;
-        
+
         case EDIT_MODE_SelectInner: {
             if(Event.IsText) {
                 b32 Invalid = false;
@@ -881,33 +877,33 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         Open = '[';
                         Close = ']';
                     } break;
-                    
+
                     case '<':
                     case '>': {
                         Open = '<';
                         Close = '>';
                     } break;
-                    
+
                     case '(':
                     case ')': {
                         Open = '(';
                         Close = ')';
                     } break;
-                    
+
                     case '{':
                     case '}': {
                         Open = '{';
                         Close = '}';
                     } break;
-                    
+
                     case '\'':
                     case '"': {
                         Open = Close = Event.Char[0];
                     } break;
-                    
+
                     default: { Invalid = true; }
-                } 
-                
+                }
+
                 if(!Invalid) {
                     for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                         selection *Sel = Buffer->Selections.Ptr + i;
@@ -915,7 +911,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                         s64 CloseOffset = -1;
                         s64 Closed = 0;
                         s64 Opened = 0;
-                        
+
                         // Try to find the opening and closing character and expand the selection to all characters
                         // between the opening and close
                         for(u64 Cursor = Sel->Cursor; Cursor > 0; Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
@@ -923,7 +919,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                             // characters are not the same
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
                                 Closed++;
-                                
                             } else if(utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
                                 if(Closed > 0) {
                                     Closed--;
@@ -933,11 +928,9 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 }
                             }
                         }
-                        
                         for(u64 Cursor = Sel->Cursor; Cursor < Buffer->Text.Count; Cursor += utf8_char_size(Buffer->Text.Ptr[Cursor])) {
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
                                 Opened++;
-                                
                             } else if(utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
                                 if(Opened > 0) {
                                     Opened--;
@@ -947,17 +940,12 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 }
                             }
                         }
-                        
                         if(OpenOffset != -1 && CloseOffset != -1) {
                             Sel->Anchor = OpenOffset;
                             Sel->Cursor = CloseOffset;
-                            
                             merge_overlapping_selections(&Buffer->Selections);
                         }
-                        
                         Buffer->Mode = EDIT_MODE_Command;
-                        
-                        
                     }
                 } else {
                     Buffer->Mode = EDIT_MODE_Command;
@@ -965,49 +953,50 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             } else if (event_key_match(Event, KEY_Escape, MOD_None)) {
                 Buffer->Mode = EDIT_MODE_Command;
             }
-            
         } break;
     }
 }
 
-void 
+#include <stdio.h>
+
+void
 kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
     draw_rect(Fb, {0, 0, Fb->Width, Fb->Height}, {0, 0, Fb->Width, Fb->Height}, 0xff0d1117);
-    
+
     for(u32 EventIndex = 0; EventIndex < Input->EventCount; ++EventIndex) {
         handle_input_event(Input->Events[EventIndex], &gCtx.Buffers.Ptr[gCtx.BufferIdx]);
     }
-    
+
     file_buffer *Buffer = &gCtx.Buffers.Ptr[gCtx.BufferIdx];
-    
+
     int ScrollSpeed = 20;
     static f32 FontSize = 17;
     font_metrics FontMetrics = get_font_metrics(FontSize);
-    
+
     if(Input->ScrollModifiers == MOD_Ctrl) {
         FontSize += Input->Scroll;
         FontSize = MAX(0, MIN(FontSize, gCtx.GlyphCache.MaxFontPixelHeight));
-        
+
     } else if (Input->ScrollModifiers == MOD_Shift) {
         gCtx.Scroll.x += Input->Scroll * ScrollSpeed;
-        
+
     } else if (Input->ScrollModifiers == MOD_None) {
         gCtx.Scroll.y += Input->Scroll * ScrollSpeed;
     }
-    
+
     irect Panel = {0, 0, Fb->Width, Fb->Height};
     irect LineNumberMargin = {Panel.x, Panel.y, 0, Panel.h};
-    
+
     {
         // Compute line number margin width or whatever it's called..
         glyph_key_data GlyphKeyData = {};
         GlyphKeyData.Scale = FontMetrics.Scale;
         GlyphKeyData.FontId = 0;
         utf8_to_codepoint((u8*)"0", &GlyphKeyData.Codepoint);
-        
+
         glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
         s32 GlyphAdvance = (s32)(Glyph->Scale * Glyph->Advance + 0.5f);
-        
+
         for(u64 i = Buffer->Lines.Count; i > 0; i /= 10) {
             LineNumberMargin.w += GlyphAdvance;
         }
@@ -1022,14 +1011,14 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
         }
     }
     BottomBarsHeightTotal += CommandLine.h;
-    
+
     irect StatusBar = {LineNumberMargin.x, CommandLine.y - FontMetrics.VerticalAdvance, Panel.w, FontMetrics.VerticalAdvance};
     {
         draw_rect(Fb, Panel, StatusBar, 0xff262626);
         view<u8> ModeString = edit_mode_string(Buffer->Mode);
         s32 ModeStringWidth = text_width(ModeString, FontMetrics.Scale);
         irect ModeRect = {StatusBar.x, StatusBar.y, ModeStringWidth + (s32)(1229 * FontMetrics.Scale * 2), StatusBar.h};
-        
+
         s32 Baseline = StatusBar.y + FontMetrics.Ascent;
         u32 ModeColor = Buffer->Mode == EDIT_MODE_Command ? 0xff000066 : 0xff669933;
         draw_rect(Fb, StatusBar, ModeRect, ModeColor);
@@ -1057,12 +1046,10 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
             
             glyph_key_data GlyphKeyData = {};
             GlyphKeyData.Scale = FontMetrics.Scale;
-            
             for(u64 Offset = 0; Offset < Text->Count; Offset += n) {
                 line_ending_type LineEnding = is_line_ending(make_view(Text->Ptr + Offset, Text->Count - Offset));
                 if(LineEnding) {
                     Line->LineEnding = LineEnding;
-                    
                     // Push next line and init it
                     Line = add_pointer(Lines, 1);
                     u8 LineEndingSize = line_ending_size(LineEnding);
@@ -1075,7 +1062,6 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
                 n = utf8_to_codepoint(Text->Ptr + Offset, &GlyphKeyData.Codepoint);
                 glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
                 s32 GlyphAdvance = (s32)(Glyph->Scale * Glyph->Advance + 0.5f);
-                s32 LeftBearing = (s32)(Glyph->LeftSideBearing * Glyph->Scale + 0.5f);
                 
                 b32 NeedWrap = (x + GlyphAdvance) > (TextRect.x + TextRect.w);
                 b32 IsFirstChar = Offset != Line->Offset; // We don't want to wrap the first character on the line
@@ -1090,7 +1076,7 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
                 } else {
                     Line->Size += n;
                     Line->Length += 1;
-                    
+
                     x += GlyphAdvance;
                 }
             }
@@ -1100,7 +1086,6 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
         s32 Baseline = FontMetrics.Ascent + gCtx.Scroll.y;
         for(u64 LineIdx = 0, LineNumber = 1; LineIdx < Lines->Count; ++LineIdx) {
             line *Line = &Lines->Ptr[LineIdx];
-            u8 CharByteCount = 1;
             
             if(Baseline < gCtx.Scroll.y) { continue; }
             if(Baseline > (Fb->Height + FontMetrics.VerticalAdvance)) { break; }

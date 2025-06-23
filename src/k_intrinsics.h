@@ -21,10 +21,6 @@ typedef s8 b8;
 typedef float f32;
 typedef double f64;
 
-#define local_persist static
-#define internal static
-#define file_scope static
-
 #define ARRAY_COUNT(A) (sizeof(A) / sizeof(A[0]))
 
 #define OFFSET_OF(Type, Member) ((size_t) &(((Type *)0)->Member))
