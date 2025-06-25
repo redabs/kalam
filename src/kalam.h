@@ -36,9 +36,9 @@ struct glyph_info {
         glyph_key_data KeyData;
     };
     u64 Key;
-    
+
     u64 TextureOffset;
-    
+
     s32 Advance;
     s32 LeftSideBearing;
     s32 x0, y0, x1, y1;
@@ -51,10 +51,10 @@ struct glyph_cache {
     u32 Columns;
     f32 MaxFontPixelHeight;
     s32 UnscaledDescent;
-    
+
     stbtt_fontinfo FontInfo;
     buffer<u8> FontFile;
-    
+
     u8 *Texture; // Width = CellWidth * Columns, Height = CellHeight * Rows
     glyph_info *Slots; // Count = Rows * Columns
 };
@@ -72,7 +72,7 @@ inline u8
 line_ending_size(line_ending_type Type) {
     switch(Type) {
         case LINE_ENDING_None: return 0;
-        
+
         case LINE_ENDING_Lf:
         case LINE_ENDING_Cr:
         case LINE_ENDING_Rs:
@@ -109,7 +109,7 @@ enum edit_mode {
     EDIT_MODE_Insert,
     EDIT_MODE_Select, // Reduces selection to search term
     EDIT_MODE_SelectInner,
-}; 
+};
 
 inline view<u8>
 edit_mode_string(edit_mode Mode) {
@@ -118,7 +118,7 @@ edit_mode_string(edit_mode Mode) {
         case EDIT_MODE_Insert: { return C_STR_VIEW("INSERT"); }
         case EDIT_MODE_Select: { return C_STR_VIEW("SELECT"); }
         case EDIT_MODE_SelectInner: { return C_STR_VIEW("SelectInner"); }
-        
+
     }
     ASSERT(false);
     return C_STR_VIEW("");
@@ -130,7 +130,7 @@ struct file_buffer {
     buffer<u8> Path;
     edit_mode Mode;
     buffer<selection> Selections;
-    
+
     // Used in EDIT_MODE_Select
     buffer<selection> SelectSelections; // Selections used in select mode
     buffer<u8> SelectTerm;
@@ -139,9 +139,9 @@ struct file_buffer {
 struct kalam_ctx {
     iv2 Scroll;
     u64 BufferIdx;
-    
+
     buffer<file_buffer> Buffers;
-    
+
     glyph_cache GlyphCache;
 };
 

@@ -169,7 +169,7 @@ draw_glyph(framebuffer *Fb, irect Clip, s32 Top, s32 Left, u8 *Glyph, s32 Stride
 inline line_ending_type
 is_line_ending(view<u8> Text) {
     line_ending_type Result = LINE_ENDING_None;
-    
+
     u16 Char = (Text.Count > 1) ? *(u16 *)Text.Ptr : *Text.Ptr;
     switch(Char & 0xFF) {
         case LINE_ENDING_Cr: {
@@ -179,8 +179,8 @@ is_line_ending(view<u8> Text) {
                 Result = LINE_ENDING_Cr;
             }
             break;
-        } 
-        
+        }
+
         case LINE_ENDING_Rs:
         case LINE_ENDING_Nl:
         case LINE_ENDING_Lf: { 
@@ -210,11 +210,11 @@ u64
 column_in_line_to_offset(view<u8> Text, line *Line, u64 Column) {
     u64 Offset = Line->Offset;
     u64 LineEnd = Offset + Line->Size;
-    
+
     for(u64 i = 0; (i < Column && Offset < LineEnd); ++i) {
         Offset += utf8_char_size(Text.Ptr[Offset]);
     }
-    
+
     return Offset;
 }
 
@@ -225,7 +225,7 @@ offset_to_column(view<u8> Text, line *Line, u64 Offset) {
     for(u64 i = Line->Offset; i < End; Column++) {
         i += utf8_char_size(Text.Ptr[i]);
     }
-    
+
     return Column;
 }
 
@@ -249,7 +249,7 @@ void
 move_cursor_left(file_buffer *Buffer, selection *Sel) {
     u64 LineIdx = offset_to_line_index(make_view(Buffer->Lines), Sel->Cursor);
     line *Line = Buffer->Lines.Ptr + LineIdx;
-    
+
     if(LineIdx > 0 && Sel->Cursor == Line->Offset) {
         // Move up one line
         line *PrevLine = Line - 1;
@@ -261,7 +261,7 @@ move_cursor_left(file_buffer *Buffer, selection *Sel) {
         Sel->Column = offset_to_column(make_view(Buffer->Text), PrevLine, PrevLine->Offset + PrevLine->Size);
     } else {
         Sel->Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Sel->Cursor, Sel->Cursor);
-        Sel->Column -= 1;
+        Sel->Column = offset_to_column(make_view(Buffer->Text), Line, Sel->Cursor);
     }
 }
 
@@ -273,10 +273,10 @@ move_cursor_right(file_buffer *Buffer, selection *Sel) {
         if(Sel->Cursor == (Line->Offset + Line->Size)) {
             // If we're at the end of the line then move past its line ending (which can be multiple bytes)
             Sel->Cursor += line_ending_size(Line->LineEnding);
-            Sel->Column = 0; 
+            Sel->Column = 0;
         } else {
             Sel->Cursor += utf8_char_size(Buffer->Text.Ptr[Sel->Cursor]);
-            Sel->Column += 1; 
+            Sel->Column = offset_to_column(make_view(Buffer->Text), Line, Sel->Cursor);
         }
     }
 }
@@ -784,14 +784,14 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                     Sel->Anchor = Sel->Cursor;
                 }
                 merge_overlapping_selections(&Buffer->Selections); 
-                
+
             } else if(event_key_match(Event, KEY_Space, MOD_None)) {
                 Buffer->Selections.Count = 1;
-                
+
             } else if((Event.IsText && Event.Key == 'd') || event_key_match(Event, KEY_Delete, MOD_None)) {
                 delete_selection(Buffer);
                 merge_overlapping_selections(&Buffer->Selections); 
-                
+
             } else if(event_key_match(Event, KEY_I, MOD_Alt)) {
                 u64 Count = Buffer->Selections.Count;
                 for(u64 i = 0; i < Count; ++i) {
@@ -914,7 +914,11 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
 
                         // Try to find the opening and closing character and expand the selection to all characters
                         // between the opening and close
-                        for(u64 Cursor = Sel->Cursor; Cursor > 0; Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
+
+                        // Start search backwards starting at the character
+                        // behind the cursor.
+                        u64 SearchStart = Sel->Cursor - utf8_step_back_one(Buffer->Text.Ptr + Sel->Cursor, Sel->Cursor);
+                        for(u64 Cursor = SearchStart; Cursor > 0; Cursor -= utf8_step_back_one(Buffer->Text.Ptr + Cursor, Cursor)) {
                             // Only count openings and closings 'if we're selecting inside e.g. [] {} <>, i.e. the opening and closing
                             // characters are not the same
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Close)) {
@@ -928,6 +932,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 }
                             }
                         }
+
                         for(u64 Cursor = Sel->Cursor; Cursor < Buffer->Text.Count; Cursor += utf8_char_size(Buffer->Text.Ptr[Cursor])) {
                             if(Open != Close && utf8_char_equals(Buffer->Text.Ptr + Cursor, (u8*)&Open)) {
                                 Opened++;
@@ -940,6 +945,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                                 }
                             }
                         }
+
                         if(OpenOffset != -1 && CloseOffset != -1) {
                             Sel->Anchor = OpenOffset;
                             Sel->Cursor = CloseOffset;
@@ -956,8 +962,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
         } break;
     }
 }
-
-#include <stdio.h>
 
 void
 kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {

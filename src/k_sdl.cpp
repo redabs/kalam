@@ -69,7 +69,6 @@ sdl_get_modifiers() {
     if(SDLMods & SDL_KMOD_CTRL) { Mods |= MOD_Ctrl; }
     if(SDLMods & SDL_KMOD_ALT) { Mods |= MOD_Alt; }
     if(SDLMods & SDL_KMOD_SHIFT) { Mods |= MOD_Shift; }
-    printf("Mods %d\n", Mods);
     return Mods;
 }
 
@@ -139,6 +138,19 @@ sdl_keycode_to_key(SDL_Keycode code) {
     }
 }
 
+mouse
+sdl_button_to_button(u8 SdlButton) {
+    mouse Button = 0;
+    switch(SdlButton) {
+        case SDL_BUTTON_RIGHT: Button = MOUSE_Right; break;
+        case SDL_BUTTON_LEFT: Button = MOUSE_Left; break;
+        case SDL_BUTTON_MIDDLE: Button = MOUSE_Middle; break;
+        case SDL_BUTTON_X1: Button = MOUSE_Backward; break;
+        case SDL_BUTTON_X2: Button = MOUSE_Forward; break;
+    }
+    return Button;
+}
+
 
 int
 main() {
@@ -205,12 +217,27 @@ main() {
                         }
                     } break;
 
+                    case SDL_EVENT_MOUSE_WHEEL: {
+                        InputState.Scroll += Event.wheel.y * (Event.wheel.direction == SDL_MOUSEWHEEL_NORMAL ? 1 : -1);
+                        InputState.ScrollModifiers = sdl_get_modifiers();
+                    } break;
+
+                    case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+                        mouse Button = sdl_button_to_button(Event.button.button);
+                        InputState.MousePress |= Button;
+                        InputState.MouseDown |= Button;
+                    } break;
+
+                    case SDL_EVENT_MOUSE_BUTTON_UP: {
+                        mouse Button = sdl_button_to_button(Event.button.button);
+                        InputState.MouseDown &= (~Button);
+                    } break;
+
                     case SDL_EVENT_KEY_DOWN: {
                         key_event Key = {0};
                         Key.Key = sdl_keycode_to_key(Event.key.key);
                         Key.Modifiers = sdl_get_modifiers();
 
-                        printf("key %d \n", Key.Key);
                         if(InputState.EventCount < KEY_EVENT_MAX) {
                             InputState.Events[InputState.EventCount++] = Key;
                         }

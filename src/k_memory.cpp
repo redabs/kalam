@@ -41,13 +41,13 @@ template<typename item_type>
 void
 grow_to_fit(buffer<item_type> *Buffer, u64 Count) {
     if(Buffer->Capacity == 0) { Buffer->Capacity = 1; }
-    
+
     ASSERT(Buffer->Count <= Buffer->Capacity);
     for(; (Buffer->Capacity - Buffer->Count) < Count; Buffer->Capacity *= 2);
-    
+
     item_type *NewStorage = (item_type *)gPlatform.alloc(Buffer->Capacity * sizeof(item_type));
     ASSERT(NewStorage);
-    
+
     copy(NewStorage, Buffer->Ptr, Buffer->Count * sizeof(item_type));
     gPlatform.free(Buffer->Ptr);
     Buffer->Ptr = NewStorage;
