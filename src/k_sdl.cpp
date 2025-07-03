@@ -29,7 +29,7 @@ PLATFORM_READ_FILE(read_file) {
         struct stat FileStat = {};
         int StatRes = fstat(FileDes, &FileStat);
         if(StatRes == 0) {
-            u64 DestIdx = add_index(&Result, (u64)FileStat.st_size);
+            u64 DestIdx = add(&Result, (u64)FileStat.st_size);
             read(FileDes, Result.Ptr + DestIdx, Result.Capacity);
         } else {
             fprintf(stderr, "Failed to fstat file %s. errno: %d, \"%s\"\n", Path.Ptr, errno, strerror(errno));

@@ -31,7 +31,7 @@ load_file(view<u8> Path) {
     FileBuffer.Text = gPlatform.read_file(Path);
     push(&FileBuffer.Path, Path);
     FileBuffer.Mode = EDIT_MODE_Command;
-    add_index(&FileBuffer.Selections, 1);
+    add(&FileBuffer.Selections, 1);
 
     return FileBuffer;
 }
@@ -1044,10 +1044,11 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
             line Line = {};
             push(Lines, Line);
         } else {
-            line *Line = add_pointer(Lines, 1);
-            u8 n = 0; 
+            u64 LineIdx = add(Lines, 1);
+            line *Line = &Lines->Ptr[LineIdx];
+            u8 n = 0;
             s32 x = TextRect.x;
-            
+
             glyph_key_data GlyphKeyData = {};
             GlyphKeyData.Scale = FontMetrics.Scale;
             for(u64 Offset = 0; Offset < Text->Count; Offset += n) {
@@ -1055,24 +1056,26 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
                 if(LineEnding) {
                     Line->LineEnding = LineEnding;
                     // Push next line and init it
-                    Line = add_pointer(Lines, 1);
+                    LineIdx = add(Lines, 1);
+                    Line = &Lines->Ptr[LineIdx];
                     u8 LineEndingSize = line_ending_size(LineEnding);
                     Line->Offset = Offset + LineEndingSize; // Next line
                     n = LineEndingSize;
                     x = TextRect.x;
                     continue;
                 }
-                
+
                 n = utf8_to_codepoint(Text->Ptr + Offset, &GlyphKeyData.Codepoint);
                 glyph_info *Glyph = glyph_cache_get(&gCtx.GlyphCache, GlyphKeyData);
                 s32 GlyphAdvance = (s32)(Glyph->Scale * Glyph->Advance + 0.5f);
-                
+
                 b32 NeedWrap = (x + GlyphAdvance) > (TextRect.x + TextRect.w);
                 b32 IsFirstChar = Offset != Line->Offset; // We don't want to wrap the first character on the line
                 if(NeedWrap && IsFirstChar) {
                     // Push next line and init it but dont character at current offset. 
                     // It needs to go into the next line since it does not fit on the current one
-                    Line = add_pointer(Lines, 1);
+                    LineIdx = add(Lines, 1);
+                    Line = &Lines->Ptr[LineIdx];
                     Line->Offset = Offset; // Next line starts on the current character which does not fit
                     Line->Wrapped = true;
                     n = 0; 

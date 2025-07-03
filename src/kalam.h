@@ -77,9 +77,9 @@ line_ending_size(line_ending_type Type) {
         case LINE_ENDING_Cr:
         case LINE_ENDING_Rs:
         case LINE_ENDING_Nl: return 1;
-        
+
         case LINE_ENDING_CrLf: return 2;
-        
+
         default: {
             ASSERT(false);
             return 1;
