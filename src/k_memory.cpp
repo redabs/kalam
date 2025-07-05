@@ -126,7 +126,7 @@ remove(buffer<item_type> *Buffer, u64 Index, u64 Count) {
     for(u64 i = 0; i < (Buffer->Count - Index - Count); ++i) {
         Buffer->Ptr[Index + i] = Buffer->Ptr[Index + Count + i];
     }
-    
+
     Buffer->Count -= Count;
 }
 

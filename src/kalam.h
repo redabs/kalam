@@ -9,6 +9,7 @@
 #include "k_memory.h"
 #include "k_platform.h"
 #include "k_utf8.h"
+#include "k_ui.h"
 
 enum direction {
     DIRECTION_Up = 0,
@@ -16,7 +17,6 @@ enum direction {
     DIRECTION_Left,
     DIRECTION_Right,
 };
-
 
 // glyph_key_data is data that identifies a glyph but is also general info about that glyph used for
 // layouting. This is a hack to not have to access those members behind another struct member of 

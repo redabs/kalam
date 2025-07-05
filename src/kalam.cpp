@@ -21,6 +21,7 @@
 
 #include "k_memory.cpp"
 #include "k_glyph.cpp"
+#include "k_ui.cpp"
 
 kalam_ctx gCtx;
 
