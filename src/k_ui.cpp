@@ -76,10 +76,10 @@ ui_draw_text_ex(ui_ctx *Ctx, view<u8> Text, iv2 Baseline, color Color, b32 Inter
     if(Internal) {
         // Internal text is stored right after the text pointer
         Cmd->Text.Text = (u8 *)&Cmd->Text.Text + sizeof(Cmd->Text.Text);
+        copy(Cmd->Text.Text, Text.Ptr, Text.Count);
     } else {
         Cmd->Text.Text = Text.Ptr;
     }
-    copy(Cmd->Text.Text, Text.Ptr, Text.Count);
 }
 
 void
