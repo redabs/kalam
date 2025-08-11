@@ -49,6 +49,10 @@ typedef double f64;
 
 #define ASSERT(C) ((!(C)) ? (*(int *)0=0, 0) : 0)
 
+#elif __MACH__
+
+#define ASSERT(C) ((!(C)) ? (__builtin_trap(), 0) : 0)
+
 #endif
 
 #define BIT_FLAG_ENUM(Name, IntegerType) \

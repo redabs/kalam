@@ -67,7 +67,7 @@ sdl_get_modifiers() {
     modifier Mods = (modifier)0;
     SDL_Keymod SDLMods = SDL_GetModState();
     if(SDLMods & SDL_KMOD_CTRL) { Mods |= MOD_Ctrl; }
-    if(SDLMods & SDL_KMOD_ALT) { Mods |= MOD_Alt; }
+    if((SDLMods & (SDL_KMOD_ALT | SDL_KMOD_GUI))) { Mods |= MOD_Alt; }
     if(SDLMods & SDL_KMOD_SHIFT) { Mods |= MOD_Shift; }
     return Mods;
 }
