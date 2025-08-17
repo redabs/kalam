@@ -67,7 +67,8 @@ sdl_get_modifiers() {
     modifier Mods = (modifier)0;
     SDL_Keymod SDLMods = SDL_GetModState();
     if(SDLMods & SDL_KMOD_CTRL) { Mods |= MOD_Ctrl; }
-    if((SDLMods & (SDL_KMOD_ALT | SDL_KMOD_GUI))) { Mods |= MOD_Alt; }
+    if(SDLMods & SDL_KMOD_ALT) { Mods |= MOD_Alt; }
+    if(SDLMods & SDL_KMOD_GUI) { Mods |= MOD_Alt; }
     if(SDLMods & SDL_KMOD_SHIFT) { Mods |= MOD_Shift; }
     return Mods;
 }
@@ -182,7 +183,7 @@ main() {
             resize_framebuffer(&Framebuffer, Width, Height);
         }
 
-        kalam_init();
+        kalam_init(&InputState);
 
         ASSERT(SDL_StartTextInput(Window));
 
@@ -253,7 +254,7 @@ main() {
                 }
             }
 
-            kalam_update_and_render(&InputState, &Framebuffer, 1/60.);
+            kalam_update_and_render(&Framebuffer, 1/60.);
 
             if(!SDL_UpdateTexture(Texture, 0, Framebuffer.Pixels, Framebuffer.Width * 4)) {
                 fprintf(stderr, "SDL_UpdateTexture: Failed to update texture with framebuffer pixels: %s\n", SDL_GetError());

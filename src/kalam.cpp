@@ -43,10 +43,12 @@ save_buffer(file_buffer *Buffer) {
 }
 
 void
-kalam_init() {
+kalam_init(input_state *InputState) {
     gCtx.GlyphCache = glyph_cache_make(C_STR_VIEW("../fonts/liberation-mono.ttf"), 48);
     file_buffer Buffer = load_file(C_STR_VIEW("test.cpp"));
     push(&gCtx.Buffers, Buffer);
+
+    gCtx.Ui.Input = InputState;
 }
 
 b8
@@ -410,7 +412,7 @@ do_backspace(file_buffer *Buffer) {
         remove(&Buffer->Text, Sel->Cursor, n);
         DeletedBytesAccumulator += n;
     }
-    merge_overlapping_selections(&Buffer->Selections);
+  merge_overlapping_selections(&Buffer->Selections);
 }
 
 b8
@@ -965,11 +967,11 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
 }
 
 void
-kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
+kalam_update_and_render(framebuffer *Fb, f32 Dt) {
     draw_rect(Fb, {0, 0, Fb->Width, Fb->Height}, {0, 0, Fb->Width, Fb->Height}, 0xff0d1117);
 
-    for(u32 EventIndex = 0; EventIndex < Input->EventCount; ++EventIndex) {
-        handle_input_event(Input->Events[EventIndex], &gCtx.Buffers.Ptr[gCtx.BufferIdx]);
+    for(u32 EventIndex = 0; EventIndex < gCtx.Ui.Input->EventCount; ++EventIndex) {
+        handle_input_event(gCtx.Ui.Input->Events[EventIndex], &gCtx.Buffers.Ptr[gCtx.BufferIdx]);
     }
 
     file_buffer *Buffer = &gCtx.Buffers.Ptr[gCtx.BufferIdx];
@@ -978,15 +980,15 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
     static f32 FontSize = 17;
     font_metrics FontMetrics = get_font_metrics(FontSize);
 
-    if(Input->ScrollModifiers == MOD_Ctrl) {
-        FontSize += Input->Scroll;
+    if(gCtx.Ui.Input->ScrollModifiers == MOD_Ctrl) {
+        FontSize += gCtx.Ui.Input->Scroll;
         FontSize = MAX(0, MIN(FontSize, gCtx.GlyphCache.MaxFontPixelHeight));
 
-    } else if (Input->ScrollModifiers == MOD_Shift) {
-        gCtx.Scroll.x += Input->Scroll * ScrollSpeed;
+    } else if (gCtx.Ui.Input->ScrollModifiers == MOD_Shift) {
+        gCtx.Scroll.x += gCtx.Ui.Input->Scroll * ScrollSpeed;
 
-    } else if (Input->ScrollModifiers == MOD_None) {
-        gCtx.Scroll.y += Input->Scroll * ScrollSpeed;
+    } else if (gCtx.Ui.Input->ScrollModifiers == MOD_None) {
+        gCtx.Scroll.y += gCtx.Ui.Input->Scroll * ScrollSpeed;
     }
 
     irect Panel = {0, 0, Fb->Width, Fb->Height};
@@ -1123,4 +1125,11 @@ kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt) {
             draw_selections(Fb, make_view(Buffer->Text), make_view(Buffer->Lines), make_view(Buffer->Selections), TextRect, FontMetrics);
         }
     }
+
+    ui_begin(&gCtx.Ui);
+    
+    
+
+
+    ui_end(&gCtx.Ui);
 }

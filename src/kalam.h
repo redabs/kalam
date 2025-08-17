@@ -117,7 +117,7 @@ edit_mode_string(edit_mode Mode) {
         case EDIT_MODE_Command: { return C_STR_VIEW("COMMAND"); } 
         case EDIT_MODE_Insert: { return C_STR_VIEW("INSERT"); }
         case EDIT_MODE_Select: { return C_STR_VIEW("SELECT"); }
-        case EDIT_MODE_SelectInner: { return C_STR_VIEW("SelectInner"); }
+        case EDIT_MODE_SelectInner: { return C_STR_VIEW("SELECT INNER"); }
 
     }
     ASSERT(false);
@@ -142,10 +142,12 @@ struct kalam_ctx {
 
     buffer<file_buffer> Buffers;
 
+    ui_ctx Ui;
+
     glyph_cache GlyphCache;
 };
 
-void kalam_init();
-void kalam_update_and_render(input_state *Input, framebuffer *Fb, f32 Dt);
+void kalam_init(input_state *InputState);
+void kalam_update_and_render(framebuffer *Fb, f32 Dt);
 
 #endif
