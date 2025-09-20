@@ -139,11 +139,8 @@ struct file_buffer {
 struct kalam_ctx {
     iv2 Scroll;
     u64 BufferIdx;
-
     buffer<file_buffer> Buffers;
-
     ui_ctx Ui;
-
     glyph_cache GlyphCache;
 };
 

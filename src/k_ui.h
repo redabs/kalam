@@ -26,7 +26,7 @@ enum ui_cmd_type {
     UI_CMD_Text,
 };
 
-struct ui_cmd_clip { irect Rect; ui_cmd_clip *Prev; };
+struct ui_cmd_clip { irect Rect; ui_cmd_clip *Prev; }; // Replace Prev with last rect?
 struct ui_cmd_rect { irect Rect; color Color; };
 struct ui_cmd_text { u64 Size; iv2 Baseline; color Color; u8 *Text; };
 struct ui_cmd {

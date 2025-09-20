@@ -1,4 +1,4 @@
 cd build 
-./kalam
+./kalam_macos
 cd ..
 

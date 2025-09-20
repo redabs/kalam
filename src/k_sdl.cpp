@@ -254,6 +254,11 @@ main() {
                 }
             }
 
+            InputState.LastMousePos = InputState.MousePos;
+            f32 MouseXFloat, MouseYFloat;
+            SDL_GetMouseState(&MouseXFloat, &MouseYFloat);
+            InputState.MousePos.x = (s32) (MouseXFloat + 0.5f);
+            InputState.MousePos.y = (s32) (MouseYFloat + 0.5f);
             kalam_update_and_render(&Framebuffer, 1/60.);
 
             if(!SDL_UpdateTexture(Texture, 0, Framebuffer.Pixels, Framebuffer.Width * 4)) {

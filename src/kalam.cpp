@@ -49,6 +49,9 @@ kalam_init(input_state *InputState) {
     push(&gCtx.Buffers, Buffer);
 
     gCtx.Ui.Input = InputState;
+    ui_begin(&gCtx.Ui);
+    ui_open_container(&gCtx.Ui, C_STR_VIEW("__main_container__"), false);
+    ui_begin(&gCtx.Ui);
 }
 
 b8
@@ -83,7 +86,6 @@ draw_rect(framebuffer *Fb, irect Clip, irect Rect, u32 Color) {
 
     for(s32 y = Overlap.y; y < (Overlap.y + Overlap.h); ++y) {
         for(s32 x = Overlap.x; x < (Overlap.x +  Overlap.w); ++x) {
-
             u32 DestPixel = Fb->Pixels[y * Fb->Width + x];
 
             f32 Dr = (f32)((DestPixel >> 16) & 0xff);
@@ -968,7 +970,8 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
 
 void
 kalam_update_and_render(framebuffer *Fb, f32 Dt) {
-    draw_rect(Fb, {0, 0, Fb->Width, Fb->Height}, {0, 0, Fb->Width, Fb->Height}, 0xff0d1117);
+    irect FbRect = {0, 0, Fb->Width, Fb->Height};
+    draw_rect(Fb, FbRect, FbRect, 0xff0d1117);
 
     for(u32 EventIndex = 0; EventIndex < gCtx.Ui.Input->EventCount; ++EventIndex) {
         handle_input_event(gCtx.Ui.Input->Events[EventIndex], &gCtx.Buffers.Ptr[gCtx.BufferIdx]);
@@ -1127,9 +1130,74 @@ kalam_update_and_render(framebuffer *Fb, f32 Dt) {
     }
 
     ui_begin(&gCtx.Ui);
+    ui_push_clip(&gCtx.Ui, FbRect);
     
-    
+    irect MainContainerRect = FbRect;
+    if(ui_container *MainContainer = ui_begin_container(&gCtx.Ui, MainContainerRect, C_STR_VIEW("__main_container__"))) {
+        ui_push_clip(&gCtx.Ui, MainContainer->Rect);
+
+        ui_row(&gCtx.Ui, 2);
+
+        { ui_push_layout(&gCtx.Ui, 300);
+            ui_layout *Layout = ui_get_layout(&gCtx.Ui); 
+            irect Rect = ui_push_rect(&gCtx.Ui, 150, 30);
+            color Color;
+            Color.Argb = 0xffcc94c3;
+            ui_interaction_type Interaction = ui_update_input_state(&gCtx.Ui, Rect, ui_make_id(&gCtx.Ui, C_STR_VIEW("Button")));
+            if(gCtx.Ui.Active == ui_make_id(&gCtx.Ui, C_STR_VIEW("Button"))) {
+                Color.Argb = 0xffffffff;
+            }
+            if(Interaction == UI_INTERACTION_Hover) {
+                Color.Argb = 0xff000000;
+            }
+
+            ui_draw_rect(&gCtx.Ui, Rect, Color);
+        } ui_pop_layout(&gCtx.Ui);
+
+        { ui_push_layout(&gCtx.Ui, 0);
+            ui_layout *Layout = ui_get_layout(&gCtx.Ui); 
+            irect Rect = ui_push_rect(&gCtx.Ui, 90, 150);
+            color Color;
+            Color.Argb = 0xff3c24f3;
+            ui_interaction_type Interaction = ui_update_input_state(&gCtx.Ui, Rect, ui_make_id(&gCtx.Ui, C_STR_VIEW("Button2")));
+            if(gCtx.Ui.Active == ui_make_id(&gCtx.Ui, C_STR_VIEW("Button2"))) {
+                Color.Argb = 0xffffffff;
+            }
+            if(Interaction == UI_INTERACTION_Hover) {
+                Color.Argb = 0xff000000;
+            }
+
+            ui_draw_rect(&gCtx.Ui, Rect, Color);
+
+        } ui_pop_layout(&gCtx.Ui);
 
 
+        ui_pop_clip(&gCtx.Ui);
+        ui_end_container(&gCtx.Ui);
+    }
+
+
+    ui_pop_clip(&gCtx.Ui);
     ui_end(&gCtx.Ui);
+
+
+    irect Clip = {0, 0, Fb->Width, Fb->Height};
+    for(u64 CmdOffset = 0; CmdOffset < gCtx.Ui.CmdUsed;) {
+        ui_cmd *Cmd = (ui_cmd *)(gCtx.Ui.CmdBuf + CmdOffset);
+
+        switch(Cmd->Type) {
+            case UI_CMD_Clip: {
+                Clip = Cmd->Clip.Rect;
+            } break;
+
+            case UI_CMD_Rect: {
+                draw_rect(Fb, Clip, Cmd->Rect.Rect, Cmd->Rect.Color.Argb);
+            } break;
+
+            case UI_CMD_Text: {
+            } break;
+        }
+
+        CmdOffset += Cmd->Size;
+    }
 }
