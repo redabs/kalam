@@ -101,7 +101,6 @@ struct selection {
     u64 Cursor;
     u64 Anchor;
     u64 Column;
-    u8 Panel; // Owner of the selection
 };
 
 enum edit_mode {
@@ -136,11 +135,30 @@ struct file_buffer {
     buffer<u8> SelectTerm;
 };
 
+enum panel_split_mode {
+    PANEL_SPLIT_Vertical,
+    PANEL_SPLIT_Horizontal
+};
+
+struct panel {
+    u8 Children[2];
+    u8 LastSelectedChild;
+    u8 Parent;
+    u8 Next; // Free list when free
+    panel_split_mode Split;
+};
+
 struct kalam_ctx {
     iv2 Scroll;
     u64 BufferIdx;
+    panel Panels[16]; // Panels[0] is root
+    u8 PanelSelected;
+    u8 PanelFree;
+
     buffer<file_buffer> Buffers;
+
     ui_ctx Ui;
+
     glyph_cache GlyphCache;
 };
 

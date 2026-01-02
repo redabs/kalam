@@ -52,6 +52,11 @@ kalam_init(input_state *InputState) {
     ui_begin(&gCtx.Ui);
     ui_open_container(&gCtx.Ui, C_STR_VIEW("__main_container__"), false);
     ui_begin(&gCtx.Ui);
+
+    gCtx.PanelFree = 1;
+    for(u32 i = 1; i < ARRAY_COUNT(gCtx.Panels) - 1; ++i) {
+        gCtx.Panels[i].Next = i + 1;
+    }
 }
 
 b8
@@ -561,6 +566,75 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
     }
 }
 
+u8
+panel_alloc() {
+    if(!gCtx.PanelFree) {
+        ASSERT(false);
+        return 0;
+    }
+    
+    u8 Free = gCtx.PanelFree;
+    gCtx.PanelFree = gCtx.Panels[Free].Next;
+    return Free;
+}
+
+void
+panel_free(u8 Panel) {
+    zero_struct(&gCtx.Panels[Panel]);
+    gCtx.Panels[Panel].Next = gCtx.PanelFree;
+    gCtx.PanelFree = Panel;
+}
+
+void
+panel_split(u8 Panel) {
+    u8 p0i = panel_alloc();
+    if(!p0i) {
+        return;
+    }
+
+    u8 p1i = panel_alloc();
+    if(!p1i) {
+        panel_free(p0i);
+        return;
+    }
+
+
+    panel *p0 = &gCtx.Panels[p0i];
+    panel *p1 = &gCtx.Panels[p1i];
+    panel *Parent = &gCtx.Panels[Panel];
+
+    p0->Split = p1->Split = Parent->Split;
+    p0->Parent = p1->Parent = Panel;
+
+    Parent->Children[0] = p0i;
+    Parent->Children[1] = p1i;
+    
+    gCtx.PanelSelected = p0i;
+}
+
+void
+panels(u8 PanelIdx, irect Rect) {
+    panel *Panel = &gCtx.Panels[PanelIdx];
+    if(Panel->Children[0] || Panel->Children[1]) {
+        irect r0 = Rect, r1;
+        if(Panel->Split == PANEL_SPLIT_Vertical) {
+            r0.w = (s32)((f32)r0.w / 2 + 0.5f);
+            r1 = r0;
+            r1.x += r0.w;
+        } else {
+            r0.h = (s32)((f32)r0.h / 2 + 0.5f);
+            r1 = r0;
+            r1.y += r0.h;
+        }
+        panels(Panel->Children[0], r0);
+        panels(Panel->Children[1], r1);
+    } else {
+        color Color;
+        Color.Argb = 0xff000000 | fnv1a_32((u8*)&Panel, sizeof(Panel));
+        ui_draw_rect(&gCtx.Ui, Rect, Color);
+    }
+}
+
 void
 handle_input_event(key_event Event, file_buffer *Buffer) {
     // TODO: Keybindings to commands mapping...
@@ -639,6 +713,15 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             if(event_key_match(Event, KEY_S, MOD_Ctrl)) {
                 save_buffer(Buffer);
                 
+            } else if (event_key_match(Event, KEY_N, MOD_Ctrl)) {
+                panel_split(gCtx.PanelSelected);
+
+            } else if (event_key_match(Event, KEY_W, MOD_Ctrl)) {
+
+            } else if (event_key_match(Event, KEY_X, MOD_Ctrl)) {
+                panel *Panel = &gCtx.Panels[gCtx.PanelSelected];
+                Panel->Split = (panel_split_mode)((u8) Panel->Split ^ 1);
+
             } else if(event_key_match(Event, KEY_Return, MOD_None)) {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
                     selection *Sel = Buffer->Selections.Ptr + i;
@@ -860,7 +943,6 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                             // between lines where the selection starts and ends.
                             u64 LineIdx = offset_to_line_index(make_view(Buffer->Lines), NewSel.Cursor);
                             NewSel.Column = offset_to_column(make_view(Buffer->Text), &Buffer->Lines.Ptr[LineIdx], NewSel.Cursor);
-                            NewSel.Panel = Sel->Panel;
                             push(&Buffer->SelectSelections, NewSel);
 
                             // Continue search after found search term
@@ -1139,8 +1221,7 @@ kalam_update_and_render(framebuffer *Fb, f32 Dt) {
         ui_row(&gCtx.Ui, 2);
 
         { ui_push_layout(&gCtx.Ui, 300);
-            ui_layout *Layout = ui_get_layout(&gCtx.Ui); 
-            irect Rect = ui_push_rect(&gCtx.Ui, 150, 30);
+            irect Rect = ui_push_rect(&gCtx.Ui, 0, 0);
             color Color;
             Color.Argb = 0xffcc94c3;
             ui_interaction_type Interaction = ui_update_input_state(&gCtx.Ui, Rect, ui_make_id(&gCtx.Ui, C_STR_VIEW("Button")));
@@ -1154,24 +1235,10 @@ kalam_update_and_render(framebuffer *Fb, f32 Dt) {
             ui_draw_rect(&gCtx.Ui, Rect, Color);
         } ui_pop_layout(&gCtx.Ui);
 
-        { ui_push_layout(&gCtx.Ui, 0);
-            ui_layout *Layout = ui_get_layout(&gCtx.Ui); 
-            irect Rect = ui_push_rect(&gCtx.Ui, 90, 150);
-            color Color;
-            Color.Argb = 0xff3c24f3;
-            ui_interaction_type Interaction = ui_update_input_state(&gCtx.Ui, Rect, ui_make_id(&gCtx.Ui, C_STR_VIEW("Button2")));
-            if(gCtx.Ui.Active == ui_make_id(&gCtx.Ui, C_STR_VIEW("Button2"))) {
-                Color.Argb = 0xffffffff;
-            }
-            if(Interaction == UI_INTERACTION_Hover) {
-                Color.Argb = 0xff000000;
-            }
-
-            ui_draw_rect(&gCtx.Ui, Rect, Color);
-
-        } ui_pop_layout(&gCtx.Ui);
-
-
+        {
+            irect Rect = ui_push_rect(&gCtx.Ui, 0, 0);
+            panels(0, Rect);
+        }
         ui_pop_clip(&gCtx.Ui);
         ui_end_container(&gCtx.Ui);
     }
