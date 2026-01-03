@@ -141,7 +141,7 @@ enum panel_split_mode {
 };
 
 struct panel {
-    u8 Children[2];
+    u8 Children[2]; // [0] is left/up and [1] is right/down
     u8 LastSelectedChild;
     u8 Parent;
     u8 Next; // Free list when free
