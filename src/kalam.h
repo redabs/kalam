@@ -141,19 +141,20 @@ enum panel_split_mode {
 };
 
 struct panel {
-    u8 Children[2]; // [0] is left/up and [1] is right/down
+    panel *Children[2]; // [0] is left/up and [1] is right/down
     u8 LastSelectedChild;
-    u8 Parent;
-    u8 Next; // Free list when free
+    panel *Parent;
+    panel *Next; // Free list when free
     panel_split_mode Split;
 };
 
 struct kalam_ctx {
     iv2 Scroll;
     u64 BufferIdx;
-    panel Panels[16]; // Panels[0] is root
-    u8 PanelSelected;
-    u8 PanelFree;
+    panel Panels[16]; 
+    panel *PanelRoot;
+    panel *PanelSelected;
+    panel *PanelFree;
 
     buffer<file_buffer> Buffers;
 

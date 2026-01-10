@@ -53,9 +53,11 @@ kalam_init(input_state *InputState) {
     ui_open_container(&gCtx.Ui, C_STR_VIEW("__main_container__"), false);
     ui_begin(&gCtx.Ui);
 
-    gCtx.PanelFree = 1;
+    gCtx.PanelRoot = &gCtx.Panels[0];
+    gCtx.PanelSelected = gCtx.PanelRoot;
+    gCtx.PanelFree = &gCtx.Panels[1];
     for(u32 i = 1; i < ARRAY_COUNT(gCtx.Panels) - 1; ++i) {
-        gCtx.Panels[i].Next = i + 1;
+        gCtx.Panels[i].Next = &gCtx.Panels[i + 1];
     }
 }
 
@@ -566,89 +568,103 @@ draw_selections(framebuffer *Fb, view<u8> Buffer, view<line> Lines, view<selecti
     }
 }
 
-panel *
-panel_get(u8 Panel) {
-    return &gCtx.Panels[Panel];
+u8
+panel_child_index(panel *Panel) {
+    ASSERT(Panel->Parent); // Root panel is an invalid argument
+    return Panel->Parent->Children[0] == Panel ? 0 : 1;
 }
 
-u8
+panel *
 panel_alloc() {
     if(!gCtx.PanelFree) {
         return 0;
     }
     
-    u8 Free = gCtx.PanelFree;
-    gCtx.PanelFree = gCtx.Panels[Free].Next;
-    zero_struct(panel_get(Free));
+    panel *Free = gCtx.PanelFree;
+    gCtx.PanelFree = Free->Next;
+    zero_struct(Free);
     return Free;
 }
 
 void
-panel_free(u8 Panel) {
-    // Panel 0 is reserved for root and never freed.
+panel_free(panel *Panel) {
     if(!Panel) {
         return;
     }
-    zero_struct(panel_get(Panel));
-    gCtx.Panels[Panel].Next = gCtx.PanelFree;
+    zero_struct(Panel);
+    Panel->Next = gCtx.PanelFree;
     gCtx.PanelFree = Panel;
 }
 
 b32
-panel_is_leaf(u8 Panel) {
-    panel *P = panel_get(Panel);
-    return !P->Children[0] && !P->Children[1];
+panel_is_leaf(panel *Panel) {
+    return !Panel->Children[0] && !Panel->Children[1];
 }
 
 void
-panel_split(u8 Panel) {
-    u8 P0i = panel_alloc();
-    u8 P1i = panel_alloc();
+panel_split(panel *Panel) {
+    panel *P0 = panel_alloc();
+    panel *P1 = panel_alloc();
 
-    if(!P0i || !P1i) {
-        panel_free(P0i);
-        panel_free(P1i);
+    if(!P0 || !P1) {
+        panel_free(P0);
+        panel_free(P1);
         return;
     }
 
-    panel *P0 = panel_get(P0i);
-    panel *P1 = panel_get(P1i);
-    panel *Parent = panel_get(Panel);
-
-    P0->Split = P1->Split = Parent->Split;
+    P0->Split = P1->Split = Panel->Split;
     P0->Parent = P1->Parent = Panel;
 
-    Parent->Children[0] = P0i;
-    Parent->Children[1] = P1i;
+    Panel->Children[0] = P0;
+    Panel->Children[1] = P1;
     
-    gCtx.PanelSelected = P0i;
+    gCtx.PanelSelected = P0;
 }
 
-u8
-panel_child_index(u8 Panel) {
-    ASSERT(Panel); // Root panel is an invalid argument
-    panel *P = panel_get(Panel);
-    panel *Parent = panel_get(P->Parent);
-    return Parent->Children[0] == Panel ? 0 : 1;
+void
+panel_close(panel *Panel) {
+    if(Panel == gCtx.PanelRoot) {
+        return;
+    }
+
+    panel *Sibling = Panel->Parent->Children[!panel_child_index(Panel)];
+    if(Panel->Parent == gCtx.PanelRoot) {
+        panel *SavedRoot = gCtx.PanelRoot;
+        gCtx.PanelRoot = Sibling;
+
+        Sibling->Parent = 0;
+        panel_free(SavedRoot);
+        panel_free(Panel);
+    } else {
+        panel *ParentParent = Sibling->Parent->Parent;
+        ParentParent->Children[panel_child_index(Panel->Parent)] = Sibling;
+
+        Sibling->Parent = ParentParent;
+        panel_free(Panel->Parent);
+        panel_free(Panel);
+    }
+    
+    // Traverse down and set selection
+    Panel = Sibling;
+    while(!panel_is_leaf(Panel)) {
+        Panel = Panel->Children[Panel->LastSelectedChild]; 
+    }
+    gCtx.PanelSelected = Panel;
 }
 
 void
 panel_move_selection(direction Direction) {
-    u8 PanelIdx = gCtx.PanelSelected;
+    //u8 PanelIdx = gCtx.PanelSelected;
+    panel *Panel = gCtx.PanelSelected;
     b32 Found = false;
-    // Find ancestor with vertical split on which we're on the opposite side of
+    // Find ancestor with split on which we're on the opposite side of
     // the direction we're going.
     u8 DirectionIndex = (Direction == DIRECTION_Left || Direction == DIRECTION_Up) ? 0 : 1;
     panel_split_mode SplitMode = (Direction == DIRECTION_Left || Direction == DIRECTION_Right) ? PANEL_SPLIT_Vertical : PANEL_SPLIT_Horizontal;
-    while(PanelIdx) {
-        panel *Panel = panel_get(PanelIdx);
-        panel *Parent = panel_get(Panel->Parent);
-        u8 ChildIdx = panel_child_index(PanelIdx);
-        PanelIdx = Panel->Parent;
-        if(Parent->Split == SplitMode && ChildIdx == !DirectionIndex) {
-            Found = true;
-            break;
-        }
+    while(Panel != gCtx.PanelRoot && !Found) {
+        u8 ChildIdx = panel_child_index(Panel);
+        Panel = Panel->Parent;
+        Found = Panel->Split == SplitMode && ChildIdx == !DirectionIndex;
     }
 
     if(!Found) {
@@ -656,24 +672,20 @@ panel_move_selection(direction Direction) {
     }
 
     // Get first child panel of the split in the direction we're moving.
-    panel *SplitPanel = panel_get(PanelIdx);
+    panel *SplitPanel = Panel;
     SplitPanel->LastSelectedChild = DirectionIndex;
-    PanelIdx = SplitPanel->Children[DirectionIndex];
+    Panel = SplitPanel->Children[DirectionIndex];
 
     // Traverse down 
-    while(!panel_is_leaf(PanelIdx)) {
-        panel *Panel = panel_get(PanelIdx);
-        PanelIdx = Panel->Children[Panel->LastSelectedChild]; 
+    while(!panel_is_leaf(Panel)) {
+        Panel = Panel->Children[Panel->LastSelectedChild]; 
     }
-    gCtx.PanelSelected = PanelIdx;
-    panel *Panel = panel_get(PanelIdx);
-    panel *Parent = panel_get(Panel->Parent);
-    Parent->LastSelectedChild = panel_child_index(PanelIdx);
+    gCtx.PanelSelected = Panel;
+    Panel->Parent->LastSelectedChild = panel_child_index(Panel);
 }
 
 void
-panels(u8 PanelIdx, irect Rect) {
-    panel *Panel = panel_get(PanelIdx);
+panels(panel *Panel, irect Rect) {
     if(Panel->Children[0] || Panel->Children[1]) {
         irect R0 = Rect, R1;
         if(Panel->Split == PANEL_SPLIT_Vertical) {
@@ -690,7 +702,7 @@ panels(u8 PanelIdx, irect Rect) {
     } else {
         color Color;
         Color.Argb = 0xff000000 | fnv1a_32((u8*)&Panel, sizeof(Panel));
-        if(PanelIdx == gCtx.PanelSelected) { Color.Argb = 0xffffffff; }
+        if(Panel == gCtx.PanelSelected) { Color.Argb = 0xffffffff; }
         ui_draw_rect(&gCtx.Ui, Rect, Color);
     }
 }
@@ -779,7 +791,7 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
             } else if(event_key_match(Event, KEY_W, MOD_Ctrl)) {
 
             } else if(event_key_match(Event, KEY_X, MOD_Ctrl)) {
-                panel *Panel = panel_get(gCtx.PanelSelected);
+                panel *Panel = gCtx.PanelSelected;
                 Panel->Split = (panel_split_mode)((u8) Panel->Split ^ 1);
 
             } else if(event_key_match(Event, KEY_J, MOD_Ctrl)) {
@@ -793,6 +805,9 @@ handle_input_event(key_event Event, file_buffer *Buffer) {
                 
             } else if(event_key_match(Event, KEY_K, MOD_Ctrl)) {
                 panel_move_selection(DIRECTION_Down);
+
+            } else if(event_key_match(Event, KEY_B, MOD_Ctrl)) {
+                panel_close(gCtx.PanelSelected);
 
             } else if(event_key_match(Event, KEY_Return, MOD_None)) {
                 for(u64 i = 0; i < Buffer->Selections.Count; ++i) {
@@ -1291,7 +1306,7 @@ kalam_update_and_render(framebuffer *Fb, f32 Dt) {
         ui_push_clip(&gCtx.Ui, MainContainer->Rect);
 
         ui_row(&gCtx.Ui, 2);
-
+#if 1
         { ui_push_layout(&gCtx.Ui, 300);
             irect Rect = ui_push_rect(&gCtx.Ui, 0, 0);
             color Color;
@@ -1309,8 +1324,9 @@ kalam_update_and_render(framebuffer *Fb, f32 Dt) {
 
         {
             irect Rect = ui_push_rect(&gCtx.Ui, 0, 0);
-            panels(0, Rect);
+            panels(gCtx.PanelRoot, Rect);
         }
+#endif 
         ui_pop_clip(&gCtx.Ui);
         ui_end_container(&gCtx.Ui);
     }
